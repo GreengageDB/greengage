@@ -31,7 +31,7 @@ class GpCheckCatTestCase(GpTestCase):
             patch('pygresql.pgdb'),
         ])
 
-        self.subject.logger = Mock(spec=['log', 'info', 'debug', 'error', 'fatal'])
+        self.subject.logger = Mock(spec=['log', 'info', 'debug', 'warning', 'error', 'fatal'])
         self.unique_index_violation_check.runCheck.return_value = []
         self.leaked_schema_dropper = Mock(spec=['drop_leaked_schemas'])
         self.leaked_schema_dropper.drop_leaked_schemas.return_value = []
@@ -473,6 +473,159 @@ class GpCheckCatTestCase(GpTestCase):
         self.assertFalse(self.subject.GV.checkStatus)
         self.assertEqual(mock_connect2.query.call_count, 0)
         self.assertEqual(mock_connect2.query.dictresult.call_count, 0)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+
+    def _partitionBoundResults(self, levels=True, invalid_t2=()):
+        def result(rows):
+            res = Mock()
+            res.dictresult.return_value = rows
+            return res
+
+        if not levels:
+            return [result([])]
+        level = {'keytype': 'text', 'keycoll': 'pg_catalog."C"'}
+        rule = {'name': "'p1'", 'parparentrule': 0, 'startexpr': "'a'::text",
+                'endexpr': "'b'::text", 'startincl': 'true', 'endincl': 'false'}
+        return [
+            result([dict(level, tablename='public.t1', paroid=1),
+                    dict(level, tablename='public.t2', paroid=2)]),
+            result([rule]), result([]),
+            result([rule]), result(list(invalid_t2)),
+        ]
+
+    def test_checkPartitionBoundCollation_no_issues(self):
+        self.db_connection.query.side_effect = self._partitionBoundResults(levels=False)
+
+        self.subject.checkPartitionBoundCollation()
+
+        self.assertEqual(self.db_connection.query.call_count, 1)
+        self.assertTrue(self.subject.GV.checkStatus)
+        self.subject.setError.assert_not_called()
+
+    @patch('gpcheckcat.myprint')
+    def test_checkPartitionBoundCollation_with_issues(self, mock_myprint):
+        # Affected tables are reported as a warning, which does not fail the run.
+        self.db_connection.query.side_effect = self._partitionBoundResults()
+
+        self.subject.checkPartitionBoundCollation()
+
+        self.assertEqual(self.db_connection.query.call_count, 1)
+        self.assertTrue(self.subject.GV.checkStatus)
+        self.subject.setError.assert_not_called()
+        self.assertEqual(mock_myprint.call_count, 1)
+        self.assertIn('[WARNING]: 2 range partitioned table(s)', mock_myprint.call_args[0][0])
+        self.subject.logger.warning.assert_has_calls([
+            call('  table public.t1'),
+            call('  table public.t2'),
+        ])
+
+    def test_checkPartitionBoundCollation_with_error_on_execution(self):
+        self.db_connection.query.side_effect = Exception("Simulated error during execution")
+
+        self.subject.checkPartitionBoundCollation()
+
+        self.assertEqual(self.db_connection.query.call_count, 1)
+        self.assertFalse(self.subject.GV.checkStatus)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+
+    @patch('gpcheckcat.connect2')
+    def test_checkPartitionBoundCollation_exception_on_connect(self, mock_connect2):
+        mock_connect2.side_effect = Exception("Simulated error during connection")
+
+        self.subject.checkPartitionBoundCollation()
+
+        self.assertEqual(mock_connect2.call_count, 1)
+        self.assertFalse(self.subject.GV.checkStatus)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+
+    def test_checkPartitionBoundOrder_no_affected_tables(self):
+        self.db_connection.query.side_effect = self._partitionBoundResults(levels=False)
+
+        self.subject.checkPartitionBoundOrder()
+
+        self.assertEqual(self.db_connection.query.call_count, 1)
+        self.assertTrue(self.subject.GV.checkStatus)
+        self.subject.setError.assert_not_called()
+
+    def test_checkPartitionBoundOrder_valid_ranges(self):
+        # Tables with the database default collation in their boundaries,
+        # but with ranges that are valid under the key's collation, pass.
+        self.db_connection.query.side_effect = self._partitionBoundResults()
+
+        self.subject.checkPartitionBoundOrder()
+
+        self.assertEqual(self.db_connection.query.call_count, 5)
+        self.assertTrue(self.subject.GV.checkStatus)
+        self.subject.setError.assert_not_called()
+
+    @patch('gpcheckcat.myprint')
+    def test_checkPartitionBoundOrder_invalid_ranges(self, mock_myprint):
+        self.db_connection.query.side_effect = self._partitionBoundResults(
+            invalid_t2=[{'name': 'p2'}, {'name': 'p3'}])
+
+        self.subject.checkPartitionBoundOrder()
+
+        self.assertFalse(self.subject.GV.checkStatus)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+        self.assertEqual(mock_myprint.call_count, 1)
+        self.assertIn('[ERROR]: 1 range partitioned table(s) have partition ranges',
+                      mock_myprint.call_args[0][0])
+        self.subject.logger.error.assert_any_call('  table public.t2, partitions p2, p3')
+
+    @patch('gpcheckcat.myprint')
+    def test_checkPartitionBoundOrder_continues_after_error(self, mock_myprint):
+        # A failure at one level is reported, and the other levels are still
+        # checked.
+        results = self._partitionBoundResults(invalid_t2=[{'name': 'p2'}])
+        results[1] = Exception("Simulated error during execution")
+        del results[2]
+        self.db_connection.query.side_effect = results
+
+        self.subject.checkPartitionBoundOrder()
+
+        self.assertEqual(self.db_connection.query.call_count, 4)
+        self.assertFalse(self.subject.GV.checkStatus)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+        mock_myprint.assert_any_call(
+            '[ERROR] executing test: checkPartitionBoundOrder for table public.t1')
+        self.assertIn('[ERROR]: 1 range partitioned table(s) have partition ranges',
+                      mock_myprint.call_args[0][0])
+        self.subject.logger.error.assert_any_call('  table public.t2, partitions p2')
+
+    @patch('gpcheckcat.myprint')
+    def test_checkPartitionBoundOrder_error_without_invalid_ranges(self, mock_myprint):
+        # A failed level must not be reported as OK, even if no other level
+        # has invalid ranges.
+        results = self._partitionBoundResults()
+        results[1] = Exception("Simulated error during execution")
+        del results[2]
+        self.db_connection.query.side_effect = results
+
+        self.subject.checkPartitionBoundOrder()
+
+        self.assertFalse(self.subject.GV.checkStatus)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+        self.subject.logger.info.assert_any_call('[FAIL] range partition boundary order')
+        self.assertNotIn(call('[OK] range partition boundary order'),
+                         self.subject.logger.info.call_args_list)
+
+    def test_checkPartitionBoundOrder_with_error_on_execution(self):
+        self.db_connection.query.side_effect = Exception("Simulated error during execution")
+
+        self.subject.checkPartitionBoundOrder()
+
+        self.assertEqual(self.db_connection.query.call_count, 1)
+        self.assertFalse(self.subject.GV.checkStatus)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+
+    @patch('gpcheckcat.connect2')
+    def test_checkPartitionBoundOrder_exception_on_connect(self, mock_connect2):
+        mock_connect2.side_effect = Exception("Simulated error during connection")
+
+        self.subject.checkPartitionBoundOrder()
+
+        self.assertEqual(mock_connect2.call_count, 1)
+        self.assertFalse(self.subject.GV.checkStatus)
         self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
 
     def test_checkMixDistPolicy_with_error_on_execution(self):

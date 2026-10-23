@@ -1930,6 +1930,78 @@ del_part_template(Oid rootrelid, int16 parlevel, Oid parent)
 	return 1;
 }								/* end del_part_template */
 
+/*
+ * inherit_bound_collations
+ *   Give the boundaries of a new partition rule the collation of the
+ *   boundaries of an existing rule of the same partitioning level and parent.
+ *
+ * Tables created by older versions store the boundaries with the database
+ * default collation instead of the key's, and compare them using it. A
+ * partition added to such a table must use the same collation, so that all
+ * boundaries of a level are compared the same way.
+ */
+static void
+inherit_bound_collations(Oid paroid, Oid parentoid, PartitionByType parttype,
+						 Node *rangestart, Node *rangeend, List *listvalues)
+{
+	Relation	rel;
+	ScanKeyData scankey[2];
+	SysScanDesc sscan;
+	HeapTuple	tuple;
+	List	   *sibvals = NIL;
+	ListCell   *lc;
+	int			keyno;
+
+	rel = heap_open(PartitionRuleRelationId, AccessShareLock);
+	ScanKeyInit(&scankey[0], Anum_pg_partition_rule_paroid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(paroid));
+	ScanKeyInit(&scankey[1], Anum_pg_partition_rule_parparentrule,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(parentoid));
+	sscan = systable_beginscan(rel, PartitionRuleParoidParparentruleParruleordIndexId, true,
+							   NULL, 2, scankey);
+	while (HeapTupleIsValid(tuple = systable_getnext(sscan)))
+	{
+		PartitionRule *sibling = ruleMakePartitionRule(tuple);
+
+		if (parttype == PARTTYP_RANGE)
+			sibvals = (List *) (sibling->parrangestart ? sibling->parrangestart :
+								sibling->parrangeend);
+		else if (sibling->parlistvalues)
+			sibvals = linitial(sibling->parlistvalues);
+		if (sibvals)
+			break;
+	}
+	systable_endscan(sscan);
+	heap_close(rel, AccessShareLock);
+
+	/*
+	 * sibvals has one Const per partitioning key column: the START or END of
+	 * a range, or one value tuple of a list, whose key may have several
+	 * columns.
+	 */
+	keyno = 0;
+	foreach(lc, sibvals)
+	{
+		Oid			collation = ((Const *) lfirst(lc))->constcollid;
+		ListCell   *lcvals;
+
+		if (parttype == PARTTYP_RANGE)
+		{
+			if (rangestart)
+				((Const *) list_nth((List *) rangestart, keyno))->constcollid = collation;
+			if (rangeend)
+				((Const *) list_nth((List *) rangeend, keyno))->constcollid = collation;
+		}
+		else
+		{
+			foreach(lcvals, listvalues)
+				((Const *) list_nth((List *) lfirst(lcvals), keyno))->constcollid = collation;
+		}
+		keyno++;
+	}
+}
 
 /*
  * add_part_to_catalog() - add a partition to the catalog
@@ -2201,6 +2273,10 @@ add_part_to_catalog(Oid relid, PartitionBy *pby,
 			systable_endscan(sscan);
 			heap_close(partrulerel, AccessShareLock);
 		}
+
+		if (!bTemplate_Only && !el->isDefault)
+			inherit_bound_collations(paroid, parentoid, pby->partType,
+									 rangestart, rangeend, (List *) listvalues);
 
 		rule->paroid = paroid;
 		rule->parchildrelid = relid;
@@ -3930,14 +4006,15 @@ magic_expr_to_datum(Relation rel, PartitionNode *partnode,
 
 			if (lhsid != c1->consttype)
 			{
-				/* see coerce_partition_value_to_const */
+				/* see coerce_partition_value_to_collated_const */
 				Node	   *out;
 
-				out = coerce_partition_value_to_const(NULL,
-													  n1,
-													  lhsid,
-													  attribute->atttypmod,
-													  char_to_parttype(partnode->part->parkind));
+				out = coerce_partition_value_to_collated_const(NULL,
+															   n1,
+															   lhsid,
+															   attribute->atttypmod,
+															   char_to_parttype(partnode->part->parkind),
+															   attribute->attcollation);
 				if (!out)
 					ereport(ERROR,
 							(errcode(ERRCODE_DATATYPE_MISMATCH),
@@ -5324,6 +5401,35 @@ apply_template_storage_encodings(CreateStmt *ct, Oid relid, Oid paroid,
 }
 
 /*
+ * get_partition_bound_collation
+ *   Return the collation stored with the boundaries of the existing
+ *   partitions of a partitioning level for the given key column, or
+ *   InvalidOid if there are none.
+ */
+static Oid
+get_partition_bound_collation(PartitionNode *pNode, int keyno)
+{
+	ListCell   *lc;
+
+	foreach(lc, pNode->rules)
+	{
+		PartitionRule *rule = (PartitionRule *) lfirst(lc);
+		List	   *vals;
+
+		if (pNode->part->parkind == 'r')
+			vals = (List *) (rule->parrangestart ? rule->parrangestart :
+							 rule->parrangeend);
+		else
+			vals = rule->parlistvalues ? linitial(rule->parlistvalues) : NIL;
+
+		if (list_length(vals) > keyno)
+			return ((Const *) list_nth(vals, keyno))->constcollid;
+	}
+
+	return InvalidOid;
+}
+
+/*
  * atpxPart_validate_spec: kludge up a PartitionBy statement and use
  * validate_partition_spec to transform and validate a partition
  * boundary spec.
@@ -5351,8 +5457,35 @@ atpxPart_validate_spec(PartitionBy *pBy,
 
 	int			result;
 	PartitionNode *pNode_tmpl = NULL;
+	int			keyno;
 
 	Assert(pNode != NULL && pNode->part != NULL);
+
+	/*
+	 * Tables created by older versions store the boundaries with the database
+	 * default collation instead of the key's, and compare them using it. Give
+	 * new boundaries of an existing level the collation of the existing ones,
+	 * so that all boundaries of the level are compared the same way.
+	 */
+	for (keyno = 0; keyno < pNode->part->parnatts; keyno++)
+	{
+		Oid			boundcoll = get_partition_bound_collation(pNode, keyno);
+		char	   *attname;
+		ListCell   *lc;
+
+		if (!OidIsValid(boundcoll))
+			continue;
+
+		attname = get_attname(pNode->part->parrelid,
+							  pNode->part->paratts[keyno]);
+		foreach(lc, schema)
+		{
+			ColumnDef  *def = (ColumnDef *) lfirst(lc);
+
+			if (strcmp(def->colname, attname) == 0)
+				def->collOid = boundcoll;
+		}
+	}
 
 	spec->partElem = list_make1(pelem);
 
