@@ -111,14 +111,8 @@ NOTICE:  dropping a column that is part of the distribution policy forces a NULL
  b      | integer |           |          | 
  c      | integer |           |          | 
 Statistics objects:
-<<<<<<< HEAD
-    "public"."ab1_b_c_stats" ON b, c FROM ab1
-Distributed randomly
-||||||| e1c1c30f635
-    "public"."ab1_b_c_stats" ON b, c FROM ab1
-=======
     "public.ab1_b_c_stats" ON b, c FROM ab1
->>>>>>> 3b231596ccf
+Distributed randomly
 
 -- Ensure statistics are dropped when table is
 SELECT stxname FROM pg_statistic_ext WHERE stxname LIKE 'ab1%';
@@ -150,14 +144,8 @@ ALTER STATISTICS ab1_a_b_stats SET STATISTICS 0;
  a      | integer |           |          | 
  b      | integer |           |          | 
 Statistics objects:
-<<<<<<< HEAD
-    "public"."ab1_a_b_stats" ON a, b FROM ab1; STATISTICS 0
-Distributed by: (a)
-||||||| e1c1c30f635
-    "public"."ab1_a_b_stats" ON a, b FROM ab1; STATISTICS 0
-=======
     "public.ab1_a_b_stats" ON a, b FROM ab1; STATISTICS 0
->>>>>>> 3b231596ccf
+Distributed by: (a)
 
 ANALYZE ab1;
 SELECT stxname, stxdndistinct, stxddependencies, stxdmcv
@@ -177,14 +165,8 @@ ALTER STATISTICS ab1_a_b_stats SET STATISTICS -1;
  a      | integer |           |          |         | plain   |              | 
  b      | integer |           |          |         | plain   |              | 
 Statistics objects:
-<<<<<<< HEAD
-    "public"."ab1_a_b_stats" ON a, b FROM ab1
-Distributed by: (a)
-||||||| e1c1c30f635
-    "public"."ab1_a_b_stats" ON a, b FROM ab1
-=======
     "public.ab1_a_b_stats" ON a, b FROM ab1
->>>>>>> 3b231596ccf
+Distributed by: (a)
 
 -- partial analyze doesn't build stats either
 ANALYZE ab1 (a);

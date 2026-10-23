@@ -200,11 +200,13 @@ View definition:
    FROM numeric_tbl;
 
 explain (verbose, costs off) select * from numeric_view;
-                                                                      QUERY PLAN                                                                       
--------------------------------------------------------------------------------------------------------------------------------------------------------
- Seq Scan on public.numeric_tbl
-   Output: numeric_tbl.f1, (numeric_tbl.f1)::numeric(16,4), (numeric_tbl.f1)::numeric, numeric_tbl.f2, (numeric_tbl.f2)::numeric(16,4), numeric_tbl.f2
-(2 rows)
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: numeric_tbl.f1, ((numeric_tbl.f1)::numeric(16,4)), ((numeric_tbl.f1)::numeric), numeric_tbl.f2, ((numeric_tbl.f2)::numeric(16,4)), numeric_tbl.f2
+   ->  Seq Scan on public.numeric_tbl
+         Output: numeric_tbl.f1, (numeric_tbl.f1)::numeric(16,4), (numeric_tbl.f1)::numeric, numeric_tbl.f2, (numeric_tbl.f2)::numeric(16,4), numeric_tbl.f2
+(6 rows)
 
 rollback;
 --

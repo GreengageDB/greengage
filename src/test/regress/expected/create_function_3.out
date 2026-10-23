@@ -560,11 +560,13 @@ SELECT * FROM functest_sri1();
 (3 rows)
 
 EXPLAIN (verbose, costs off) SELECT * FROM functest_sri1();
-              QUERY PLAN              
---------------------------------------
- Seq Scan on temp_func_test.functest3
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
    Output: functest3.a
-(2 rows)
+   ->  Seq Scan on temp_func_test.functest3
+         Output: functest3.a
+(6 rows)
 
 CREATE FUNCTION functest_sri2() RETURNS SETOF int
 LANGUAGE SQL
@@ -581,11 +583,13 @@ SELECT * FROM functest_sri2();
 (3 rows)
 
 EXPLAIN (verbose, costs off) SELECT * FROM functest_sri2();
-              QUERY PLAN              
---------------------------------------
- Seq Scan on temp_func_test.functest3
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
    Output: functest3.a
-(2 rows)
+   ->  Seq Scan on temp_func_test.functest3
+         Output: functest3.a
+(6 rows)
 
 DROP TABLE functest3 CASCADE;
 NOTICE:  drop cascades to function functest_sri2()
@@ -809,13 +813,7 @@ ORDER BY 1, 2;
 
 -- Cleanup
 DROP SCHEMA temp_func_test CASCADE;
-<<<<<<< HEAD
-NOTICE:  drop cascades to 32 other objects
-||||||| e1c1c30f635
-NOTICE:  drop cascades to 30 other objects
-=======
-NOTICE:  drop cascades to 29 other objects
->>>>>>> 3b231596ccf
+NOTICE:  drop cascades to 41 other objects
 DETAIL:  drop cascades to function functest_a_1(text,date)
 drop cascades to function functest_a_2(text[])
 drop cascades to function functest_a_3()
