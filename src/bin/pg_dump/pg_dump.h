@@ -205,24 +205,8 @@ typedef struct _typeInfo
 	 * result of format_type(), which will be quoted if needed, and might be
 	 * schema-qualified too.
 	 */
-<<<<<<< HEAD
 	char		*ftypname;
 	const char  *rolname;
-	char		*typacl;
-||||||| e1c1c30f635
-	char	   *rolname;		/* name of owner, or empty string */
-	char	   *typacl;
-	char	   *rtypacl;
-	char	   *inittypacl;
-	char	   *initrtypacl;
-=======
-	char	   *ftypname;
-	char	   *rolname;		/* name of owner, or empty string */
-	char	   *typacl;
-	char	   *rtypacl;
-	char	   *inittypacl;
-	char	   *initrtypacl;
->>>>>>> 3b231596ccf
 	Oid			typelem;
 	Oid			typrelid;
 	char		typrelkind;		/* 'r', 'v', 'c', etc */

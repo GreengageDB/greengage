@@ -301,15 +301,7 @@ static char *format_function_signature(Archive *fout,
 static char *convertRegProcReference(const char *proc);
 static char *getFormattedOperatorName(const char *oproid);
 static char *convertTSFunction(Archive *fout, Oid funcOid);
-<<<<<<< HEAD
-static char *getFormattedTypeName(Archive *fout, Oid oid, OidOptions opts);
-||||||| e1c1c30f635
-static Oid	findLastBuiltinOid_V71(Archive *fout);
-static char *getFormattedTypeName(Archive *fout, Oid oid, OidOptions opts);
-=======
-static Oid	findLastBuiltinOid_V71(Archive *fout);
 static const char *getFormattedTypeName(Archive *fout, Oid oid, OidOptions opts);
->>>>>>> 3b231596ccf
 static void getBlobs(Archive *fout);
 static void dumpBlob(Archive *fout, const BlobInfo *binfo);
 static int	dumpBlobs(Archive *fout, const void *arg);
@@ -5563,27 +5555,12 @@ getTypes(Archive *fout, int *numTypes)
 		tyinfo[i].dobj.name = pg_strdup(PQgetvalue(res, i, i_typname));
 		tyinfo[i].dobj.namespace =
 			findNamespace(atooid(PQgetvalue(res, i, i_typnamespace)));
-<<<<<<< HEAD
 		tyinfo[i].dacl.acl = pg_strdup(PQgetvalue(res, i, i_typacl));
 		tyinfo[i].dacl.acldefault = pg_strdup(PQgetvalue(res, i, i_acldefault));
 		tyinfo[i].dacl.privtype = 0;
 		tyinfo[i].dacl.initprivs = NULL;
 		tyinfo[i].ftypname = NULL;	/* may get filled later */
 		tyinfo[i].rolname = getRoleName(PQgetvalue(res, i, i_typowner));
-||||||| e1c1c30f635
-		tyinfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
-		tyinfo[i].typacl = pg_strdup(PQgetvalue(res, i, i_typacl));
-		tyinfo[i].rtypacl = pg_strdup(PQgetvalue(res, i, i_rtypacl));
-		tyinfo[i].inittypacl = pg_strdup(PQgetvalue(res, i, i_inittypacl));
-		tyinfo[i].initrtypacl = pg_strdup(PQgetvalue(res, i, i_initrtypacl));
-=======
-		tyinfo[i].ftypname = NULL;	/* may get filled later */
-		tyinfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
-		tyinfo[i].typacl = pg_strdup(PQgetvalue(res, i, i_typacl));
-		tyinfo[i].rtypacl = pg_strdup(PQgetvalue(res, i, i_rtypacl));
-		tyinfo[i].inittypacl = pg_strdup(PQgetvalue(res, i, i_inittypacl));
-		tyinfo[i].initrtypacl = pg_strdup(PQgetvalue(res, i, i_initrtypacl));
->>>>>>> 3b231596ccf
 		tyinfo[i].typelem = atooid(PQgetvalue(res, i, i_typelem));
 		tyinfo[i].typrelid = atooid(PQgetvalue(res, i, i_typrelid));
 		tyinfo[i].typrelkind = *PQgetvalue(res, i, i_typrelkind);
@@ -12645,17 +12622,7 @@ format_table_function_columns(Archive *fout, const FuncInfo *finfo, int nallargs
 	for (j = 0; j < nallargs; j++)
 	{
 		Oid			typid;
-<<<<<<< HEAD
-		char	   *typname;
-||||||| e1c1c30f635
-		char	   *typname;
-		const char *argmode;
-		const char *argname;
-=======
 		const char *typname;
-		const char *argmode;
-		const char *argname;
->>>>>>> 3b231596ccf
 
 		/*
 		 * argmodes are checked in format_function_arguments, it isn't necessary
@@ -12671,40 +12638,8 @@ format_table_function_columns(Archive *fout, const FuncInfo *finfo, int nallargs
 							  first_column ? "" : ", ",
 							  fmtId(argnames[j]),
 							  typname);
-			free(typname);
 			first_column = false;
 		}
-<<<<<<< HEAD
-||||||| e1c1c30f635
-		else
-			argmode = "";
-
-		argname = argnames ? argnames[j] : (char *) NULL;
-		if (argname && argname[0] == '\0')
-			argname = NULL;
-
-		appendPQExpBuffer(&fn, "%s%s%s%s%s",
-						  (j > 0) ? ", " : "",
-						  argmode,
-						  argname ? fmtId(argname) : "",
-						  argname ? " " : "",
-						  typname);
-		free(typname);
-=======
-		else
-			argmode = "";
-
-		argname = argnames ? argnames[j] : (char *) NULL;
-		if (argname && argname[0] == '\0')
-			argname = NULL;
-
-		appendPQExpBuffer(&fn, "%s%s%s%s%s",
-						  (j > 0) ? ", " : "",
-						  argmode,
-						  argname ? fmtId(argname) : "",
-						  argname ? " " : "",
-						  typname);
->>>>>>> 3b231596ccf
 	}
 
 	appendPQExpBuffer(&fn, ")");
@@ -12782,15 +12717,9 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 	char	   *prosupport;
 	char	   *proparallel;
 	char	   *lanname;
-<<<<<<< HEAD
 	char	   *callbackfunc;
 	char	   *prodataaccess;
 	char	   *proexeclocation;
-	char	   *rettypename;
-||||||| e1c1c30f635
-	char	   *rettypename;
-=======
->>>>>>> 3b231596ccf
 	int			nallargs;
 	char	  **allargtypes = NULL;
 	char	  **argmodes = NULL;
@@ -13015,25 +12944,11 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 		 /* no result type to output */ ;
 	else if (funcresult)
 		appendPQExpBuffer(q, " RETURNS %s", funcresult);
-<<<<<<< HEAD
 	else if (!is_returns_table_function(nallargs, argmodes))
-	{
-		rettypename = getFormattedTypeName(fout, finfo->prorettype,
-										   zeroIsError);
-||||||| e1c1c30f635
-	else
-	{
-		rettypename = getFormattedTypeName(fout, finfo->prorettype,
-										   zeroIsError);
-=======
-	else
->>>>>>> 3b231596ccf
 		appendPQExpBuffer(q, " RETURNS %s%s",
 						  (proretset[0] == 't') ? "SETOF " : "",
-<<<<<<< HEAD
-						  rettypename);
-		free(rettypename);
-	}
+						  getFormattedTypeName(fout, finfo->prorettype,
+											   zeroIsError));
 	else
 	{
 		/* RETURNS TABLE functions */
@@ -13043,14 +12958,6 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 		appendPQExpBuffer(q, "RETURNS TABLE %s", func_cols);
 		free(func_cols);
 	}
-||||||| e1c1c30f635
-						  rettypename);
-		free(rettypename);
-	}
-=======
-						  getFormattedTypeName(fout, finfo->prorettype,
-											   zeroIsError));
->>>>>>> 3b231596ccf
 
 	appendPQExpBuffer(q, "\n    LANGUAGE %s", fmtId(lanname));
 
@@ -20393,14 +20300,8 @@ addDistributedByOld(Archive *fout, PQExpBuffer q, const TableInfo *tbinfo, int a
  *
  * This does not guarantee to schema-qualify the output, so it should not
  * be used to create the target object name for CREATE or ALTER commands.
-<<<<<<< HEAD
-||||||| e1c1c30f635
- *
- * TODO: there might be some value in caching the results.
-=======
  *
  * Note that the result is cached and must not be freed by the caller.
->>>>>>> 3b231596ccf
  */
 static const char *
 getFormattedTypeName(Archive *fout, Oid oid, OidOptions opts)
@@ -20421,12 +20322,7 @@ getFormattedTypeName(Archive *fout, Oid oid, OidOptions opts)
 	/* see if we have the result cached in the type's TypeInfo record */
 	typeInfo = findTypeByOid(oid);
 	if (typeInfo && typeInfo->ftypname)
-<<<<<<< HEAD
-		return pg_strdup(typeInfo->ftypname);
-||||||| e1c1c30f635
-=======
 		return typeInfo->ftypname;
->>>>>>> 3b231596ccf
 
 	query = createPQExpBuffer();
 	appendPQExpBuffer(query, "SELECT pg_catalog.format_type('%u'::pg_catalog.oid, NULL)",
@@ -20440,12 +20336,6 @@ getFormattedTypeName(Archive *fout, Oid oid, OidOptions opts)
 	PQclear(res);
 	destroyPQExpBuffer(query);
 
-<<<<<<< HEAD
-	/* cache a copy for later requests */
-	if (typeInfo)
-		typeInfo->ftypname = pg_strdup(result);
-||||||| e1c1c30f635
-=======
 	/*
 	 * Cache the result for re-use in later requests, if possible.  If we
 	 * don't have a TypeInfo for the type, the string will be leaked once the
@@ -20454,7 +20344,6 @@ getFormattedTypeName(Archive *fout, Oid oid, OidOptions opts)
 	 */
 	if (typeInfo)
 		typeInfo->ftypname = result;
->>>>>>> 3b231596ccf
 
 	return result;
 }
