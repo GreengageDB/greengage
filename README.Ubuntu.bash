@@ -61,6 +61,8 @@ echo "deb [signed-by=/etc/apt/keyrings/greengagedb.gpg] \
 	greengagedb main" \
 	| tee /etc/apt/sources.list.d/greengagedb.list
 
+set +e
+
 tee -a /etc/sysctl.conf << EOF
 kernel.shmmax = 5000000000000
 kernel.shmmni = 32768
