@@ -2,6 +2,8 @@
 # Some packages, for example KRB5, not installing properly without this option
 export DEBIAN_FRONTEND=noninteractive
 
+set -eo pipefail
+
 apt-get update
 apt-get install -y \
   bison \
@@ -54,7 +56,9 @@ apt-get install -y \
   sudo \
   zlib1g-dev
 
-curl -fsSL greengagedb.org/repositories/gpg | gpg --dearmor -o /etc/apt/keyrings/greengagedb.gpg
+curl -fsSL --proto '=https' --proto-redir '=https' \
+  https://greengagedb.org/repositories/gpg  | \
+  gpg --dearmor -o /etc/apt/keyrings/greengagedb.gpg
 echo "deb [signed-by=/etc/apt/keyrings/greengagedb.gpg] \
       https://greengagedb.org/repositories/ubuntu/$(lsb_release -sr)/x86_64 \
       greengagedb main" \
