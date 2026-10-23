@@ -10,7 +10,7 @@ case "$(uname -s)" in
         BLD_ARCH_HOST="rhel$(sed -e 's/CentOS Linux/RedHat/' -e 's/Red Hat Enterprise Linux/RedHat/' -e 's/WS//' -e 's/Server//' -e 's/Client//' /etc/redhat-release | awk '{print $3}' | awk -F. '{print $1}')_$(uname -m | sed -e 's/i686/x86_32/')"
     fi
 
-    if [ -f /etc/altlinux-release ]; then
+    if [ -f /etc/altlinux-release ] || [ -f /etc/redos-release ] ; then
         BLD_ARCH_HOST="$(. /etc/os-release; echo "${ID}${VERSION_ID}" | sed 's/-/_/' | cut -d'.' -f1,2)_$(uname -m)"
     fi
     if [ -f /etc/rocky-release ]; then
