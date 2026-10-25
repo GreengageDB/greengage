@@ -12,7 +12,7 @@ case "`uname -s`" in
         esac
     fi
 
-    if [ -f /etc/altlinux-release ]; then
+    if [ -f /etc/altlinux-release ] || [ -f /etc/redos-release ] ; then
 	case "`cat /etc/altlinux-release`" in
             *)
             BLD_ARCH_HOST="$(. /etc/os-release; echo ${ID}${VERSION_ID} | sed 's/-/_/' | cut -d'.' -f1,2)_$(uname -m)"
@@ -22,13 +22,6 @@ case "`uname -s`" in
 
     if [ -f /etc/astra_version ]; then
 	case "`cat /etc/astra_version`" in
-            *)
-            BLD_ARCH_HOST="$(. /etc/os-release; echo ${ID}${VERSION_ID} | sed 's/-/_/')"
-	esac
-    fi
-
-    if [ -f /etc/redos-release ]; then
-	case "`cat /etc/redos-release`" in
             *)
             BLD_ARCH_HOST="$(. /etc/os-release; echo ${ID}${VERSION_ID} | sed 's/-/_/')"
 	esac
