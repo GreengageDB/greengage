@@ -1,0 +1,60 @@
+# Leftover demo cluster data from previous host builds (GBs; generated
+# files are gitignored in gpAux/gpdemo/.gitignore - the tracked scripts
+# themselves are needed to create the demo cluster inside the image)
+gpAux/gpdemo/datadirs/
+gpAux/gpdemo/gpdemo-env.sh
+gpAux/gpdemo/hostfile
+gpAux/gpdemo/clusterConfigFile
+gpAux/gpdemo/clusterConfigPostgresAddonsFile
+gpAux/gpdemo/certificate/
+
+# Git metadata: kept out to shrink the context; BUILD_NUMBER generation
+# in the image simply skips it
+.git/
+.gitmodules
+
+# Host configure/build leftovers - the container runs its own configure
+config.log
+config.status
+config.cache
+GNUmakefile
+src/Makefile.global
+src/Makefile.custom
+src/backend/Makefile.global
+src/include/pg_config.h
+src/include/pg_config_ext.h
+src/include/pg_config_os.h
+src/include/stamp-h
+src/include/config.h
+
+# Generated headers and other distprep output (see .gitignore); may be
+# absolute-path symlinks left by local builds that dangle inside the image
+**/errcodes.h
+**/fmgroids.h
+**/fmgrprotos.h
+**/probes.h
+**/gram.h
+**/lwlocknames.h
+**/fmgrtab.c
+**/fmgr-stamp
+**/header-stamp
+**/scan.c
+**/gram.c
+**/.deps/
+**/*.o
+**/*.a
+**/*.so
+**/*.so.[0-9]*
+**/*.po
+**/*.pyc
+**/__pycache__/
+
+# Test run outputs
+*.diffs
+*.out
+!src/test/regress/expected/*.out
+!src/test/regress/sql/*.sql
+src/test/regress/testtablespace/
+src/test/regress/tmp_check/
+src/test/regress/regression.diffs
+src/test/regress/regression.out
