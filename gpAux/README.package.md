@@ -38,7 +38,7 @@ pointing at the staging area.
 | Target | Description |
 | --- | --- |
 | `../VERSION` | Runs [`../getversion`](../getversion), writes result to `../VERSION` |
-| `version-vars` | Reads `../VERSION`, sets `FULL_VERSION`, `PACKAGE_VERSION`, `DISTRO_CODENAME`, `IS_RELEASE`, `STABILITY`, `BUILD_TYPE` |
+| `version-vars` | Reads `../VERSION`, sets `FULL_VERSION`, `PACKAGE_VERSION` (with `~` instead of `-`), `DISTRO_CODENAME`, `IS_RELEASE`, `STABILITY`, `BUILD_TYPE` |
 | `version-info` | Prints the above variables (debug) |
 
 ### Packaging
