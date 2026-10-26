@@ -4891,6 +4891,22 @@ tempcat_inplace_update(Relation rel, HeapTuple tup)
 	if (tup->t_len != e->len || tup->t_data->t_hoff != hdr->t_hoff)
 		elog(ERROR, "wrong tuple length");
 
+	/*
+	 * Like heap_inplace_lock(): a version the transaction has replaced would
+	 * take the change with it.
+	 */
+	if (TransactionIdIsValid(e->xmax) &&
+		TransactionIdIsCurrentTransactionId(e->xmax))
+	{
+		if (e->cmax < GetCurrentCommandId(false))
+			ereport(ERROR,
+					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+					 errmsg_internal("attempted to overwrite invisible tuple")));
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("tuple to be updated was already modified by an operation triggered by the current command")));
+	}
+
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 	memcpy((char *) hdr + hdr->t_hoff,
 		   (char *) tup->t_data + tup->t_data->t_hoff,
