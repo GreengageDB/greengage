@@ -113,6 +113,7 @@ Append
 AppendPath
 AppendRelInfo
 AppendState
+ApplyErrorCallbackArg
 ApplyExecutionData
 ApplySubXactData
 Archive
@@ -707,6 +708,7 @@ File
 FileFdwExecutionState
 FileFdwPlanState
 FileNameMap
+FileSet
 FileTag
 FinalPathExtraData
 FindColsContext
@@ -1389,12 +1391,15 @@ LogicalOutputPluginWriterUpdateProgress
 LogicalOutputPluginWriterWrite
 LogicalRepBeginData
 LogicalRepCommitData
+LogicalRepCommitPreparedTxnData
 LogicalRepCtxStruct
 LogicalRepMsgType
 LogicalRepPartMapEntry
+LogicalRepPreparedTxnData
 LogicalRepRelId
 LogicalRepRelMapEntry
 LogicalRepRelation
+LogicalRepRollbackPreparedTxnData
 LogicalRepTupleData
 LogicalRepTyp
 LogicalRepWorker
@@ -1420,6 +1425,13 @@ Material
 MaterialPath
 MaterialState
 MdfdVec
+Memoize
+MemoizeEntry
+MemoizeInstrumentation
+MemoizeKey
+MemoizePath
+MemoizeState
+MemoizeTuple
 MemoryContext
 MemoryContextCallback
 MemoryContextCallbackFunction
@@ -2034,6 +2046,7 @@ PublicationActions
 PublicationInfo
 PublicationPartOpt
 PublicationRelInfo
+PublicationTable
 PullFilter
 PullFilterOps
 PushFilter
@@ -2221,13 +2234,6 @@ RestoreOptions
 RestorePass
 RestrictInfo
 Result
-ResultCache
-ResultCacheEntry
-ResultCacheInstrumentation
-ResultCacheKey
-ResultCachePath
-ResultCacheState
-ResultCacheTuple
 ResultRelInfo
 ResultState
 ReturnSetInfo
@@ -2383,10 +2389,10 @@ SharedInvalSmgrMsg
 SharedInvalSnapshotMsg
 SharedInvalidationMessage
 SharedJitInstrumentation
+SharedMemoizeInfo
 SharedRecordTableEntry
 SharedRecordTableKey
 SharedRecordTypmodRegistry
-SharedResultCacheInfo
 SharedSortInfo
 SharedTuplestore
 SharedTuplestoreAccessor
@@ -2419,7 +2425,6 @@ SlabBlock
 SlabChunk
 SlabContext
 SlabSlot
-SlotErrCallbackArg
 SlotNumber
 SlruCtl
 SlruCtlData
@@ -2510,6 +2515,7 @@ StringInfoData
 StripnullState
 SubLink
 SubLinkType
+SubOpts
 SubPlan
 SubPlanState
 SubRemoveRels
@@ -2842,6 +2848,7 @@ WaitEventSet
 WaitEventTimeout
 WaitPMResult
 WalCloseMethod
+WalCompression
 WalLevel
 WalRcvData
 WalRcvExecResult
@@ -3269,6 +3276,8 @@ mbcharacter_incrementer
 mbdisplaylen_converter
 mblen_converter
 mbstr_verifier
+memoize_hash
+memoize_iterator
 metastring
 mix_data_t
 mixedStruct
@@ -3316,6 +3325,7 @@ pgParameterStatus
 pg_atomic_flag
 pg_atomic_uint32
 pg_atomic_uint64
+pg_be_sasl_mech
 pg_checksum_context
 pg_checksum_raw_context
 pg_checksum_type
@@ -3331,6 +3341,7 @@ pg_enc
 pg_enc2gettext
 pg_enc2name
 pg_encname
+pg_fe_sasl_mech
 pg_funcptr_t
 pg_gssinfo
 pg_hmac_ctx
@@ -3473,8 +3484,6 @@ remoteDep
 rendezvousHashEntry
 replace_rte_variables_callback
 replace_rte_variables_context
-resultcache_hash
-resultcache_iterator
 ret_type
 rewind_source
 rewrite_event

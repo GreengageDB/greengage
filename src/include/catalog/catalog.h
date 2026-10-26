@@ -45,6 +45,8 @@ extern char* GetReservedPrefix(const char *name);
 
 extern bool IsSharedRelation(Oid relationId);
 
+extern bool IsPinnedObject(Oid classId, Oid objectId);
+
 extern Oid GetNewOidWithIndex(Relation relation, Oid indexId,
 							  AttrNumber oidcolumn);
 extern Oid GetNewRelFileNode(Oid reltablespace, Relation pg_class,

@@ -115,7 +115,7 @@ static relopt_bool boolRelOpts[] =
 		{
 			"autovacuum_enabled",
 			"Enables autovacuum in this relation",
-			RELOPT_KIND_HEAP | RELOPT_KIND_TOAST | RELOPT_KIND_PARTITIONED,
+			RELOPT_KIND_HEAP | RELOPT_KIND_TOAST,
 			ShareUpdateExclusiveLock
 		},
 		true
@@ -244,7 +244,7 @@ static relopt_int intRelOpts[] =
 		{
 			"autovacuum_analyze_threshold",
 			"Minimum number of tuple inserts, updates or deletes prior to analyze",
-			RELOPT_KIND_HEAP | RELOPT_KIND_PARTITIONED,
+			RELOPT_KIND_HEAP,
 			ShareUpdateExclusiveLock
 		},
 		-1, 0, INT_MAX
@@ -418,7 +418,7 @@ static relopt_real realRelOpts[] =
 		{
 			"autovacuum_analyze_scale_factor",
 			"Number of tuple inserts, updates or deletes prior to analyze as a fraction of reltuples",
-			RELOPT_KIND_HEAP | RELOPT_KIND_PARTITIONED,
+			RELOPT_KIND_HEAP,
 			ShareUpdateExclusiveLock
 		},
 		-1, 0.0, 100.0
@@ -1889,7 +1889,7 @@ default_reloptions(Datum reloptions, bool validate, relopt_kind kind)
 		offsetof(StdRdOptions, user_catalog_table)},
 		{"parallel_workers", RELOPT_TYPE_INT,
 		offsetof(StdRdOptions, parallel_workers)},
-		{"vacuum_index_cleanup", RELOPT_TYPE_BOOL,
+		{"vacuum_index_cleanup", RELOPT_TYPE_ENUM,
 		offsetof(StdRdOptions, vacuum_index_cleanup)},
 		{"vacuum_truncate", RELOPT_TYPE_BOOL,
 		offsetof(StdRdOptions, vacuum_truncate)},
@@ -2004,11 +2004,9 @@ bytea *
 partitioned_table_reloptions(Datum reloptions, bool validate)
 {
 	/*
-	 * autovacuum_enabled, autovacuum_analyze_threshold and
-	 * autovacuum_analyze_scale_factor are supported for partitioned tables.
-	 *
-	 * GPDB: we maintain reloptions for partition roots to support reloption
-	 * inheritance and hierarchy wide ALTER TABLE SET().
+	 * GPDB: upstream has no options for partitioned tables, but we maintain
+	 * reloptions for partition roots to support reloption inheritance and
+	 * hierarchy wide ALTER TABLE SET(), so parse them as heap options.
 	 */
 	return default_reloptions(reloptions, validate, RELOPT_KIND_HEAP);
 }

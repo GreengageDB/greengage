@@ -167,9 +167,9 @@ btbuildempty(Relation index)
 	 * this even when wal_level=minimal.
 	 */
 	PageSetChecksumInplace(metapage, BTREE_METAPAGE);
-	smgrwrite(index->rd_smgr, INIT_FORKNUM, BTREE_METAPAGE,
+	smgrwrite(RelationGetSmgr(index), INIT_FORKNUM, BTREE_METAPAGE,
 			  (char *) metapage, true);
-	log_newpage(&index->rd_smgr->smgr_rnode.node, INIT_FORKNUM,
+	log_newpage(&RelationGetSmgr(index)->smgr_rnode.node, INIT_FORKNUM,
 				BTREE_METAPAGE, metapage, true);
 
 	/*
@@ -177,7 +177,7 @@ btbuildempty(Relation index)
 	 * write did not go through shared_buffers and therefore a concurrent
 	 * checkpoint may have moved the redo pointer past our xlog record.
 	 */
-	smgrimmedsync(index->rd_smgr, INIT_FORKNUM);
+	smgrimmedsync(RelationGetSmgr(index), INIT_FORKNUM);
 }
 
 /*
@@ -1072,11 +1072,10 @@ btvacuumscan(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 	 * recycled.  Taking the lock synchronizes things enough to prevent a
 	 * problem: either num_pages won't include the new page, or _bt_getbuf
 	 * already has write lock on the buffer and it will be fully initialized
-	 * before we can examine it.  (See also vacuumlazy.c, which has the same
-	 * issue.)	Also, we need not worry if a page is added immediately after
-	 * we look; the page splitting code already has write-lock on the left
-	 * page before it adds a right page, so we must already have processed any
-	 * tuples due to be moved into such a page.
+	 * before we can examine it.  Also, we need not worry if a page is added
+	 * immediately after we look; the page splitting code already has
+	 * write-lock on the left page before it adds a right page, so we must
+	 * already have processed any tuples due to be moved into such a page.
 	 *
 	 * We can skip locking for new or temp relations, however, since no one
 	 * else could be accessing them.

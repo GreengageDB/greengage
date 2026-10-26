@@ -348,7 +348,7 @@ expand_partitioned_rtentry(PlannerInfo *root, RelOptInfo *relinfo,
 	 * that survive pruning.  Below, we will initialize child objects for the
 	 * surviving partitions.
 	 */
-	live_parts = prune_append_rel_partitions(relinfo);
+	relinfo->live_parts = live_parts = prune_append_rel_partitions(relinfo);
 
 	/* Expand simple_rel_array and friends to hold child objects. */
 	num_live_parts = bms_num_members(live_parts);
@@ -399,6 +399,14 @@ expand_partitioned_rtentry(PlannerInfo *root, RelOptInfo *relinfo,
 
 			/* release the lock, since we're not scanning this partition */
 			table_close(childrel, lockmode);
+
+			/*
+			 * The partition is not scanned, so it must not be in live_parts
+			 * either: code that walks live_parts expects part_rels[i] to be
+			 * set for every member.  (Deleting the current member does not
+			 * disturb the bms_next_member() loop.)
+			 */
+			relinfo->live_parts = bms_del_member(relinfo->live_parts, i);
 
 			continue;
 		}

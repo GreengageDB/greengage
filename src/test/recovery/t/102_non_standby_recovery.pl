@@ -4,7 +4,7 @@ use PostgresNode;
 use TestLib;
 use Test::More tests => 3;
 
-my $node = get_new_node('master');
+my $node = PostgresNode->new('master');
 
 # Create a data directory with initdb
 $node->init(has_archiving    => 1);
@@ -35,7 +35,7 @@ $node->safe_psql(
 $node->stop;
 
 # Restore it to create a new independent node
-my $restored_node = get_new_node('restored_node');
+my $restored_node = PostgresNode->new('restored_node');
 
 # Recovery in non-standby mode
 $restored_node->init_from_backup($node, 'testbackup', has_restoring => 1, standby => 0);

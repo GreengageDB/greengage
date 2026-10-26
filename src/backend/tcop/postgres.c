@@ -924,7 +924,7 @@ pg_rewrite_query(Query *query)
 		 */
 		foreach(lc, querytree_list)
 		{
-			Query	   *query = castNode(Query, lfirst(lc));
+			Query	   *query = lfirst_node(Query, lc);
 
 			if (query->commandType != CMD_UTILITY)
 			{
@@ -5021,10 +5021,9 @@ PostgresMain(int argc, char *argv[],
 
 		/* Initialize MaxBackends (if under postmaster, was done already) */
 		InitializeMaxBackends();
-	}
 
-	/* Early initialization */
-	BaseInit();
+		CreateSharedMemoryAndSemaphores();
+	}
 
 	/*
 	 * Create a per-backend PGPROC struct in shared memory, except in the
@@ -5038,6 +5037,9 @@ PostgresMain(int argc, char *argv[],
 #else
 	InitProcess();
 #endif
+
+	/* Early initialization */
+	BaseInit();
 
 	/* We need to allow SIGINT, etc during the initial transaction */
 	PG_SETMASK(&UnBlockSig);

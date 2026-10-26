@@ -1943,7 +1943,7 @@ generate_orderedappend_paths(PlannerInfo *root, RelOptInfo *rel,
 	 * for both forward and reverse scans.
 	 */
 	if (rel->part_scheme != NULL && IS_SIMPLE_REL(rel) &&
-		partitions_are_ordered(rel->boundinfo, rel->nparts))
+		partitions_are_ordered(rel->boundinfo, rel->live_parts))
 	{
 		partition_pathkeys = build_partition_pathkeys(root, rel,
 													  ForwardScanDirection,
@@ -3342,8 +3342,8 @@ generate_useful_gather_paths(PlannerInfo *root, RelOptInfo *rel, bool override_r
 			 * gather merge path for every subpath that has pathkeys present.
 			 *
 			 * But since the subpath is already sorted, we know we don't need
-			 * to consider adding a sort (other either kind) on top of it, so
-			 * we can continue here.
+			 * to consider adding a sort (full or incremental) on top of it,
+			 * so we can continue here.
 			 */
 			if (is_sorted)
 				continue;
@@ -4711,9 +4711,9 @@ print_path(PlannerInfo *root, Path *path, int indent)
 			ptype = "Material";
 			subpath = ((MaterialPath *) path)->subpath;
 			break;
-		case T_ResultCachePath:
-			ptype = "ResultCache";
-			subpath = ((ResultCachePath *) path)->subpath;
+		case T_MemoizePath:
+			ptype = "Memoize";
+			subpath = ((MemoizePath *) path)->subpath;
 			break;
 		case T_UniquePath:
 			ptype = "Unique";

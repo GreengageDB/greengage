@@ -180,6 +180,7 @@ typedef struct _namespaceInfo
 {
 	DumpableObject dobj;
 	DumpableAcl dacl;
+	bool		create;			/* CREATE SCHEMA, or just set owner? */
 	Oid			nspowner;		/* OID of owner */
 	const char *rolname;		/* name of owner */
 } NamespaceInfo;
@@ -206,7 +207,6 @@ typedef struct _typeInfo
 	 */
 	char		*ftypname;
 	const char  *rolname;
-	char		*typacl;
 	Oid			typelem;
 	Oid			typrelid;
 	char		typrelkind;		/* 'r', 'v', 'c', etc */
@@ -508,6 +508,7 @@ typedef struct _triggerInfo
 	Oid			tgconstrrelid;
 	char	   *tgconstrrelname;
 	char		tgenabled;
+	bool		tgisinternal;
 	bool		tgdeferrable;
 	bool		tginitdeferred;
 	char	   *tgdef;
@@ -707,6 +708,7 @@ typedef struct _SubscriptionInfo
 	char	   *subslotname;
 	char	   *subbinary;
 	char	   *substream;
+	char	   *subtwophasestate;
 	char	   *subsynccommit;
 	char	   *subpublications;
 } SubscriptionInfo;

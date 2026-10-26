@@ -1853,6 +1853,166 @@ window w as
    | 43 |          42 |         43
 (7 rows)
 
+-- There is a syntactic ambiguity in the SQL standard.  Since
+-- UNBOUNDED is a non-reserved word, it could be the name of a
+-- function parameter and be used as an expression.  There is a
+-- grammar hack to resolve such cases as the keyword.  The following
+-- tests record this behavior.
+CREATE FUNCTION unbounded_syntax_test1a(x int) RETURNS TABLE (a int, b int, c int)
+LANGUAGE SQL
+BEGIN ATOMIC
+  -- GPDB: ORDER BY in the frame makes the windowed sum deterministic under MPP
+  -- (without it the ROWS frame depends on inter-segment gather order).
+  SELECT sum(unique1) over (order by unique1 rows between x preceding and x following),
+         unique1, four
+  FROM tenk1 WHERE unique1 < 10;
+END;
+CREATE FUNCTION unbounded_syntax_test1b(x int) RETURNS TABLE (a int, b int, c int)
+LANGUAGE SQL
+AS $$
+  -- GPDB: ORDER BY in the frame makes the windowed sum deterministic under MPP
+  -- (without it the ROWS frame depends on inter-segment gather order).
+  SELECT sum(unique1) over (order by unique1 rows between x preceding and x following),
+         unique1, four
+  FROM tenk1 WHERE unique1 < 10;
+$$;
+-- These will apply the argument to the window specification inside the function.
+SELECT * FROM unbounded_syntax_test1a(2);
+ a  | b | c 
+----+---+---
+  3 | 0 | 0
+  6 | 1 | 1
+ 10 | 2 | 2
+ 15 | 3 | 3
+ 20 | 4 | 0
+ 25 | 5 | 1
+ 30 | 6 | 2
+ 35 | 7 | 3
+ 30 | 8 | 0
+ 24 | 9 | 1
+(10 rows)
+
+SELECT * FROM unbounded_syntax_test1b(2);
+ a  | b | c 
+----+---+---
+  3 | 0 | 0
+  6 | 1 | 1
+ 10 | 2 | 2
+ 15 | 3 | 3
+ 20 | 4 | 0
+ 25 | 5 | 1
+ 30 | 6 | 2
+ 35 | 7 | 3
+ 30 | 8 | 0
+ 24 | 9 | 1
+(10 rows)
+
+-- GPDB: UNBOUNDED is a reserved keyword in Greengage (unreserved upstream),
+-- so it is quoted wherever it is a parameter, function or alias name.
+CREATE FUNCTION unbounded_syntax_test2a("unbounded" int) RETURNS TABLE (a int, b int, c int)
+LANGUAGE SQL
+BEGIN ATOMIC
+  SELECT sum(unique1) over (rows between unbounded preceding and unbounded following),
+         unique1, four
+  FROM tenk1 WHERE unique1 < 10;
+END;
+CREATE FUNCTION unbounded_syntax_test2b("unbounded" int) RETURNS TABLE (a int, b int, c int)
+LANGUAGE SQL
+AS $$
+  SELECT sum(unique1) over (rows between unbounded preceding and unbounded following),
+         unique1, four
+  FROM tenk1 WHERE unique1 < 10;
+$$;
+-- These will not apply the argument but instead treat UNBOUNDED as a keyword.
+SELECT * FROM unbounded_syntax_test2a(2);
+ a  | b | c 
+----+---+---
+ 45 | 4 | 0
+ 45 | 2 | 2
+ 45 | 1 | 1
+ 45 | 6 | 2
+ 45 | 9 | 1
+ 45 | 8 | 0
+ 45 | 5 | 1
+ 45 | 3 | 3
+ 45 | 7 | 3
+ 45 | 0 | 0
+(10 rows)
+
+SELECT * FROM unbounded_syntax_test2b(2);
+ a  | b | c 
+----+---+---
+ 45 | 4 | 0
+ 45 | 2 | 2
+ 45 | 1 | 1
+ 45 | 6 | 2
+ 45 | 9 | 1
+ 45 | 8 | 0
+ 45 | 5 | 1
+ 45 | 3 | 3
+ 45 | 7 | 3
+ 45 | 0 | 0
+(10 rows)
+
+DROP FUNCTION unbounded_syntax_test1a, unbounded_syntax_test1b,
+              unbounded_syntax_test2a, unbounded_syntax_test2b;
+-- Other tests with token UNBOUNDED in potentially problematic position
+CREATE FUNCTION "unbounded"(x int) RETURNS int LANGUAGE SQL IMMUTABLE RETURN x;
+-- GPDB: ORDER BY in the frame for MPP determinism (see note above).
+SELECT sum(unique1) over (order by unique1 rows between 1 preceding and 1 following),
+       unique1, four
+FROM tenk1 WHERE unique1 < 10;
+ sum | unique1 | four 
+-----+---------+------
+   1 |       0 |    0
+   3 |       1 |    1
+   6 |       2 |    2
+   9 |       3 |    3
+  12 |       4 |    0
+  15 |       5 |    1
+  18 |       6 |    2
+  21 |       7 |    3
+  24 |       8 |    0
+  17 |       9 |    1
+(10 rows)
+
+SELECT sum(unique1) over (order by unique1 rows between "unbounded"(1) preceding and "unbounded"(1) following),
+       unique1, four
+FROM tenk1 WHERE unique1 < 10;
+ sum | unique1 | four 
+-----+---------+------
+   1 |       0 |    0
+   3 |       1 |    1
+   6 |       2 |    2
+   9 |       3 |    3
+  12 |       4 |    0
+  15 |       5 |    1
+  18 |       6 |    2
+  21 |       7 |    3
+  24 |       8 |    0
+  17 |       9 |    1
+(10 rows)
+
+-- GPDB: variables are allowed in frame offsets (see transformFrameOffset()),
+-- so this query does not fail as it does upstream.
+SELECT sum(unique1) over (order by unique1 rows between "unbounded".x preceding and "unbounded".x following),
+       unique1, four
+FROM tenk1, (values (1)) as "unbounded"(x) WHERE unique1 < 10;
+ sum | unique1 | four 
+-----+---------+------
+   1 |       0 |    0
+   3 |       1 |    1
+   6 |       2 |    2
+   9 |       3 |    3
+  12 |       4 |    0
+  15 |       5 |    1
+  18 |       6 |    2
+  21 |       7 |    3
+  24 |       8 |    0
+  17 |       9 |    1
+(10 rows)
+
+DROP FUNCTION "unbounded";
 -- Check overflow behavior for various integer sizes
 select x, last_value(x) over (order by x::smallint range between current row and 2147450884 following)
 from generate_series(32764, 32766) x;

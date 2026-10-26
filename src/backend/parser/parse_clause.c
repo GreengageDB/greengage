@@ -349,7 +349,7 @@ setTargetTable(ParseState *pstate, RangeVar *relation,
 	/*
 	 * Special check for DML on system relations,
 	 * allow DML when:
-	 * 	- in single user mode: initdb insert PIN entries to pg_depend,...
+	 * 	- in single user mode (initdb's post-bootstrap processing)
 	 * 	- in maintenance mode, upgrade mode or
 	 *  - allow_system_table_mods = true
 	 */
@@ -3060,7 +3060,7 @@ transformWindowDefinitions(ParseState *pstate,
 						(errcode(ERRCODE_WINDOWING_ERROR),
 						 errmsg("RANGE with offset PRECEDING/FOLLOWING requires exactly one ORDER BY column"),
 						 parser_errposition(pstate, windef->location)));
-			sortcl = castNode(SortGroupClause, linitial(wc->orderClause));
+			sortcl = linitial_node(SortGroupClause, wc->orderClause);
 			sortkey = get_sortgroupclause_expr(sortcl, *targetlist);
 			/* Find the sort operator in pg_amop */
 			if (!get_ordering_op_properties(sortcl->sortop,

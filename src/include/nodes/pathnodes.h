@@ -84,6 +84,7 @@ typedef enum UpperRelationKind
 	UPPERREL_GROUP_AGG,			/* result of grouping/aggregation, if any */
 	UPPERREL_CDB_FIRST_STAGE_GROUP_AGG,
 	UPPERREL_WINDOW,			/* result of window functions, if any */
+	UPPERREL_PARTIAL_DISTINCT,	/* result of partial "SELECT DISTINCT", if any */
 	UPPERREL_DISTINCT,			/* result of "SELECT DISTINCT", if any */
 	UPPERREL_CDB_FIRST_STAGE_DISTINCT,
 	UPPERREL_ORDERED,			/* result of ORDER BY, if any */
@@ -948,6 +949,9 @@ typedef struct RelOptInfo
 	List	   *partition_qual; /* Partition constraint, if not the root */
 	struct RelOptInfo **part_rels;	/* Array of RelOptInfos of partitions,
 									 * stored in the same order as bounds */
+	Bitmapset  *live_parts;		/* Bitmap with members acting as indexes into
+								 * the part_rels[] array to indicate which
+								 * partitions survived partition pruning. */
 	Relids		all_partrels;	/* Relids set of all partition relids */
 	List	  **partexprs;		/* Non-nullable partition key expressions */
 	List	  **nullable_partexprs; /* Nullable partition key expressions */
@@ -1678,7 +1682,7 @@ typedef struct CdbMotionPath
 } CdbMotionPath;
 
 /*
- * TidRangePath represents a scan by a continguous range of TIDs
+ * TidRangePath represents a scan by a contiguous range of TIDs
  *
  * tidrangequals is an implicitly AND'ed list of qual expressions of the form
  * "CTID relop pseudoconstant", where relop is one of >,>=,<,<=.
@@ -1850,11 +1854,11 @@ typedef struct MaterialPath
 } MaterialPath;
 
 /*
- * ResultCachePath represents a ResultCache plan node, i.e., a cache that
- * caches tuples from parameterized paths to save the underlying node from
- * having to be rescanned for parameter values which are already cached.
+ * MemoizePath represents a Memoize plan node, i.e., a cache that caches
+ * tuples from parameterized paths to save the underlying node from having to
+ * be rescanned for parameter values which are already cached.
  */
-typedef struct ResultCachePath
+typedef struct MemoizePath
 {
 	Path		path;
 	Path	   *subpath;		/* outerpath to cache tuples from */
@@ -1866,7 +1870,7 @@ typedef struct ResultCachePath
 	uint32		est_entries;	/* The maximum number of entries that the
 								 * planner expects will fit in the cache, or 0
 								 * if unknown */
-} ResultCachePath;
+} MemoizePath;
 
 /*
  * UniquePath represents elimination of distinct rows from the output of
@@ -1880,7 +1884,7 @@ typedef struct ResultCachePath
  * it's convenient to have a UniquePath in the path tree to signal upper-level
  * routines that the input is known distinct.)
  */
-typedef enum
+typedef enum UniquePathMethod
 {
 	UNIQUE_PATH_NOOP,			/* input is known unique already */
 	UNIQUE_PATH_HASH,			/* use hashing */
@@ -1959,7 +1963,10 @@ typedef struct JoinPath
  * A nested-loop path needs no special fields.
  */
 
-typedef JoinPath NestPath;
+typedef struct NestPath
+{
+	JoinPath	jpath;
+} NestPath;
 
 /*
  * A mergejoin path has these fields.
@@ -2527,7 +2534,7 @@ typedef struct RestrictInfo
 	Selectivity left_mcvfreq;	/* left side's most common val's freq */
 	Selectivity right_mcvfreq;	/* right side's most common val's freq */
 
-	/* hash equality operator used for result cache, else InvalidOid */
+	/* hash equality operator used for memoize nodes, else InvalidOid */
 	Oid			hasheqoperator;
 } RestrictInfo;
 

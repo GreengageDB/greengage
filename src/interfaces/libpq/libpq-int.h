@@ -42,6 +42,7 @@
 #include "getaddrinfo.h"
 #include "libpq/pqcomm.h"
 /* include stuff found in fe only */
+#include "fe-auth-sasl.h"
 #include "pqexpbuffer.h"
 
 #ifdef ENABLE_GSS
@@ -557,6 +558,7 @@ struct pg_conn
 	char		wrote_xlog;
 
 	/* Assorted state for SASL, SSL, GSS, etc */
+	const pg_fe_sasl_mech *sasl;
 	void	   *sasl_state;
 
 	/* SSL structures */
@@ -683,13 +685,6 @@ extern bool pqGetHomeDirectory(char *buf, int bufsize);
 #ifdef ENABLE_THREAD_SAFETY
 extern pgthreadlock_t pg_g_threadlock;
 
-#define PGTHREAD_ERROR(msg) \
-	do { \
-		fprintf(stderr, "%s\n", msg); \
-		abort(); \
-	} while (0)
-
-
 #define pglock_thread()		pg_g_threadlock(true)
 #define pgunlock_thread()	pg_g_threadlock(false)
 #else
@@ -699,7 +694,7 @@ extern pgthreadlock_t pg_g_threadlock;
 
 /* === in fe-exec.c === */
 
-extern void pqSetResultError(PGresult *res, const char *msg);
+extern void pqSetResultError(PGresult *res, PQExpBuffer errorMessage);
 extern void *pqResultAlloc(PGresult *res, size_t nBytes, bool isBinary);
 extern char *pqResultStrdup(PGresult *res, const char *str);
 extern void pqClearAsyncResult(PGconn *conn);

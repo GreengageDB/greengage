@@ -1642,7 +1642,7 @@ REVOKE ALL ON pg_replication_origin_status FROM public;
 -- All columns of pg_subscription except subconninfo are publicly readable.
 REVOKE ALL ON pg_subscription FROM public;
 GRANT SELECT (oid, subdbid, subname, subowner, subenabled, subbinary,
-              substream, subslotname, subsynccommit, subpublications)
+              substream, subtwophasestate, subslotname, subsynccommit, subpublications)
     ON pg_subscription TO public;
 
 

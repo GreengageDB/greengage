@@ -596,11 +596,6 @@ StartReplication(StartReplicationCmd *cmd)
 	StringInfoData buf;
 	XLogRecPtr	FlushPtr;
 
-	if (ThisTimeLineID == 0)
-		ereport(ERROR,
-				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				 errmsg("IDENTIFY_SYSTEM has not been run before START_REPLICATION")));
-
 	/* create xlogreader for physical replication */
 	xlogreader =
 		XLogReaderAllocate(wal_segment_size, NULL,
@@ -649,6 +644,7 @@ StartReplication(StartReplicationCmd *cmd)
 	 * that. Otherwise use the timeline of the last replayed record, which is
 	 * kept in ThisTimeLineID.
 	 */
+	am_cascading_walsender = RecoveryInProgress();
 	if (am_cascading_walsender)
 	{
 		/* this also updates ThisTimeLineID */
@@ -901,11 +897,13 @@ logical_read_xlog_page(XLogReaderState *state, XLogRecPtr targetPagePtr, int req
 static void
 parseCreateReplSlotOptions(CreateReplicationSlotCmd *cmd,
 						   bool *reserve_wal,
-						   CRSSnapshotAction *snapshot_action)
+						   CRSSnapshotAction *snapshot_action,
+						   bool *two_phase)
 {
 	ListCell   *lc;
 	bool		snapshot_action_given = false;
 	bool		reserve_wal_given = false;
+	bool		two_phase_given = false;
 
 	/* Parse options */
 	foreach(lc, cmd->options)
@@ -943,6 +941,15 @@ parseCreateReplSlotOptions(CreateReplicationSlotCmd *cmd,
 			reserve_wal_given = true;
 			*reserve_wal = true;
 		}
+		else if (strcmp(defel->defname, "two_phase") == 0)
+		{
+			if (two_phase_given || cmd->kind != REPLICATION_KIND_LOGICAL)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			two_phase_given = true;
+			*two_phase = true;
+		}
 		else
 			elog(ERROR, "unrecognized option: %s", defel->defname);
 	}
@@ -958,6 +965,7 @@ CreateReplicationSlot(CreateReplicationSlotCmd *cmd)
 	char		xloc[MAXFNAMELEN];
 	char	   *slot_name;
 	bool		reserve_wal = false;
+	bool		two_phase = false;
 	CRSSnapshotAction snapshot_action = CRS_EXPORT_SNAPSHOT;
 	DestReceiver *dest;
 	TupOutputState *tstate;
@@ -967,7 +975,7 @@ CreateReplicationSlot(CreateReplicationSlotCmd *cmd)
 
 	Assert(!MyReplicationSlot);
 
-	parseCreateReplSlotOptions(cmd, &reserve_wal, &snapshot_action);
+	parseCreateReplSlotOptions(cmd, &reserve_wal, &snapshot_action, &two_phase);
 
 	/* setup state for WalSndSegmentOpen */
 	sendTimeLineIsHistoric = false;
@@ -992,7 +1000,7 @@ CreateReplicationSlot(CreateReplicationSlotCmd *cmd)
 		 */
 		ReplicationSlotCreate(cmd->slotname, true,
 							  cmd->temporary ? RS_TEMPORARY : RS_EPHEMERAL,
-							  false);
+							  two_phase);
 	}
 
 	if (cmd->kind == REPLICATION_KIND_LOGICAL)

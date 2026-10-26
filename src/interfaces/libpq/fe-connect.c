@@ -574,11 +574,7 @@ pqDropConnection(PGconn *conn, bool flushInput)
 #endif
 	if (conn->sasl_state)
 	{
-		/*
-		 * XXX: if support for more authentication mechanisms is added, this
-		 * needs to call the right 'free' function.
-		 */
-		pg_fe_scram_free(conn->sasl_state);
+		conn->sasl->free(conn->sasl_state);
 		conn->sasl_state = NULL;
 	}
 }
@@ -6902,6 +6898,14 @@ PQerrorMessage(const PGconn *conn)
 	if (!conn)
 		return libpq_gettext("connection pointer is NULL\n");
 
+	/*
+	 * The errorMessage buffer might be marked "broken" due to having
+	 * previously failed to allocate enough memory for the message.  In that
+	 * case, tell the application we ran out of memory.
+	 */
+	if (PQExpBufferBroken(&conn->errorMessage))
+		return libpq_gettext("out of memory\n");
+
 	return conn->errorMessage.data;
 }
 
@@ -7413,6 +7417,11 @@ pqGetHomeDirectory(char *buf, int bufsize)
 /*
  * To keep the API consistent, the locking stubs are always provided, even
  * if they are not required.
+ *
+ * Since we neglected to provide any error-return convention in the
+ * pgthreadlock_t API, we can't do much except Assert upon failure of any
+ * mutex primitive.  Fortunately, such failures appear to be nonexistent in
+ * the field.
  */
 
 static void
@@ -7432,7 +7441,7 @@ default_threadlock(int acquire)
 		if (singlethread_lock == NULL)
 		{
 			if (pthread_mutex_init(&singlethread_lock, NULL))
-				PGTHREAD_ERROR("failed to initialize mutex");
+				Assert(false);
 		}
 		InterlockedExchange(&mutex_initlock, 0);
 	}
@@ -7440,12 +7449,12 @@ default_threadlock(int acquire)
 	if (acquire)
 	{
 		if (pthread_mutex_lock(&singlethread_lock))
-			PGTHREAD_ERROR("failed to lock mutex");
+			Assert(false);
 	}
 	else
 	{
 		if (pthread_mutex_unlock(&singlethread_lock))
-			PGTHREAD_ERROR("failed to unlock mutex");
+			Assert(false);
 	}
 #endif
 }

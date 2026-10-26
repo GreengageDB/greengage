@@ -587,20 +587,34 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	/*
 	 * Open all indexes of the relation, and see if there are any analyzable
 	 * columns in the indexes.  We do not analyze index columns if there was
-	 * an explicit column list in the ANALYZE command, however.  If we are
-	 * doing a recursive scan, we don't want to touch the parent's indexes at
-	 * all.
+	 * an explicit column list in the ANALYZE command, however.
+	 *
+	 * If we are doing a recursive scan, we don't want to touch the parent's
+	 * indexes at all.  If we're processing a partitioned table, we need to
+	 * know if there are any indexes, but we don't want to process them.
 	 */
-	if (!inh)
+	if (onerel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+	{
+		List *idxs = RelationGetIndexList(onerel);
+
+		Irel = NULL;
+		nindexes = 0;
+		hasindex = idxs != NIL;
+		list_free(idxs);
+	}
+	else if (!inh)
+	{
 		vac_open_indexes(onerel, AccessShareLock, &nindexes, &Irel);
+		hasindex = nindexes > 0;
+	}
 	else
 	{
 		Irel = NULL;
 		nindexes = 0;
+		hasindex = false;
 	}
-	hasindex = (nindexes > 0);
 	indexdata = NULL;
-	if (hasindex)
+	if (nindexes > 0)
 	{
 		indexdata = (AnlIndexData *) palloc0(nindexes * sizeof(AnlIndexData));
 		for (ind = 0; ind < nindexes; ind++)
@@ -921,7 +935,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		 * are used as is to evaluate index statistics. It is less likely to have
 		 * indexes on very wide columns, so the effect will be minimal.
 		 */
-		if (hasindex)
+		if (nindexes > 0)
 			compute_index_stats(onerel, totalrows,
 								indexdata, nindexes,
 								rows, numrows,
@@ -1058,21 +1072,10 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	{
 		/*
 		 * Partitioned tables don't have storage, so we don't set any fields
-		 * in their pg_class entries except for reltuples, which is necessary
-		 * for auto-analyze to work properly.
-		 *
-		 * We deliberately don't touch the parent's own indexes above (see
-		 * "Irel = NULL" for the inh case), so we don't know whether it
-		 * currently has any; pass through the existing relhasindex instead
-		 * of hard-coding false, which would otherwise make
-		 * vac_update_relstats() clear a true flag (partitioned tables can
-		 * have their own logical index, e.g. from CREATE INDEX on the
-		 * partitioned table) and hide all indexes on this table from the
-		 * planner.
+		 * in their pg_class entries except for reltuples and relhasindex.
 		 */
 		vac_update_relstats(onerel, -1, totalrows,
-							0, onerel->rd_rel->relhasindex,
-							InvalidTransactionId,
+							0, hasindex, InvalidTransactionId,
 							InvalidMultiXactId,
 							in_outer_xact, false);
 	}
@@ -1086,25 +1089,11 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	 * Reset the changes_since_analyze counter only if we analyzed all
 	 * columns; otherwise, there is still work for auto-analyze to do.
 	 */
-	if (!inh || onerel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+	if (!inh)
 		pgstat_report_analyze(onerel, totalrows, totaldeadrows,
 							  (va_cols == NIL));
-
-	/*
-	 * If this is a manual analyze of all columns of a permanent leaf
-	 * partition, and not doing inherited stats, also let the collector know
-	 * about the ancestor tables of this partition.  Autovacuum does the
-	 * equivalent of this at the start of its run, so there's no reason to do
-	 * it there.
-	 */
-	if (!inh && !IsAutoVacuumWorkerProcess() &&
-		(va_cols == NIL) &&
-		onerel->rd_rel->relispartition &&
-		onerel->rd_rel->relkind == RELKIND_RELATION &&
-		onerel->rd_rel->relpersistence == RELPERSISTENCE_PERMANENT)
-	{
-		pgstat_report_anl_ancestors(RelationGetRelid(onerel));
-	}
+	else if (onerel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+		pgstat_report_analyze(onerel, 0, 0, (va_cols == NIL));
 
 	/*
 	 * If this isn't part of VACUUM ANALYZE, let index AMs do cleanup.
@@ -1173,7 +1162,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 			 * reads which are also picked up by track_io_timing, if enabled,
 			 * the 'average write rate' is actually talking about the rate of
 			 * pages being dirtied, not being written out, so it's typical to
-			 * have a non-zero 'avg write rate' while I/O Timings only reports
+			 * have a non-zero 'avg write rate' while I/O timings only reports
 			 * reads.
 			 *
 			 * It's not clear that an ANALYZE will ever result in
@@ -1200,23 +1189,20 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 							 get_database_name(MyDatabaseId),
 							 get_namespace_name(RelationGetNamespace(onerel)),
 							 RelationGetRelationName(onerel));
+			if (track_io_timing)
+			{
+				double		read_ms = (double) (pgStatBlockReadTime - startreadtime) / 1000;
+				double		write_ms = (double) (pgStatBlockWriteTime - startwritetime) / 1000;
+
+				appendStringInfo(&buf, _("I/O timings: read: %.3f ms, write: %.3f ms\n"),
+								 read_ms, write_ms);
+			}
+			appendStringInfo(&buf, _("avg read rate: %.3f MB/s, avg write rate: %.3f MB/s\n"),
+							 read_rate, write_rate);
 			appendStringInfo(&buf, _("buffer usage: %lld hits, %lld misses, %lld dirtied\n"),
 							 (long long) AnalyzePageHit,
 							 (long long) AnalyzePageMiss,
 							 (long long) AnalyzePageDirty);
-			appendStringInfo(&buf, _("avg read rate: %.3f MB/s, avg write rate: %.3f MB/s\n"),
-							 read_rate, write_rate);
-			if (track_io_timing)
-			{
-				appendStringInfoString(&buf, _("I/O Timings:"));
-				if (pgStatBlockReadTime - startreadtime > 0)
-					appendStringInfo(&buf, _(" read=%.3f"),
-									 (double) (pgStatBlockReadTime - startreadtime) / 1000);
-				if (pgStatBlockWriteTime - startwritetime > 0)
-					appendStringInfo(&buf, _(" write=%.3f"),
-									 (double) (pgStatBlockWriteTime - startwritetime) / 1000);
-				appendStringInfoChar(&buf, '\n');
-			}
 			appendStringInfo(&buf, _("system usage: %s"), pg_rusage_show(&ru0));
 
 			ereport(LOG,
@@ -1653,7 +1639,7 @@ acquire_sample_rows(Relation onerel, int elevel,
 	 * fork's actual size. Skip prefetching for AO/AOCO relations.
 	 */
 	prefetch_maximum = RelationIsAppendOptimized(onerel) ?
-		0 : get_tablespace_io_concurrency(onerel->rd_rel->reltablespace);
+		0 : get_tablespace_maintenance_io_concurrency(onerel->rd_rel->reltablespace);
 	/* Create another BlockSampler, using the same seed, for prefetching */
 	if (prefetch_maximum)
 		(void) BlockSampler_Init(&prefetch_bs, totalblocks, targrows, randseed);

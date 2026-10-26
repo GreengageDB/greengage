@@ -2590,7 +2590,7 @@ reset enable_nestloop;
 set work_mem to '64kB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 set enable_mergejoin to off;
-set enable_resultcache to off;
+set enable_memoize to off;
 explain (costs off)
 select count(*) from tenk1 a, tenk1 b
   where a.hundred = b.thousand and (b.fivethous % 10) < 10;
@@ -2619,7 +2619,7 @@ select count(*) from tenk1 a, tenk1 b
 reset work_mem;
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 reset enable_mergejoin;
-reset enable_resultcache;
+reset enable_memoize;
 --
 -- regression test for 8.2 bug with improper re-ordering of left joins
 --
@@ -3581,6 +3581,14 @@ select unique1 from tenk1, lateral f_immutable_int4(1) x where x = unique1;
 (4 rows)
 
 explain (costs off)
+select unique1 from tenk1, lateral f_immutable_int4(1) x where x in (select 17);
+             QUERY PLAN              
+-------------------------------------
+ Result
+   One-Time Filter: false
+(3 rows)
+
+explain (costs off)
 select unique1, x from tenk1 join f_immutable_int4(1) x on unique1 = x;
                      QUERY PLAN                     
 ----------------------------------------------------
@@ -4503,7 +4511,7 @@ where t1.f1 = ss.f1;
                ->  Seq Scan on public.int8_tbl i8
                      Output: i8.q1, i8.q2
                      Filter: (i8.q2 = 123)
-   ->  Result Cache
+   ->  Memoize
          Output: (i8.q1), t2.f1
          Cache Key: i8.q1
          ->  Limit
@@ -4547,14 +4555,14 @@ where t1.f1 = ss2.f1;
                      ->  Seq Scan on public.int8_tbl i8
                            Output: i8.q1, i8.q2
                            Filter: (i8.q2 = 123)
-         ->  Result Cache
+         ->  Memoize
                Output: (i8.q1), t2.f1
                Cache Key: i8.q1
                ->  Limit
                      Output: (i8.q1), t2.f1
                      ->  Seq Scan on public.text_tbl t2
                            Output: i8.q1, t2.f1
-   ->  Result Cache
+   ->  Memoize
          Output: ((i8.q1)), (t2.f1)
          Cache Key: (i8.q1), t2.f1
          ->  Limit
@@ -4607,7 +4615,7 @@ where tt1.f1 = ss1.c0;
                      ->  Seq Scan on public.text_tbl tt4
                            Output: tt4.f1
                            Filter: (tt4.f1 = 'foo'::text)
-   ->  Result Cache
+   ->  Memoize
          Output: ss1.c0
          Cache Key: tt4.f1
          ->  Subquery Scan on ss1
@@ -5403,7 +5411,7 @@ explain (costs off)
          ->  Partial Aggregate
                ->  Nested Loop
                      ->  Seq Scan on tenk1 a
-                     ->  Result Cache
+                     ->  Memoize
                            Cache Key: a.two
                            ->  Function Scan on generate_series g
  Optimizer: Postgres query optimizer
@@ -5418,7 +5426,7 @@ explain (costs off)
          ->  Partial Aggregate
                ->  Nested Loop
                      ->  Seq Scan on tenk1 a
-                     ->  Result Cache
+                     ->  Memoize
                            Cache Key: a.two
                            ->  Function Scan on generate_series g
  Optimizer: Postgres query optimizer
@@ -5434,7 +5442,7 @@ explain (costs off)
          ->  Partial Aggregate
                ->  Nested Loop
                      ->  Seq Scan on tenk1 a
-                     ->  Result Cache
+                     ->  Memoize
                            Cache Key: a.two
                            ->  Function Scan on generate_series g
  Optimizer: Postgres query optimizer
@@ -6575,11 +6583,11 @@ where f.c = 1;
                            Index Cond: (c = 1)
                      ->  Index Only Scan using fkest1_pkey on fkest1 f1
                            Index Cond: ((a = f.a) AND (b = f.b))
-               ->  Result Cache
+               ->  Memoize
                      Cache Key: f.a, f.b
                      ->  Index Only Scan using fkest1_pkey on fkest1 f2
                            Index Cond: ((a = f.a) AND (b = f.b))
-         ->  Result Cache
+         ->  Memoize
                Cache Key: f.a, f.b
                ->  Index Only Scan using fkest1_pkey on fkest1 f3
                      Index Cond: ((a = f.a) AND (b = f.b))

@@ -75,6 +75,12 @@ int			SessionReplicationRole = SESSION_REPLICATION_ROLE_ORIGIN;
 static int	MyTriggerDepth = 0;
 
 /* Local function prototypes */
+static void renametrig_internal(Relation tgrel, Relation targetrel,
+								HeapTuple trigtup, const char *newname,
+								const char *expected_name);
+static void renametrig_partition(Relation tgrel, Oid partitionId,
+								 Oid parentTriggerOid, const char *newname,
+								 const char *expected_name);
 static void SetTriggerFlags(TriggerDesc *trigdesc, Trigger *trigger);
 static bool GetTupleForTrigger(EState *estate,
 							   EPQState *epqstate,
@@ -155,6 +161,24 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 			  Oid relOid, Oid refRelOid, Oid constraintOid, Oid indexOid,
 			  Oid funcoid, Oid parentTriggerOid, Node *whenClause,
 			  bool isInternal, bool in_partition)
+{
+	return
+		CreateTriggerFiringOn(stmt, queryString, relOid, refRelOid,
+							  constraintOid, indexOid, funcoid,
+							  parentTriggerOid, whenClause, isInternal,
+							  in_partition, TRIGGER_FIRES_ON_ORIGIN);
+}
+
+/*
+ * Like the above; additionally the firing condition
+ * (always/origin/replica/disabled) can be specified.
+ */
+ObjectAddress
+CreateTriggerFiringOn(CreateTrigStmt *stmt, const char *queryString,
+					  Oid relOid, Oid refRelOid, Oid constraintOid,
+					  Oid indexOid, Oid funcoid, Oid parentTriggerOid,
+					  Node *whenClause, bool isInternal, bool in_partition,
+					  char trigger_fires_when)
 {
 	int16		tgtype;
 	int			ncolumns;
@@ -299,8 +323,9 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	else
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("\"%s\" is not a table or view",
-						RelationGetRelationName(rel))));
+				 errmsg("relation \"%s\" cannot have triggers",
+						RelationGetRelationName(rel)),
+				 errdetail_relkind_not_supported(rel->rd_rel->relkind)));
 
 	if (!allowSystemTableMods && IsSystemRelation(rel))
 		ereport(ERROR,
@@ -896,7 +921,7 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	 * Special for Greenplum Database: Ignore foreign keys for now. Create
 	 * the triggers to back them as 'disabled'.
 	 */
-	char		tgenabled = TRIGGER_FIRES_ON_ORIGIN;
+	char		tgenabled = trigger_fires_when;
 	if (isInternal)
 	{
 		if (RI_FKey_trigger_type(funcoid))
@@ -1260,11 +1285,11 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 				map_partition_varattnos((List *) qual, PRS2_NEW_VARNO,
 										childTbl, rel);
 
-			CreateTrigger(childStmt, queryString,
-						  partdesc->oids[i], refRelOid,
-						  InvalidOid, indexOnChild,
-						  funcoid, trigoid, qual,
-						  isInternal, true);
+			CreateTriggerFiringOn(childStmt, queryString,
+								  partdesc->oids[i], refRelOid,
+								  InvalidOid, indexOnChild,
+								  funcoid, trigoid, qual,
+								  isInternal, true, trigger_fires_when);
 
 			table_close(childTbl, NoLock);
 
@@ -1327,8 +1352,9 @@ RemoveTriggerById(Oid trigOid)
 		rel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("\"%s\" is not a table, view, or foreign table",
-						RelationGetRelationName(rel))));
+				 errmsg("relation \"%s\" cannot have triggers",
+						RelationGetRelationName(rel)),
+				 errdetail_relkind_not_supported(rel->rd_rel->relkind)));
 
 	if (!allowSystemTableMods && IsSystemRelation(rel))
 		ereport(ERROR,
@@ -1433,8 +1459,9 @@ RangeVarCallbackForRenameTrigger(const RangeVar *rv, Oid relid, Oid oldrelid,
 		form->relkind != RELKIND_PARTITIONED_TABLE)
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("\"%s\" is not a table, view, or foreign table",
-						rv->relname)));
+				 errmsg("relation \"%s\" cannot have triggers",
+						rv->relname),
+				 errdetail_relkind_not_supported(form->relkind)));
 
 	/* you must own the table to rename one of its triggers */
 	if (!pg_class_ownercheck(relid, GetUserId()))
@@ -1486,38 +1513,16 @@ renametrig(RenameStmt *stmt)
 	targetrel = relation_open(relid, NoLock);
 
 	/*
-	 * Scan pg_trigger twice for existing triggers on relation.  We do this in
-	 * order to ensure a trigger does not exist with newname (The unique index
-	 * on tgrelid/tgname would complain anyway) and to ensure a trigger does
-	 * exist with oldname.
-	 *
-	 * NOTE that this is cool only because we have AccessExclusiveLock on the
-	 * relation, so the trigger set won't be changing underneath us.
+	 * On partitioned tables, this operation recurses to partitions.  Lock all
+	 * tables upfront.
 	 */
+	if (targetrel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+		(void) find_all_inheritors(relid, AccessExclusiveLock, NULL);
+
 	tgrel = table_open(TriggerRelationId, RowExclusiveLock);
 
 	/*
-	 * First pass -- look for name conflict
-	 */
-	ScanKeyInit(&key[0],
-				Anum_pg_trigger_tgrelid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(relid));
-	ScanKeyInit(&key[1],
-				Anum_pg_trigger_tgname,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				PointerGetDatum(stmt->newname));
-	tgscan = systable_beginscan(tgrel, TriggerRelidNameIndexId, true,
-								NULL, 2, key);
-	if (HeapTupleIsValid(tuple = systable_getnext(tgscan)))
-		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("trigger \"%s\" for relation \"%s\" already exists",
-						stmt->newname, RelationGetRelationName(targetrel))));
-	systable_endscan(tgscan);
-
-	/*
-	 * Second pass -- look for trigger existing with oldname and update
+	 * Search for the trigger to modify.
 	 */
 	ScanKeyInit(&key[0],
 				Anum_pg_trigger_tgrelid,
@@ -1533,27 +1538,40 @@ renametrig(RenameStmt *stmt)
 	{
 		Form_pg_trigger trigform;
 
-		/*
-		 * Update pg_trigger tuple with new tgname.
-		 */
-		tuple = heap_copytuple(tuple);	/* need a modifiable copy */
 		trigform = (Form_pg_trigger) GETSTRUCT(tuple);
 		tgoid = trigform->oid;
 
-		namestrcpy(&trigform->tgname,
-				   stmt->newname);
-
-		CatalogTupleUpdate(tgrel, &tuple->t_self, tuple);
-
-		InvokeObjectPostAlterHook(TriggerRelationId,
-								  tgoid, 0);
-
 		/*
-		 * Invalidate relation's relcache entry so that other backends (and
-		 * this one too!) are sent SI message to make them rebuild relcache
-		 * entries.  (Ideally this should happen automatically...)
+		 * If the trigger descends from a trigger on a parent partitioned
+		 * table, reject the rename.  We don't allow a trigger in a partition
+		 * to differ in name from that of its parent: that would lead to an
+		 * inconsistency that pg_dump would not reproduce.
 		 */
-		CacheInvalidateRelcache(targetrel);
+		if (OidIsValid(trigform->tgparentid))
+			ereport(ERROR,
+					errmsg("cannot rename trigger \"%s\" on table \"%s\"",
+						   stmt->subname, RelationGetRelationName(targetrel)),
+					errhint("Rename trigger on partitioned table \"%s\" instead.",
+							get_rel_name(get_partition_parent(relid, false))));
+
+
+		/* Rename the trigger on this relation ... */
+		renametrig_internal(tgrel, targetrel, tuple, stmt->newname,
+							stmt->subname);
+
+		/* ... and if it is partitioned, recurse to its partitions */
+		if (targetrel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+		{
+			PartitionDesc partdesc = RelationGetPartitionDesc(targetrel, true);
+
+			for (int i = 0; i < partdesc->nparts; i++)
+			{
+				Oid			partitionId = partdesc->oids[i];
+
+				renametrig_partition(tgrel, partitionId, trigform->oid,
+									 stmt->newname, stmt->subname);
+			}
+		}
 	}
 	else
 	{
@@ -1577,6 +1595,139 @@ renametrig(RenameStmt *stmt)
 	return address;
 }
 
+/*
+ * Subroutine for renametrig -- perform the actual work of renaming one
+ * trigger on one table.
+ *
+ * If the trigger has a name different from the expected one, raise a
+ * NOTICE about it.
+ */
+static void
+renametrig_internal(Relation tgrel, Relation targetrel, HeapTuple trigtup,
+					const char *newname, const char *expected_name)
+{
+	HeapTuple	tuple;
+	Form_pg_trigger tgform;
+	ScanKeyData key[2];
+	SysScanDesc tgscan;
+
+	/* If the trigger already has the new name, nothing to do. */
+	tgform = (Form_pg_trigger) GETSTRUCT(trigtup);
+	if (strcmp(NameStr(tgform->tgname), newname) == 0)
+		return;
+
+	/*
+	 * Before actually trying the rename, search for triggers with the same
+	 * name.  The update would fail with an ugly message in that case, and it
+	 * is better to throw a nicer error.
+	 */
+	ScanKeyInit(&key[0],
+				Anum_pg_trigger_tgrelid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationGetRelid(targetrel)));
+	ScanKeyInit(&key[1],
+				Anum_pg_trigger_tgname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				PointerGetDatum(newname));
+	tgscan = systable_beginscan(tgrel, TriggerRelidNameIndexId, true,
+								NULL, 2, key);
+	if (HeapTupleIsValid(tuple = systable_getnext(tgscan)))
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("trigger \"%s\" for relation \"%s\" already exists",
+						newname, RelationGetRelationName(targetrel))));
+	systable_endscan(tgscan);
+
+	/*
+	 * The target name is free; update the existing pg_trigger tuple with it.
+	 */
+	tuple = heap_copytuple(trigtup);	/* need a modifiable copy */
+	tgform = (Form_pg_trigger) GETSTRUCT(tuple);
+
+	/*
+	 * If the trigger has a name different from what we expected, let the user
+	 * know. (We can proceed anyway, since we must have reached here following
+	 * a tgparentid link.)
+	 *
+	 * GPDB: QEs repeat the rename, report it from the QD only.
+	 */
+	if (strcmp(NameStr(tgform->tgname), expected_name) != 0)
+		ereport((Gp_role == GP_ROLE_EXECUTE) ? DEBUG1 : NOTICE,
+				errmsg("renamed trigger \"%s\" on relation \"%s\"",
+					   NameStr(tgform->tgname),
+					   RelationGetRelationName(targetrel)));
+
+	namestrcpy(&tgform->tgname, newname);
+
+	CatalogTupleUpdate(tgrel, &tuple->t_self, tuple);
+
+	InvokeObjectPostAlterHook(TriggerRelationId, tgform->oid, 0);
+
+	/*
+	 * Invalidate relation's relcache entry so that other backends (and this
+	 * one too!) are sent SI message to make them rebuild relcache entries.
+	 * (Ideally this should happen automatically...)
+	 */
+	CacheInvalidateRelcache(targetrel);
+}
+
+/*
+ * Subroutine for renametrig -- Helper for recursing to partitions when
+ * renaming triggers on a partitioned table.
+ */
+static void
+renametrig_partition(Relation tgrel, Oid partitionId, Oid parentTriggerOid,
+					 const char *newname, const char *expected_name)
+{
+	SysScanDesc tgscan;
+	ScanKeyData key;
+	HeapTuple	tuple;
+
+	/*
+	 * Given a relation and the OID of a trigger on parent relation, find the
+	 * corresponding trigger in the child and rename that trigger to the given
+	 * name.
+	 */
+	ScanKeyInit(&key,
+				Anum_pg_trigger_tgrelid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(partitionId));
+	tgscan = systable_beginscan(tgrel, TriggerRelidNameIndexId, true,
+								NULL, 1, &key);
+	while (HeapTupleIsValid(tuple = systable_getnext(tgscan)))
+	{
+		Form_pg_trigger tgform = (Form_pg_trigger) GETSTRUCT(tuple);
+		Relation	partitionRel;
+
+		if (tgform->tgparentid != parentTriggerOid)
+			continue;			/* not our trigger */
+
+		partitionRel = table_open(partitionId, NoLock);
+
+		/* Rename the trigger on this partition */
+		renametrig_internal(tgrel, partitionRel, tuple, newname, expected_name);
+
+		/* And if this relation is partitioned, recurse to its partitions */
+		if (partitionRel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+		{
+			PartitionDesc partdesc = RelationGetPartitionDesc(partitionRel,
+															  true);
+
+			for (int i = 0; i < partdesc->nparts; i++)
+			{
+				Oid			partitionId = partdesc->oids[i];
+
+				renametrig_partition(tgrel, partitionId, tgform->oid, newname,
+									 NameStr(tgform->tgname));
+			}
+		}
+		table_close(partitionRel, NoLock);
+
+		/* There should be at most one matching tuple */
+		break;
+	}
+	systable_endscan(tgscan);
+}
 
 /*
  * EnableDisableTrigger()

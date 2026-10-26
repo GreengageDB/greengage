@@ -94,7 +94,7 @@ typedef enum NodeTag
 	T_MergeJoin,
 	T_HashJoin,
 	T_Material,
-	T_ResultCache,
+	T_Memoize,
 	T_Sort,
 	T_IncrementalSort,
 #ifdef NOT_USED /* Group nodes are not used in GPDB */
@@ -172,7 +172,7 @@ typedef enum NodeTag
 	T_MergeJoinState,
 	T_HashJoinState,
 	T_MaterialState,
-	T_ResultCacheState,
+	T_MemoizeState,
 	T_SortState,
 	T_IncrementalSortState,
 #ifdef NOT_USED /* GroupState nodes are not used in GPDB */
@@ -315,7 +315,7 @@ typedef enum NodeTag
 	T_MergeAppendPath,
 	T_GroupResultPath,
 	T_MaterialPath,
-	T_ResultCachePath,
+	T_MemoizePath,
 	T_UniquePath,
 	T_GatherPath,
 	T_GatherMergePath,
@@ -364,7 +364,6 @@ typedef enum NodeTag
 	/*
 	 * TAGS FOR MEMORY NODES (memnodes.h)
 	 */
-	T_MemoryContext,
 	T_AllocSetContext,
 	T_SlabContext,
 	T_GenerationContext,
@@ -607,6 +606,7 @@ typedef enum NodeTag
 	T_PartitionRangeDatum,
 	T_PartitionCmd,
 	T_VacuumRelation,
+	T_PublicationTable,
 
 	/*
 	 * TAGS FOR REPLICATION GRAMMAR PARSE NODES (replnodes.h)

@@ -10,7 +10,7 @@ use PostgresNode;
 use TestLib;
 use Test::More tests => 5;
 
-my $node = get_new_node('test');
+my $node = PostgresNode->new('test');
 $node->init;
 $node->append_conf('postgresql.conf', 'allow_system_table_mods = on');
 $node->start;
@@ -35,7 +35,7 @@ $node->safe_psql(
 
 # We have not yet broken the index, so we should get no corruption
 $node->command_like(
-	[ 'pg_amcheck', '--quiet', '-p', $node->port, 'postgres' ],
+	[ 'pg_amcheck', '-p', $node->port, 'postgres' ],
 	qr/^$/,
 	'pg_amcheck all schemas, tables and indexes reports no corruption');
 

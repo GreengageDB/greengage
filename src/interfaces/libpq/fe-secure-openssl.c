@@ -618,15 +618,20 @@ static pthread_mutex_t *pq_lockarray;
 static void
 pq_lockingcallback(int mode, int n, const char *file, int line)
 {
+	/*
+	 * There's no way to report a mutex-primitive failure, so we just Assert
+	 * in development builds, and ignore any errors otherwise.  Fortunately
+	 * this is all obsolete in modern OpenSSL.
+	 */
 	if (mode & CRYPTO_LOCK)
 	{
 		if (pthread_mutex_lock(&pq_lockarray[n]))
-			PGTHREAD_ERROR("failed to lock mutex");
+			Assert(false);
 	}
 	else
 	{
 		if (pthread_mutex_unlock(&pq_lockarray[n]))
-			PGTHREAD_ERROR("failed to unlock mutex");
+			Assert(false);
 	}
 }
 #endif							/* ENABLE_THREAD_SAFETY && HAVE_CRYPTO_LOCK */
@@ -1094,7 +1099,7 @@ initialize_SSL(PGconn *conn)
 	 * Per RFC 6066, do not set it if the host is a literal IP address (IPv4
 	 * or IPv6).
 	 */
-	if (conn->sslsni && conn->sslsni[0])
+	if (conn->sslsni && conn->sslsni[0] == '1')
 	{
 		const char *host = conn->connhost[conn->whichhost].host;
 
@@ -1708,6 +1713,7 @@ my_BIO_s_socket(void)
 		my_bio_index = BIO_get_new_index();
 		if (my_bio_index == -1)
 			return NULL;
+		my_bio_index |= (BIO_TYPE_DESCRIPTOR | BIO_TYPE_SOURCE_SINK);
 		my_bio_methods = BIO_meth_new(my_bio_index, "libpq socket");
 		if (!my_bio_methods)
 			return NULL;
