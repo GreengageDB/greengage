@@ -294,6 +294,7 @@ plan_tree_walker(Node *node,
 
 		case T_IndexScan:
 		case T_DynamicIndexScan:
+		case T_DynamicIndexOnlyScan:
 			if (walk_scan_node_fields((Scan *) node, walker, context))
 				return true;
 			if (walker((Node *) ((IndexScan *) node)->indexqual, context))
@@ -302,7 +303,6 @@ plan_tree_walker(Node *node,
 			break;
 
 		case T_IndexOnlyScan:
-		case T_DynamicIndexOnlyScan:
 			if (walk_scan_node_fields((Scan *) node, walker, context))
 				return true;
 			if (walker((Node *) ((IndexOnlyScan *) node)->indexqual, context))

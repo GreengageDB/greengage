@@ -76,11 +76,4 @@ extern void AtEOXact_SharedSnapshot(void);
 
 #define NUM_SHARED_SNAPSHOT_SLOTS (2 * MaxBackends)
 
-/*
- * The subtransaction XIDs of the writer's snapshot that its slot carries to
- * the readers; with more, the slot's snapshot is marked as overflowed, and
- * readers look the XIDs up in pg_subtrans.
- */
-#define SHARED_SNAPSHOT_MAX_SUBXIDS (4 * PGPROC_MAX_CACHED_SUBXIDS)
-
 #endif   /* SHAREDSNAPSHOT_H */

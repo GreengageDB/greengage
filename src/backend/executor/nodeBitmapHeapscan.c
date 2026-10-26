@@ -139,14 +139,6 @@ BitmapHeapNext(BitmapHeapScanState *node)
 		return BitmapHeapNextTempcat(node);
 
 	/*
-	 * GPDB: called again after the end of the scan, whose bitmap was freed
-	 * then (ExecEagerFreeBitmapHeapScan()): there is nothing more, as
-	 * upstream, which keeps the exhausted iterator.
-	 */
-	if (node->initialized && pstate == NULL && tbmiterator == NULL)
-		return ExecClearTuple(slot);
-
-	/*
 	 * If we haven't yet performed the underlying index scan, do it, and begin
 	 * the iteration over the bitmap.
 	 *

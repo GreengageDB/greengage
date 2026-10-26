@@ -4445,11 +4445,6 @@ CTranslatorDXLToPlStmt::TranslateDXLDynIdxOnlyScan(
 
 	dyn_idx_only_scan->indexscan.indexqual = index_cond;
 
-	// as for TranslateDXLIndexOnlyScan(): the index quals, whose Vars refer
-	// to index columns, to recheck lossy index rows with
-	dyn_idx_only_scan->indexscan.recheckqual =
-		(List *) gpdb::CopyObject(index_cond);
-
 	SetParamIds(plan);
 
 	return (Plan *) dyn_idx_only_scan;
