@@ -358,7 +358,7 @@ ARTIFACTS_DIR := $(CURDIR)/../Package
 
 version-vars : ../VERSION
 	$(eval FULL_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION))
-   	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's/ .*//; s/-(?=\w)/~/g' ../VERSION))
+	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's/ .*//; s/-(?=\w)/~/g' ../VERSION))
 	$(eval DISTRO_CODENAME := $(shell lsb_release -sc))
 	$(eval IS_RELEASE := $(if $(findstring +dev,$(PACKAGE_VERSION)),no,yes))
 	$(eval STABILITY := $(if $(filter yes,$(IS_RELEASE)),stable,unstable))
