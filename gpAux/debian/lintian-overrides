@@ -12,7 +12,7 @@ script-not-executable [opt/greengagedb/greengage6/lib/python/*]
 
 # bin/, sbin/, lib/python/ modules use bare 'python' interpreter.
 # On Ubuntu 22.04 python(1) is a symlink to python2, created at build time.
-script-uses-unversioned-python-in-shebang opt/greengagedb/greengage6/*bin/*
+script-uses-unversioned-python-in-shebang [opt/greengagedb/greengage6/*bin/*]
 unusual-interpreter *python [opt/greengagedb/greengage6/*]
 
 # These Perl test scripts use '#!/usr/bin/env perl' for portability across
@@ -31,7 +31,7 @@ package-has-unnecessary-activation-of-ldconfig-trigger
 # Timezone data files are hardlinked by upstream PostgreSQL build system
 # to save disk space (identical timezone definitions share inodes).
 # This is standard PostgreSQL behavior, not a packaging error.
-package-contains-hardlink opt/greengagedb/greengage6/share/postgresql/timezone/*
+package-contains-hardlink pointing to: opt/greengagedb/greengage6/share/postgresql/timezone/* [opt/greengagedb/greengage6/share/postgresql/timezone/*]
 
 # plperl.so is linked against libperl<version> (pinned in shlibs:Depends).
 # The versioned RUNPATH matches the exact Perl version this package depends on.
