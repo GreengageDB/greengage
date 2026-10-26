@@ -364,7 +364,7 @@ RPM_TOPDIR := $(CURDIR)/../RPM
 
 version-vars : ../VERSION
 	$(eval FULL_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION))
-	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g' ../VERSION))
+	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's/ .*//; s/-(?=\w)/~/g' ../VERSION))
 	$(eval VERSION_CODENAME := $(shell . /etc/os-release && echo $$VERSION_CODENAME))
 	$(eval IS_RELEASE := $(if $(findstring +dev,$(PACKAGE_VERSION)),no,yes))
 	$(eval BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build))
