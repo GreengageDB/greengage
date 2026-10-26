@@ -490,9 +490,10 @@ select * from part_mixed pm join filter_table ft on pm.b = ft.a;
  15 | 15 | 15
 (1 row)
 
--- the moment, ORCA cannot generate a dynamic index scan on a table with mixed 
--- partitions, so executors don't fully support it either.
--- This test is needed to catch when ORCA starts generating such plans. 
+-- With the select pushed below the union all of the heap and foreign branches,
+-- ORCA generates a dynamic index scan on the heap branch of a table with mixed
+-- partitions. The index scan still lists all partitions, including the foreign
+-- one, which the executor does not support yet; this test pins the plan.
 create index on part_mixed(a);
 explain (costs off) select * from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
                             QUERY PLAN                            
