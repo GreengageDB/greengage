@@ -177,6 +177,32 @@ is( $node_subscriber->safe_psql(
 	qq(-1|1),
 	"update works with REPLICA IDENTITY");
 
+my $publisher_host = $node_publisher->host;
+my $publisher_port = $node_publisher->port;
+my $connstr_db =
+  "host=$publisher_host port=$publisher_port replication=database dbname=postgres";
+
+# REPLICATION users should not be able to bypass LOAD restrictions.
+$node_publisher->safe_psql(
+	'postgres', qq(
+	CREATE USER repluser REPLICATION;
+));
+
+my ($ret, $stdout, $stderr) = $node_publisher->psql(
+	'postgres',
+	qq[
+		SET ROLE repluser;
+		CREATE_REPLICATION_SLOT fail_slot LOGICAL regress;',
+	],
+	timeout => $PostgreSQL::Test::Utils::timeout_default,
+	extra_params => [ '-d', $connstr_db ]);
+
+is($ret, 3, 'loading unblessed output plugin fails');
+like(
+	$stderr,
+	qr/ERROR:  library "regress" may not be used as an output plugin/,
+	'loading unblessed output plugin fails: stderr');
+
 $node_publisher->stop('fast');
 $node_subscriber->stop('fast');
 
