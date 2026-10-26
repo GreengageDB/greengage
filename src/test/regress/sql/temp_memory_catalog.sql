@@ -571,6 +571,30 @@ END $$;
 COMMIT;
 SELECT count(*) FROM tc_keep;
 SELECT to_regclass('tc_fast') IS NULL AS dropped;
+-- The versions of a row that commands in released savepoints write, one
+-- after another (here of the default of a column set again and again, as
+-- with psql's ON_ERROR_ROLLBACK), are freed when the area is full, as those
+-- of commands outside savepoints.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '1MB';
+CREATE TEMP TABLE tc_sp (a int, b text) DISTRIBUTED BY (a);
+DO $$
+BEGIN
+  FOR i IN 1..1000 LOOP
+    BEGIN
+      EXECUTE format('ALTER TABLE tc_sp ALTER COLUMN b SET DEFAULT %L',
+                     (SELECT string_agg(md5(i || '.' || g), '')
+                        FROM generate_series(1, 60) g));
+    EXCEPTION WHEN division_by_zero THEN
+      NULL;
+    END;
+  END LOOP;
+END $$;
+SELECT md5(pg_get_expr(adbin, adrelid)) = md5(quote_literal(
+         (SELECT string_agg(md5('1000.' || g), '') FROM generate_series(1, 60) g))
+         || '::text') AS last_default
+  FROM pg_attrdef WHERE adrelid = 'tc_sp'::regclass;
 
 -- Segments of the area that empty go back to the OS when the session goes
 -- idle: its memory falls by most of the area (bodies that do not compress).
@@ -1199,6 +1223,37 @@ CREATE TEMP TABLE tc_sy1 (a int) DISTRIBUTED BY (a);
 INSERT INTO tc_sy1 VALUES (1);
 SELECT * FROM tc_sy1;
 DROP TABLE tc_sy1;
+-- An error while dropping objects lets the area grow beyond its limit
+-- (here the fault fails a new segment of the area, with the area's lock
+-- held) fails the statement, and the limit is back after the rollback: as
+-- many columns fit again.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '1MB';
+CREATE TEMP TABLE tc_od (a int) DISTRIBUTED BY (a);
+CREATE FUNCTION pg_temp.tc_widen() RETURNS int LANGUAGE plpgsql AS $$
+DECLARE n int := 0;
+BEGIN
+  FOR i IN 1..1600 LOOP
+    BEGIN
+      EXECUTE format('ALTER TABLE tc_od ADD COLUMN c%s text DEFAULT repeat(md5(%L), 56)', i, i);
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+    n := n + 1;
+  END LOOP;
+  RETURN n;
+END $$;
+SELECT pg_temp.tc_widen() AS tc_ncols \gset
+SELECT gp_inject_fault('dsm_slots_low', 'error', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+DROP TABLE tc_od;
+SELECT gp_inject_fault('dsm_slots_low', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+DROP TABLE tc_od;
+CREATE TEMP TABLE tc_od (a int) DISTRIBUTED BY (a);
+SELECT pg_temp.tc_widen() = :tc_ncols AS same_room;
+DROP TABLE tc_od;
 
 -- A session takes the OIDs of its temporary objects from the OID counter
 -- in runs (of 16 OIDs first, twice as many each time after, within blocks

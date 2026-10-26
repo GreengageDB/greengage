@@ -234,6 +234,21 @@ DROP TABLE tc_oids;
 0U: SET gp_enable_temp_memory_catalog = on;
 0U: CREATE TEMP TABLE tc_utility (a int);
 0U: SELECT tc_in_memory('tc_utility') AS in_memory;
+-- The writer QEs of a session count the uses of ordinary objects by its
+-- temporary objects too: a DROP of such an object fails in utility mode on
+-- a segment, as for their dependencies on disk, until the session no longer
+-- uses it.
+CREATE TYPE tc_util_type AS (x int);
+60: SET gp_enable_temp_memory_catalog = on;
+60: CREATE TEMP TABLE tc_util_use (a int, b tc_util_type) DISTRIBUTED BY (a);
+60: INSERT INTO tc_util_use SELECT g, ROW(g)::tc_util_type FROM generate_series(1, 3) g;
+0U: DROP TYPE tc_util_type;
+60: DROP TABLE tc_util_use;
+0U: BEGIN;
+0U: DROP TYPE tc_util_type;
+0U: ROLLBACK;
+60q:
+DROP TYPE tc_util_type;
 0Uq:
 -- A utility-mode session on the coordinator keeps them in memory, but
 -- cannot PREPARE a transaction that changed them (which utility mode allows

@@ -1494,8 +1494,9 @@ tempcat_fold_frozen_horizon(TransactionId *frozenXid, MultiXactId *minMulti)
  * would on dependent objects they could see, naming the sessions.
  * (CASCADE cannot drop objects in other sessions' memory.)  Otherwise they
  * mark the object with their transaction, which a session that comes to
- * use it meanwhile waits for, as for a lock.  All on the coordinator only,
- * where all DDL starts.
+ * use it meanwhile waits for, as for a lock.  Uses are counted on every
+ * node, by the process that keeps the rows, and looked at where DDL starts:
+ * on the coordinator, and on a segment in utility mode.
  *
  * Columns are told apart as on disk, where DROP COLUMN and ALTER COLUMN TYPE
  * look at the dependencies on that column only, and DROP of the relation at
@@ -1564,12 +1565,15 @@ tempcat_used_object_key(TempcatUsedObject *key,
 	key->objectSubId = subId;
 }
 
-/* Is it an object whose use tempcat_use_object() counts? */
+/*
+ * Is it an object whose use tempcat_use_object() counts?  On every node, by
+ * the process that keeps the rows: the coordinator's sessions and the writer
+ * QEs, as a utility-mode session on a segment may drop the object there.
+ */
 static bool
 tempcat_lockable_use(Oid classId, Oid objectId)
 {
-	return Gp_role != GP_ROLE_EXECUTE &&
-		!tempcat_owns_oid(classId, objectId);
+	return !tempcat_owns_oid(classId, objectId);
 }
 
 /* Is a DROP or ALTER of another (sub)transaction in progress marked? */
@@ -2111,7 +2115,9 @@ tempcat_others_use(Oid classId, Oid objectId, int32 subId, bool mark,
 	TransactionId xid = InvalidTransactionId;
 	bool		used = false;
 
-	if (TempcatShared == NULL || !tempcat_lockable_use(classId, objectId))
+	/* (a QE does what the coordinator, which looked, dispatched) */
+	if (TempcatShared == NULL || Gp_role == GP_ROLE_EXECUTE ||
+		!tempcat_lockable_use(classId, objectId))
 		return false;
 
 	/* Objects that sessions could not count, but locked instead */
@@ -3247,6 +3253,9 @@ tempcat_kept_room(void)
 /* Objects are being dropped (deleteObjectsInList()), see below */
 static int	tc_dropping = 0;
 
+/* The area's limits are to be put back, see tempcat_end_overdraft() */
+static bool tc_overdraft_left = false;
+
 void
 tempcat_dropping(bool start)
 {
@@ -3286,6 +3295,19 @@ tempcat_use_overdraft(bool use)
 	dsa_set_min_free_space(tc_area, use ? 0 : tc_min_free_space);
 	dsa_set_min_free_slots(tc_area, use ? 0 : tc_min_free_slots);
 	dsa_set_size_limit(tc_area, use ? 2 * tc_area_limit : tc_area_limit);
+}
+
+/*
+ * After an error while the area could grow beyond its limit (see
+ * tempcat_update()), at the abort of the (sub)transaction, which has
+ * released the lock of the area.
+ */
+static void
+tempcat_end_overdraft(void)
+{
+	if (tc_overdraft_left && tc_area != NULL)
+		tempcat_use_overdraft(false);
+	tc_overdraft_left = false;
 }
 
 /*
@@ -3857,8 +3879,11 @@ tempcat_cursors_see_command_range(CommandId cmin, CommandId cmax)
  *
  * Such a row is dead whatever the transaction's fate, as long as its
  * deletion cannot be undone on its own: rows deleted by the top-level
- * transaction itself, or by the same (sub)transaction that inserted them
- * (any rollback undoing the deletion then undoes the insertion too).  And
+ * transaction itself, or by the same open (sub)transaction that inserted
+ * them, counting released subtransactions as part of the one they were
+ * committed into (any rollback undoing the deletion then undoes the
+ * insertion too); e.g. the versions that commands in released savepoints
+ * write of the same row, one after another.  And
  * only rows that no snapshot of ours still in use can see
  * (SnapshotsSeeCommandRange()): an older snapshot of the transaction, e.g.
  * that of the outer query or of a cursor, still sees rows deleted after it
@@ -3901,10 +3926,18 @@ tempcat_reclaim_dead(void)
 		Assert(e->catidx >= 0 && e->catidx < TEMPCAT_NCATALOGS &&
 			   (e->flags & TCE_PENDING));
 
-		candidate = (TransactionIdEquals(e->xmax, topxid) ||
-					 TransactionIdEquals(e->xmax, e->xmin)) &&
-			!(e->flags & TCE_XMIN_COMMITTED) &&
-			TransactionIdIsCurrentTransactionId(e->xmin);
+		if (!TransactionIdIsValid(e->xmax) || (e->flags & TCE_XMIN_COMMITTED))
+			candidate = false;
+		else if (TransactionIdEquals(e->xmax, topxid) ||
+				 TransactionIdEquals(e->xmax, e->xmin))
+			candidate = TransactionIdIsCurrentTransactionId(e->xmin);
+		else
+		{
+			int			xmax_level = GetCurrentTransactionIdNestLevel(e->xmax);
+
+			candidate = xmax_level > 0 &&
+				xmax_level <= GetCurrentTransactionIdNestLevel(e->xmin);
+		}
 		if (candidate &&
 			(e->cmax >= curcid || SnapshotsSeeCommandRange(e->cmin, e->cmax) ||
 			 tempcat_cursors_see_command_range(e->cmin, e->cmax)))
@@ -4128,6 +4161,7 @@ tempcat_xact_callback(XactEvent event, void *arg)
 			break;
 		case XACT_EVENT_ABORT:
 		case XACT_EVENT_PARALLEL_ABORT:
+			tempcat_end_overdraft();
 			if (tc_used != NULL && hash_get_num_entries(tc_used) > 0)
 				tc_used_dirty = true;
 			if (tc_depend_changed)
@@ -4146,15 +4180,21 @@ tempcat_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
 	int			level = GetCurrentTransactionNestLevel();
 
 	/* (see tempcat_xact_callback(); counted out when the transaction ends) */
-	if (event == SUBXACT_EVENT_ABORT_SUB &&
-		tc_used != NULL && hash_get_num_entries(tc_used) > 0)
-		tc_used_dirty = true;
+	if (event == SUBXACT_EVENT_ABORT_SUB)
+	{
+		tempcat_end_overdraft();
+		if (tc_used != NULL && hash_get_num_entries(tc_used) > 0)
+			tc_used_dirty = true;
+	}
 
 	/* A committed subtransaction's changes are its parent's now. */
 	if (event != SUBXACT_EVENT_COMMIT_SUB)
 		return;
 	if (tc_change_level >= level)
 		tc_change_level = level - 1;
+
+	/* and rows it deleted may be dead now, see tempcat_reclaim_dead() */
+	tc_reclaim_failed = false;
 }
 
 /*
@@ -4761,7 +4801,13 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup,
 		}
 		PG_CATCH();
 		{
-			tempcat_use_overdraft(false);
+			/*
+			 * Not here: the error may come from within the area with its
+			 * lock held (e.g. as a segment could not be created), which
+			 * dsa_set_size_limit() would wait for forever.  Once the abort
+			 * has released it (tempcat_end_overdraft()).
+			 */
+			tc_overdraft_left = true;
 			PG_RE_THROW();
 		}
 		PG_END_TRY();

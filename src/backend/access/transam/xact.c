@@ -1254,6 +1254,56 @@ TransactionIdIsCurrentTransactionId(TransactionId xid)
 }
 
 /*
+ * GPDB: the nesting level of the open (sub)transaction that 'xid' belongs
+ * to now: its own, or that of the one it was committed into as a
+ * subtransaction; or 0 if it is not a current transaction ID.  Not for
+ * readers and parallel workers, which have no transaction state stack of
+ * their own.  (See tempcat_reclaim_dead().)
+ */
+int
+GetCurrentTransactionIdNestLevel(TransactionId xid)
+{
+	TransactionState s;
+
+	Assert(nParallelCurrentXids == 0);
+	Assert(DistributedTransactionContext != DTX_CONTEXT_QE_READER &&
+		   DistributedTransactionContext != DTX_CONTEXT_QE_ENTRY_DB_SINGLETON);
+
+	if (!TransactionIdIsNormal(xid))
+		return 0;
+
+	for (s = CurrentTransactionState; s != NULL; s = s->parent)
+	{
+		int			low,
+					high;
+
+		if (s->state == TRANS_ABORT ||
+			!FullTransactionIdIsValid(s->fullTransactionId))
+			continue;
+		if (TransactionIdEquals(xid, XidFromFullTransactionId(s->fullTransactionId)))
+			return s->nestingLevel;
+
+		/* As the childXids array is ordered, we can use binary search */
+		low = 0;
+		high = s->nChildXids - 1;
+		while (low <= high)
+		{
+			int			middle = low + (high - low) / 2;
+			TransactionId probe = s->childXids[middle];
+
+			if (TransactionIdEquals(probe, xid))
+				return s->nestingLevel;
+			else if (TransactionIdPrecedes(probe, xid))
+				low = middle + 1;
+			else
+				high = middle - 1;
+		}
+	}
+
+	return 0;
+}
+
+/*
  *	TransactionStartedDuringRecovery
  *
  * Returns true if the current transaction started while recovery was still

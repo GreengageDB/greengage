@@ -508,6 +508,32 @@ CREATE TABLE
 -----------
  f         
 (1 row)
+-- The writer QEs of a session count the uses of ordinary objects by its
+-- temporary objects too: a DROP of such an object fails in utility mode on
+-- a segment, as for their dependencies on disk, until the session no longer
+-- uses it.
+CREATE TYPE tc_util_type AS (x int);
+CREATE TYPE
+60: SET gp_enable_temp_memory_catalog = on;
+SET
+60: CREATE TEMP TABLE tc_util_use (a int, b tc_util_type) DISTRIBUTED BY (a);
+CREATE TABLE
+60: INSERT INTO tc_util_use SELECT g, ROW(g)::tc_util_type FROM generate_series(1, 3) g;
+INSERT 0 3
+0U: DROP TYPE tc_util_type;
+ERROR:  temporary objects of other sessions depend on type tc_util_type
+DETAIL:  The sessions of processes 177437 keep them in memory.
+60: DROP TABLE tc_util_use;
+DROP TABLE
+0U: BEGIN;
+BEGIN
+0U: DROP TYPE tc_util_type;
+DROP TYPE
+0U: ROLLBACK;
+ROLLBACK
+60q: ... <quitting>
+DROP TYPE tc_util_type;
+DROP TYPE
 0Uq: ... <quitting>
 -- A utility-mode session on the coordinator keeps them in memory, but
 -- cannot PREPARE a transaction that changed them (which utility mode allows
