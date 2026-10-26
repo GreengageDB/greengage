@@ -1188,7 +1188,7 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And ggrebalance should not print "Cancelled steps:" to logfile with latest timestamp
          And ggrebalance should not print " WARNINGS " to logfile with latest timestamp
 
-    Scenario: test 22. Check ggrebalance interruption with '--detailed-progress' options during shrink.
+    Scenario: test 22. Check ggrebalance interruption with '--detailed-progress' options during shrink and re-enter.
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1"
@@ -1205,7 +1205,6 @@ Feature: ggrebalance behave tests (misc options scenarios)
         Then the user waits till ggrebalance prints "Shrink was interrupted" in the logs (with timeout of "60" sec)
          And the user executes "ROLLBACK;" with named connection "test_connection"
          And the user drops the named connection "test_connection"
-        When the user runs "ggrebalance -c --non-interactive-mode"
+        When the user runs "ggrebalance -n 1 --non-interactive-mode"
         Then ggrebalance should return a return code of 0
-         And ggrebalance should print "Reset numsegments to default is done." to logfile with latest timestamp
-         And ggrebalance should print "Cleanup is complete" to logfile with latest timestamp
+         And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
