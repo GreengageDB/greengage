@@ -889,7 +889,8 @@ make_new_heap_with_colname(Oid OIDOldHeap, Oid NewTableSpace, Oid NewAccessMetho
 									 &isNull);
 		if (isNull)
 			reloptions = (Datum) 0;
-		NewHeapCreateToastTable(OIDNewHeap, reloptions, lockmode);
+
+		NewHeapCreateToastTable(OIDNewHeap, reloptions, lockmode, toastid);
 
 		ReleaseSysCache(tuple);
 	}
@@ -965,6 +966,7 @@ copy_table_data(Oid OIDNewHeap, Oid OIDOldHeap, Oid OIDOldIndex, bool verbose,
 	BlockNumber num_pages;
 	int			elevel = verbose ? INFO : DEBUG2;
 	PGRUsage	ru0;
+	char	   *nspname;
 
 	pg_rusage_init(&ru0);
 
@@ -977,6 +979,9 @@ copy_table_data(Oid OIDNewHeap, Oid OIDOldHeap, Oid OIDOldIndex, bool verbose,
 		OldIndex = index_open(OIDOldIndex, AccessExclusiveLock);
 	else
 		OldIndex = NULL;
+
+	/* Store a copy of the namespace name for logging purposes */
+	nspname = get_namespace_name(RelationGetNamespace(OldHeap));
 
 	/*
 	 * Their tuple descriptors should be exactly alike, but here we only need
@@ -1076,18 +1081,18 @@ copy_table_data(Oid OIDNewHeap, Oid OIDOldHeap, Oid OIDOldIndex, bool verbose,
 	if (OldIndex != NULL && !use_sort)
 		ereport(elevel,
 				(errmsg("clustering \"%s.%s\" using index scan on \"%s\"",
-						get_namespace_name(RelationGetNamespace(OldHeap)),
+						nspname,
 						RelationGetRelationName(OldHeap),
 						RelationGetRelationName(OldIndex))));
 	else if (use_sort)
 		ereport(elevel,
 				(errmsg("clustering \"%s.%s\" using sequential scan and sort",
-						get_namespace_name(RelationGetNamespace(OldHeap)),
+						nspname,
 						RelationGetRelationName(OldHeap))));
 	else
 		ereport(elevel,
 				(errmsg("vacuuming \"%s.%s\"",
-						get_namespace_name(RelationGetNamespace(OldHeap)),
+						nspname,
 						RelationGetRelationName(OldHeap))));
 
 	/*
@@ -1112,7 +1117,8 @@ copy_table_data(Oid OIDNewHeap, Oid OIDOldHeap, Oid OIDOldIndex, bool verbose,
 
 	/* Log what we did */
 	ereport(elevel,
-			(errmsg("\"%s\": found %.0f removable, %.0f nonremovable row versions in %u pages",
+			(errmsg("\"%s.%s\": found %.0f removable, %.0f nonremovable row versions in %u pages",
+					nspname,
 					RelationGetRelationName(OldHeap),
 					tups_vacuumed, num_tuples,
 					RelationGetNumberOfBlocks(OldHeap)),
@@ -1800,6 +1806,14 @@ finish_heap_swap(Oid OIDOldHeap, Oid OIDNewHeap,
 
 			RenameRelationInternal(toastidx,
 								   NewToastName, true, true);
+
+			/*
+			 * Reset the relrewrite for the toast. The command-counter
+			 * increment is required here as we are about to update
+			 * the tuple that is updated as part of RenameRelationInternal.
+			 */
+			CommandCounterIncrement();
+			ResetRelRewrite(newrel->rd_rel->reltoastrelid);
 		}
 		relation_close(newrel, NoLock);
 	}

@@ -319,11 +319,14 @@ DROP FUNCTION functest1(a int);
 
 -- inlining of set-returning functions
 
+CREATE TABLE functest3 (a int);
+INSERT INTO functest3 VALUES (1), (2), (3);
+
 CREATE FUNCTION functest_sri1() RETURNS SETOF int
 LANGUAGE SQL
 STABLE
 AS '
-    VALUES (1), (2), (3);
+    SELECT * FROM functest3;
 ';
 
 SELECT * FROM functest_sri1();
@@ -333,11 +336,13 @@ CREATE FUNCTION functest_sri2() RETURNS SETOF int
 LANGUAGE SQL
 STABLE
 BEGIN ATOMIC
-    VALUES (1), (2), (3);
+    SELECT * FROM functest3;
 END;
 
 SELECT * FROM functest_sri2();
 EXPLAIN (verbose, costs off) SELECT * FROM functest_sri2();
+
+DROP TABLE functest3 CASCADE;
 
 
 -- Check behavior of VOID-returning SQL functions
@@ -380,6 +385,84 @@ CREATE FUNCTION functest_gp_paramref_atomic(int) RETURNS int
         SELECT $1 + 1;
     END;
 SELECT functest_gp_paramref_atomic(41);
+
+-- GPDB: every node type that can appear in the raw parse tree of a
+-- SQL-standard function body must have a binary serializer and deserializer,
+-- since the tree is dispatched to the segments.
+CREATE TABLE functest_gp_t (a int PRIMARY KEY, b int) DISTRIBUTED BY (a);
+INSERT INTO functest_gp_t SELECT i, i % 3 FROM generate_series(1, 6) i;
+
+-- WindowDef
+CREATE FUNCTION functest_gp_win() RETURNS SETOF bigint LANGUAGE sql
+BEGIN ATOMIC
+  SELECT sum(a) OVER (PARTITION BY b ORDER BY a
+                      ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE CURRENT ROW)
+  FROM functest_gp_t;
+END;
+-- RangeSubselect
+CREATE FUNCTION functest_gp_sub() RETURNS SETOF int LANGUAGE sql
+BEGIN ATOMIC
+  SELECT x FROM (SELECT a AS x FROM functest_gp_t) s;
+END;
+-- RangeFunction
+CREATE FUNCTION functest_gp_rf() RETURNS SETOF int LANGUAGE sql
+BEGIN ATOMIC
+  SELECT g FROM generate_series(1, 3) g;
+END;
+-- RangeTableSample
+CREATE FUNCTION functest_gp_ts() RETURNS SETOF int LANGUAGE sql
+BEGIN ATOMIC
+  SELECT a FROM functest_gp_t TABLESAMPLE system (50);
+END;
+-- RangeTableFunc, RangeTableFuncCol
+CREATE FUNCTION functest_gp_xt() RETURNS SETOF int LANGUAGE sql
+BEGIN ATOMIC
+  SELECT x FROM xmltable('/r' PASSING (xml '<r>1</r>') COLUMNS x int PATH '.');
+END;
+-- XmlSerialize
+CREATE FUNCTION functest_gp_xml() RETURNS text LANGUAGE sql
+BEGIN ATOMIC
+  SELECT xmlserialize(CONTENT '<a/>'::xml AS text);
+END;
+-- LockingClause, including its wait policy
+CREATE FUNCTION functest_gp_lock() RETURNS SETOF int LANGUAGE sql
+BEGIN ATOMIC
+  SELECT a FROM functest_gp_t FOR UPDATE SKIP LOCKED;
+END;
+-- OnConflictClause, InferClause
+CREATE FUNCTION functest_gp_oc() RETURNS void LANGUAGE sql
+BEGIN ATOMIC
+  INSERT INTO functest_gp_t VALUES (1, 1) ON CONFLICT (a) DO UPDATE SET b = 2;
+END;
+-- InsertStmt: OVERRIDING clause
+CREATE FUNCTION functest_gp_ov() RETURNS void LANGUAGE sql
+BEGIN ATOMIC
+  INSERT INTO functest_gp_t OVERRIDING SYSTEM VALUE VALUES (3, 3);
+END;
+
+SELECT * FROM functest_gp_win() ORDER BY 1;
+SELECT * FROM functest_gp_sub() ORDER BY 1;
+SELECT * FROM functest_gp_rf() ORDER BY 1;
+SELECT count(*) <= 6 AS sampled FROM functest_gp_ts();
+SELECT * FROM functest_gp_xt();
+SELECT functest_gp_xml();
+SELECT * FROM functest_gp_lock() ORDER BY 1;
+SELECT functest_gp_oc();
+SELECT * FROM functest_gp_t WHERE a = 1;
+
+-- The stored bodies must be identical on the coordinator and on the segments.
+-- The coordinator's text has to be computed on the coordinator (hence
+-- MATERIALIZED), otherwise both sides are evaluated against the segment's
+-- catalog and always match.
+WITH q AS MATERIALIZED
+    (SELECT proname, pg_get_functiondef(oid) AS def FROM pg_proc
+     WHERE pronamespace = 'temp_func_test'::regnamespace AND proname LIKE 'functest\_gp\_%')
+SELECT q.proname, s.gp_segment_id
+FROM q JOIN (SELECT proname, gp_segment_id, pg_get_functiondef(oid) AS def
+             FROM gp_dist_random('pg_proc')
+             WHERE pronamespace = 'temp_func_test'::regnamespace) s USING (proname)
+WHERE q.def <> s.def
+ORDER BY 1, 2;
 
 -- Cleanup
 DROP SCHEMA temp_func_test CASCADE;

@@ -15,6 +15,7 @@ override CPPFLAGS := -I$(libpq_srcdir) $(CPPFLAGS)
 
 OBJS = \
 	autovacuum.o \
+	auxprocess.o \
 	bgworker.o \
 	bgwriter.o \
 	checkpointer.o \

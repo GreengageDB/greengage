@@ -1,6 +1,8 @@
 -- start_matchsubs
 -- m/ERROR:  permission denied: "pg_ao(seg|visimap|blkdir)_\d+" is a system catalog/
 -- s/pg_ao(seg|visimap|blkdir)_\d+/pg_ao_aux_table_xxxxx/
+-- m/pg_aoseg\.pg_ao(seg|visimap|blkdir)_\d+ SET SCHEMA|auxiliary table "pg_ao(seg|visimap|blkdir)_\d+"/
+-- s/pg_ao(seg|visimap|blkdir)_\d+/pg_ao$1_xxxxx/
 -- end_matchsubs
 -- create functions to query uao auxiliary tables through gp_dist_random instead of going through utility mode
 CREATE OR REPLACE FUNCTION gp_aovisimap_dist_random(
@@ -457,3 +459,20 @@ SET allow_system_table_mods = off;
 DROP FUNCTION insert_dummy_ao_aux_entry(fqname text);
 DROP FUNCTION delete_dummy_ao_aux_entry(fqname text);
 DROP TABLE uao_catalog_delete_from;
+-- Verify that the AO auxiliary tables cannot be moved out of pg_aoseg
+CREATE TABLE uao_catalog_set_schema (a int, b int) WITH (appendonly=true) DISTRIBUTED BY (a);
+CREATE INDEX ON uao_catalog_set_schema (b);
+SET allow_system_table_mods = on;
+SELECT format('ALTER TABLE %s SET SCHEMA public', c.oid::regclass)
+FROM pg_appendonly a JOIN pg_class c
+     ON c.oid IN (a.segrelid, a.blkdirrelid, a.visimaprelid)
+WHERE a.relid = 'uao_catalog_set_schema'::regclass
+ORDER BY c.relkind \gexec
+ALTER TABLE pg_aoseg.pg_aovisimap_160377 SET SCHEMA public
+ERROR:  cannot change schema of append-optimized auxiliary table "pg_aovisimap_160377"
+ALTER TABLE pg_aoseg.pg_aoblkdir_160377 SET SCHEMA public
+ERROR:  cannot change schema of append-optimized auxiliary table "pg_aoblkdir_160377"
+ALTER TABLE pg_aoseg.pg_aoseg_160377 SET SCHEMA public
+ERROR:  cannot change schema of append-optimized auxiliary table "pg_aoseg_160377"
+RESET allow_system_table_mods;
+DROP TABLE uao_catalog_set_schema;

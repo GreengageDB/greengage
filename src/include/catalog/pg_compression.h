@@ -47,8 +47,7 @@ CATALOG(pg_compression,7056,CompressionRelationId)
  */
 typedef FormData_pg_compression *Form_pg_compression;
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_compression_compname_index, 7059, on pg_compression using btree(compname name_ops));
-#define CompressionCompnameIndexId	7059
+DECLARE_UNIQUE_INDEX_PKEY(pg_compression_compname_index, 7059, CompressionCompnameIndexId, on pg_compression using btree(compname name_ops));
 
 #define NUM_COMPRESS_FUNCS 5
 

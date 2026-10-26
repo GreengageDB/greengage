@@ -40,6 +40,7 @@
 #include "access/transam.h"
 #include "access/twophase.h"
 #include "access/xact.h"
+#include "access/xlogutils.h"
 #include "catalog/namespace.h" /* TempNamespaceOidIsValid */
 #include "commands/async.h"
 #include "miscadmin.h"

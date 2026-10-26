@@ -47,9 +47,7 @@ typedef FormData_pg_resqueuecapability *Form_pg_resqueuecapability;
 
 DECLARE_FOREIGN_KEY((restypid), pg_resourcetype, (restypid));
 
-DECLARE_INDEX(pg_resqueuecapability_resqueueid_index, 6442, on pg_resqueuecapability using btree(resqueueid oid_ops));
-#define ResQueueCapabilityResqueueidIndexId	6442
-DECLARE_INDEX(pg_resqueuecapability_restypid_index, 6443, on pg_resqueuecapability using btree(restypid int2_ops));
-#define ResQueueCapabilityRestypidIndexId	6443
+DECLARE_INDEX(pg_resqueuecapability_resqueueid_index, 6442, ResQueueCapabilityResqueueidIndexId, on pg_resqueuecapability using btree(resqueueid oid_ops));
+DECLARE_INDEX(pg_resqueuecapability_restypid_index, 6443, ResQueueCapabilityRestypidIndexId, on pg_resqueuecapability using btree(restypid int2_ops));
 
 #endif   /* PG_RESQUEUECAPABILITY_H */

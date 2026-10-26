@@ -133,8 +133,8 @@ static void show_windowagg_keys(WindowAggState *waggstate, List *ancestors, Expl
 static void show_incremental_sort_info(IncrementalSortState *incrsortstate,
 									   ExplainState *es);
 static void show_hash_info(HashState *hashstate, ExplainState *es);
-static void show_resultcache_info(ResultCacheState *rcstate, List *ancestors,
-								  ExplainState *es);
+static void show_memoize_info(MemoizeState *mstate, List *ancestors,
+							  ExplainState *es);
 static void show_hashagg_info(AggState *hashstate, ExplainState *es);
 static void show_tidbitmap_info(BitmapHeapScanState *planstate,
 								ExplainState *es);
@@ -744,10 +744,12 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 
 	if (es->verbose && plannedstmt->queryId != UINT64CONST(0))
 	{
-		char		buf[MAXINT8LEN + 1];
-
-		pg_lltoa(plannedstmt->queryId, buf);
-		ExplainPropertyText("Query Identifier", buf, es);
+		/*
+		 * Output the queryid as an int64 rather than a uint64 so we match
+		 * what would be seen in the BIGINT pg_stat_statements.queryid column.
+		 */
+		ExplainPropertyInteger("Query Identifier", NULL, (int64)
+							   plannedstmt->queryId, es);
 	}
 
 	/* Show buffer usage in planning */
@@ -1721,8 +1723,8 @@ ExplainNode(PlanState *planstate, List *ancestors,
 		case T_Material:
 			pname = sname = "Materialize";
 			break;
-		case T_ResultCache:
-			pname = sname = "Result Cache";
+		case T_Memoize:
+			pname = sname = "Memoize";
 			break;
 		case T_Sort:
 			pname = sname = "Sort";
@@ -2408,7 +2410,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 				char *buf;
 				Oid relid;
 				relid = rt_fetch(((DynamicSeqScan *)plan)
-							->seqscan.scanrelid,
+							->seqscan.scan.scanrelid,
 							es->rtable)->relid;
 				buf = psprintf("(out of %d)",  countLeafPartTables(relid));
 				ExplainPropertyInteger(
@@ -2702,9 +2704,9 @@ ExplainNode(PlanState *planstate, List *ancestors,
 		case T_Append:
 			show_join_pruning_info(((Append *) plan)->join_prune_paramids, es);
 			break;
-		case T_ResultCache:
-			show_resultcache_info(castNode(ResultCacheState, planstate),
-								  ancestors, es);
+		case T_Memoize:
+			show_memoize_info(castNode(MemoizeState, planstate), ancestors,
+							  es);
 			break;
 		default:
 			break;
@@ -3907,13 +3909,12 @@ show_hash_info(HashState *hashstate, ExplainState *es)
 }
 
 /*
- * Show information on result cache hits/misses/evictions and memory usage.
+ * Show information on memoize hits/misses/evictions and memory usage.
  */
 static void
-show_resultcache_info(ResultCacheState *rcstate, List *ancestors,
-					  ExplainState *es)
+show_memoize_info(MemoizeState *mstate, List *ancestors, ExplainState *es)
 {
-	Plan	   *plan = ((PlanState *) rcstate)->plan;
+	Plan	   *plan = ((PlanState *) mstate)->plan;
 	ListCell   *lc;
 	List	   *context;
 	StringInfoData keystr;
@@ -3924,7 +3925,7 @@ show_resultcache_info(ResultCacheState *rcstate, List *ancestors,
 	initStringInfo(&keystr);
 
 	/*
-	 * It's hard to imagine having a result cache with fewer than 2 RTEs, but
+	 * It's hard to imagine having a memoize node with fewer than 2 RTEs, but
 	 * let's just keep the same useprefix logic as elsewhere in this file.
 	 */
 	useprefix = list_length(es->rtable) > 1 || es->verbose;
@@ -3934,7 +3935,7 @@ show_resultcache_info(ResultCacheState *rcstate, List *ancestors,
 									   plan,
 									   ancestors);
 
-	foreach(lc, ((ResultCache *) plan)->param_exprs)
+	foreach(lc, ((Memoize *) plan)->param_exprs)
 	{
 		Node	   *expr = (Node *) lfirst(lc);
 
@@ -3960,23 +3961,23 @@ show_resultcache_info(ResultCacheState *rcstate, List *ancestors,
 	if (!es->analyze)
 		return;
 
-	if (rcstate->stats.cache_misses > 0)
+	if (mstate->stats.cache_misses > 0)
 	{
 		/*
 		 * mem_peak is only set when we freed memory, so we must use mem_used
 		 * when mem_peak is 0.
 		 */
-		if (rcstate->stats.mem_peak > 0)
-			memPeakKb = (rcstate->stats.mem_peak + 1023) / 1024;
+		if (mstate->stats.mem_peak > 0)
+			memPeakKb = (mstate->stats.mem_peak + 1023) / 1024;
 		else
-			memPeakKb = (rcstate->mem_used + 1023) / 1024;
+			memPeakKb = (mstate->mem_used + 1023) / 1024;
 
 		if (es->format != EXPLAIN_FORMAT_TEXT)
 		{
-			ExplainPropertyInteger("Cache Hits", NULL, rcstate->stats.cache_hits, es);
-			ExplainPropertyInteger("Cache Misses", NULL, rcstate->stats.cache_misses, es);
-			ExplainPropertyInteger("Cache Evictions", NULL, rcstate->stats.cache_evictions, es);
-			ExplainPropertyInteger("Cache Overflows", NULL, rcstate->stats.cache_overflows, es);
+			ExplainPropertyInteger("Cache Hits", NULL, mstate->stats.cache_hits, es);
+			ExplainPropertyInteger("Cache Misses", NULL, mstate->stats.cache_misses, es);
+			ExplainPropertyInteger("Cache Evictions", NULL, mstate->stats.cache_evictions, es);
+			ExplainPropertyInteger("Cache Overflows", NULL, mstate->stats.cache_overflows, es);
 			ExplainPropertyInteger("Peak Memory Usage", "kB", memPeakKb, es);
 		}
 		else
@@ -3984,23 +3985,23 @@ show_resultcache_info(ResultCacheState *rcstate, List *ancestors,
 			ExplainIndentText(es);
 			appendStringInfo(es->str,
 							 "Hits: " UINT64_FORMAT "  Misses: " UINT64_FORMAT "  Evictions: " UINT64_FORMAT "  Overflows: " UINT64_FORMAT "  Memory Usage: " INT64_FORMAT "kB\n",
-							 rcstate->stats.cache_hits,
-							 rcstate->stats.cache_misses,
-							 rcstate->stats.cache_evictions,
-							 rcstate->stats.cache_overflows,
+							 mstate->stats.cache_hits,
+							 mstate->stats.cache_misses,
+							 mstate->stats.cache_evictions,
+							 mstate->stats.cache_overflows,
 							 memPeakKb);
 		}
 	}
 
-	if (rcstate->shared_info == NULL)
+	if (mstate->shared_info == NULL)
 		return;
 
 	/* Show details from parallel workers */
-	for (int n = 0; n < rcstate->shared_info->num_workers; n++)
+	for (int n = 0; n < mstate->shared_info->num_workers; n++)
 	{
-		ResultCacheInstrumentation *si;
+		MemoizeInstrumentation *si;
 
-		si = &rcstate->shared_info->sinstrument[n];
+		si = &mstate->shared_info->sinstrument[n];
 
 		/*
 		 * Skip workers that didn't do any work.  We needn't bother checking
@@ -4013,10 +4014,10 @@ show_resultcache_info(ResultCacheState *rcstate, List *ancestors,
 			ExplainOpenWorker(n, es);
 
 		/*
-		 * Since the worker's ResultCacheState.mem_used field is unavailable
-		 * to us, ExecEndResultCache will have set the
-		 * ResultCacheInstrumentation.mem_peak field for us.  No need to do
-		 * the zero checks like we did for the serial case above.
+		 * Since the worker's MemoizeState.mem_used field is unavailable to
+		 * us, ExecEndMemoize will have set the
+		 * MemoizeInstrumentation.mem_peak field for us.  No need to do the
+		 * zero checks like we did for the serial case above.
 		 */
 		memPeakKb = (si->mem_peak + 1023) / 1024;
 
@@ -4595,7 +4596,7 @@ ExplainTargetRel(Plan *plan, Index rti, ExplainState *es)
 			Assert(rte->rtekind == RTE_RELATION);
 			objectname = get_rel_name(rte->relid);
 			if (es->verbose)
-				namespace = get_namespace_name(get_rel_namespace(rte->relid));
+				namespace = get_namespace_name_or_temp(get_rel_namespace(rte->relid));
 			objecttag = "Relation Name";
 			break;
 		case T_FunctionScan:
@@ -4622,8 +4623,7 @@ ExplainTargetRel(Plan *plan, Index rti, ExplainState *es)
 
 						objectname = get_func_name(funcid);
 						if (es->verbose)
-							namespace =
-								get_namespace_name(get_func_namespace(funcid));
+							namespace = get_namespace_name_or_temp(get_func_namespace(funcid));
 					}
 				}
 				objecttag = "Function Name";

@@ -304,6 +304,8 @@ except for the case of Perl=msys and host=mingw32.  The subject need not
 exist, but its parent or grandparent directory must exist unless cygpath is
 available.
 
+The returned path uses forward slashes but has no trailing slash.
+
 =cut
 
 sub perl2host
@@ -313,10 +315,11 @@ sub perl2host
 	if ($is_msys2)
 	{
 		# get absolute, windows type path
-		my $path = qx{cygpath -a -w "$subject"};
+		my $path = qx{cygpath -a -m "$subject"};
 		if (!$?)
 		{
 			chomp $path;
+			$path =~ s!/$!!;
 			return $path if $path;
 		}
 		# fall through if this didn't work.
@@ -342,6 +345,7 @@ sub perl2host
 	# this odd way of calling 'pwd -W' is the only way that seems to work.
 	my $dir = qx{sh -c "pwd -W"};
 	chomp $dir;
+	$dir =~ s!/$!!;
 	chdir $here;
 	return $dir . $leaf;
 }
@@ -375,9 +379,29 @@ sub system_or_bail
 {
 	if (system_log(@_) != 0)
 	{
-		BAIL_OUT("system $_[0] failed");
+		if ($? == -1)
+		{
+			BAIL_OUT(
+				sprintf(
+					"failed to execute command \"%s\": $!", join(" ", @_)));
+		}
+		elsif ($? & 127)
+		{
+			BAIL_OUT(
+				sprintf(
+					"command \"%s\" died with signal %d",
+					join(" ", @_),
+					$? & 127));
+		}
+		else
+		{
+			BAIL_OUT(
+				sprintf(
+					"command \"%s\" exited with value %d",
+					join(" ", @_),
+					$? >> 8));
+		}
 	}
-	return;
 }
 
 =pod

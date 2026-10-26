@@ -481,7 +481,7 @@ process_subquery_nestloop_params(PlannerInfo *root, List *subplan_params)
 
 	foreach(lc, subplan_params)
 	{
-		PlannerParamItem *pitem = castNode(PlannerParamItem, lfirst(lc));
+		PlannerParamItem *pitem = lfirst_node(PlannerParamItem, lc);
 
 		if (IsA(pitem->item, Var))
 		{

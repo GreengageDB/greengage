@@ -49,10 +49,8 @@ typedef FormData_pg_extprotocol *Form_pg_extprotocol;
 
 DECLARE_TOAST(pg_extprotocol, 7173, 7174);
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_extprotocol_oid_index, 7156, on pg_extprotocol using btree(oid oid_ops));
-#define ExtprotocolOidIndexId	7156
-DECLARE_UNIQUE_INDEX(pg_extprotocol_ptcname_index, 7177, on pg_extprotocol using btree(ptcname name_ops));
-#define ExtprotocolPtcnameIndexId	7177
+DECLARE_UNIQUE_INDEX_PKEY(pg_extprotocol_oid_index, 7156, ExtprotocolOidIndexId, on pg_extprotocol using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_extprotocol_ptcname_index, 7177, ExtprotocolPtcnameIndexId, on pg_extprotocol using btree(ptcname name_ops));
 
 /*
  * Different type of functions that can be 

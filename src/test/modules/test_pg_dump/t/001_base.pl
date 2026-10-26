@@ -10,7 +10,6 @@ use TestLib;
 use Test::More;
 
 my $tempdir       = TestLib::tempdir;
-my $tempdir_short = TestLib::tempdir_short;
 
 ###############################################################
 # This structure is based off of the src/bin/pg_dump/t test
@@ -316,6 +315,17 @@ my %tests = (
 		create_sql   => 'CREATE ROLE regress_dump_test_role;',
 		regexp       => qr/^CREATE ROLE regress_dump_test_role;\n/m,
 		like         => { pg_dumpall_globals => 1, },
+	},
+
+	'CREATE SCHEMA public' => {
+		regexp => qr/^CREATE SCHEMA public;/m,
+		# GPDB: binary upgrade drops and re-creates the public schema to
+		# preserve its OID.
+		like   => {
+			binary_upgrade                    => 1,
+			extension_schema                  => 1,
+			without_extension_explicit_schema => 1,
+		},
 	},
 
 	'CREATE SEQUENCE regress_pg_dump_table_col1_seq' => {
@@ -705,7 +715,7 @@ my %tests = (
 #########################################
 # Create a PG instance to test actually dumping from
 
-my $node = get_new_node('main');
+my $node = PostgresNode->new('main');
 $node->init;
 $node->start;
 

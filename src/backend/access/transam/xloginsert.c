@@ -33,12 +33,20 @@
 #include "storage/proc.h"
 #include "utils/memutils.h"
 
-#ifdef USE_ZSTD
-/* Zstandard library is provided */
-#include <zstd.h>
-/* zstandard compression level to use. */
-#define COMPRESS_LEVEL 3
+/*
+ * Guess the maximum buffer size required to store a compressed version of
+ * backup block image.
+ */
+#ifdef USE_LZ4
+#include <lz4.h>
+#define	LZ4_MAX_BLCKSZ		LZ4_COMPRESSBOUND(BLCKSZ)
+#else
+#define LZ4_MAX_BLCKSZ		0
 #endif
+
+#define PGLZ_MAX_BLCKSZ		PGLZ_MAX_OUTPUT(BLCKSZ)
+
+#define COMPRESS_BUFSIZE	Max(PGLZ_MAX_BLCKSZ, LZ4_MAX_BLCKSZ)
 
 /*
  * For each block reference registered with XLogRegisterBuffer, we fill in
@@ -62,7 +70,7 @@ typedef struct
 								 * backup block data in XLogRecordAssemble() */
 
 	/* buffer to store a compressed version of backup block image */
-	char		compressed_page[BLCKSZ];
+	char		compressed_page[COMPRESS_BUFSIZE];
 } registered_buffer;
 
 static registered_buffer *registered_buffers;
@@ -282,8 +290,6 @@ XLogRegisterBlock(uint8 block_id, RelFileNode *rnode, ForkNumber forknum,
 {
 	registered_buffer *regbuf;
 
-	/* This is currently only used to WAL-log a full-page image of a page */
-	Assert(flags & REGBUF_FORCE_IMAGE);
 	Assert(begininsert_called);
 
 	if (block_id >= max_registered_block_id)
@@ -648,7 +654,7 @@ XLogRecordAssemble(RmgrId rmid, uint8 info,
 			/*
 			 * Try to compress a block image if wal_compression is enabled
 			 */
-			if (wal_compression)
+			if (wal_compression != WAL_COMPRESSION_NONE)
 			{
 				is_compressed =
 					XLogCompressBackupBlock(page, bimg.hole_offset,
@@ -685,8 +691,29 @@ XLogRecordAssemble(RmgrId rmid, uint8 info,
 
 			if (is_compressed)
 			{
+				/* The current compression is stored in the WAL record */
 				bimg.length = compressed_len;
-				bimg.bimg_info |= BKPIMAGE_IS_COMPRESSED;
+
+				/* Set the compression method used for this block */
+				switch ((WalCompression) wal_compression)
+				{
+					case WAL_COMPRESSION_PGLZ:
+						bimg.bimg_info |= BKPIMAGE_COMPRESS_PGLZ;
+						break;
+
+					case WAL_COMPRESSION_LZ4:
+#ifdef USE_LZ4
+						bimg.bimg_info |= BKPIMAGE_COMPRESS_LZ4;
+#else
+						elog(ERROR, "LZ4 is not supported by this build");
+#endif
+						break;
+
+					case WAL_COMPRESSION_NONE:
+						Assert(false);	/* cannot happen */
+						break;
+						/* no default case, so that compiler will warn */
+				}
 
 				rdt_datas_last->data = regbuf->compressed_page;
 				rdt_datas_last->len = compressed_len;
@@ -849,10 +876,8 @@ static bool
 XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 						char *dest, uint16 *dlen)
 {
-#ifdef USE_ZSTD
-	static ZSTD_CCtx  *cxt = NULL;      /* ZSTD compression context */
 	int32		orig_len = BLCKSZ - hole_length;
-	int32		len;
+	int32		len = -1;
 	int32		extra_bytes = 0;
 	char	   *source;
 	PGAlignedBlock tmp;
@@ -875,26 +900,33 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 	else
 		source = page;
 
-	if (!cxt)
+	switch ((WalCompression) wal_compression)
 	{
-		cxt = ZSTD_createCCtx();
-		if (!cxt)
-			elog(ERROR, "out of memory");
+		case WAL_COMPRESSION_PGLZ:
+			len = pglz_compress(source, orig_len, dest, PGLZ_strategy_default);
+			break;
+
+		case WAL_COMPRESSION_LZ4:
+#ifdef USE_LZ4
+			len = LZ4_compress_default(source, dest, orig_len,
+									   COMPRESS_BUFSIZE);
+			if (len <= 0)
+				len = -1;		/* failure */
+#else
+			elog(ERROR, "LZ4 is not supported by this build");
+#endif
+			break;
+
+		case WAL_COMPRESSION_NONE:
+			Assert(false);		/* cannot happen */
+			break;
+			/* no default case, so that compiler will warn */
 	}
 
-	len = ZSTD_compressCCtx(cxt,
-							dest, BLCKSZ,
-							source, orig_len,
-							COMPRESS_LEVEL);
-
-	if (ZSTD_isError(len))
-		elog(ERROR, "compression failed: %s uncompressed len %d",
-			 ZSTD_getErrorName(len), orig_len);
-
 	/*
-	 * We recheck the actual size even if ZSTD reports success and
-	 * see if the number of bytes saved by compression is larger than the
-	 * length of extra data needed for the compressed version of block image.
+	 * We recheck the actual size even if compression reports success and see
+	 * if the number of bytes saved by compression is larger than the length
+	 * of extra data needed for the compressed version of block image.
 	 */
 	if (len >= 0 &&
 		len + extra_bytes < orig_len)
@@ -902,7 +934,6 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 		*dlen = (uint16) len;	/* successful compression */
 		return true;
 	}
-#endif
 	return false;
 }
 
@@ -978,7 +1009,7 @@ XLogSaveBufferForHint(Buffer buffer, bool buffer_std)
 
 	if (lsn <= RedoRecPtr)
 	{
-		int			flags;
+		int			flags = 0;
 		PGAlignedBlock copied_buffer;
 		char	   *origdata = (char *) BufferGetBlock(buffer);
 		RelFileNode rnode;
@@ -1005,7 +1036,6 @@ XLogSaveBufferForHint(Buffer buffer, bool buffer_std)
 
 		XLogBeginInsert();
 
-		flags = REGBUF_FORCE_IMAGE;
 		if (buffer_std)
 			flags |= REGBUF_STANDARD;
 

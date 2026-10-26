@@ -154,6 +154,10 @@ s/.//gs
 m/\(dbsize\.c\:\d+\)/
 s/\(dbsize\.c:\d+\)/\(dbsize\.c:XXX\)/
 
+# upstream's ALTER TRIGGER ... RENAME errors on partitions have no errcode
+m/ \(trigger\.c\:\d+\)/
+s/ \(trigger\.c:\d+\)//
+
 # remove the cdbdisp_async suffix of some ERROR messages
 m/ \(cdbdisp_async\.c.*\)/
 s/ \(cdbdisp_async\.c.*\)//

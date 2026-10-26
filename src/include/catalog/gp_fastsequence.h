@@ -38,8 +38,7 @@ CATALOG(gp_fastsequence,8043,FastSequenceRelationId)
 */
 typedef FormData_gp_fastsequence *Form_gp_fastsequence;
 
-DECLARE_UNIQUE_INDEX_PKEY(gp_fastsequence_objid_objmod_index, 6067, on gp_fastsequence using btree(objid oid_ops, objmod  int8_ops));
-#define FastSequenceObjidObjmodIndexId 6067
+DECLARE_UNIQUE_INDEX_PKEY(gp_fastsequence_objid_objmod_index, 6067, FastSequenceObjidObjmodIndexId, on gp_fastsequence using btree(objid oid_ops, objmod  int8_ops));
 
 #define NUM_FAST_SEQUENCES					 100
 extern void InsertInitialFastSequenceEntries(Oid objid);

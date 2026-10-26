@@ -39,7 +39,7 @@
 #include "access/twophase_rmgr.h"
 #include "access/xact.h"
 #include "access/xlog.h"
-#include "catalog/partition.h"
+#include "catalog/catalog.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_proc.h"
 #include "executor/instrument.h"
@@ -143,13 +143,14 @@ char	   *pgstat_stat_tmpname = NULL;
  * Stored directly in a stats message structure so they can be sent
  * without needing to copy things around.  We assume these init to zeroes.
  */
-PgStat_MsgBgWriter BgWriterStats;
+PgStat_MsgBgWriter PendingBgWriterStats;
+PgStat_MsgCheckpointer PendingCheckpointerStats;
 PgStat_MsgWal WalStats;
 
 /*
  * WAL usage counters saved from pgWALUsage at the previous call to
  * pgstat_send_wal(). This is used to calculate how much WAL usage
- * happens between pgstat_send_wal() calls, by substracting
+ * happens between pgstat_send_wal() calls, by subtracting
  * the previous counters from the current ones.
  */
 static WalUsage prevWalUsage;
@@ -318,11 +319,13 @@ static List *pending_write_requests = NIL;
 static instr_time total_func_time;
 
 /*
- * Total time charged to functions so far in the current backend.
- * We use this to help separate "self" and "other" time charges.
- * (We assume this initializes to zero.)
+ * For assertions that check pgstat is not used before initialization / after
+ * shutdown.
  */
-static instr_time total_func_time;
+#ifdef USE_ASSERT_CHECKING
+static bool pgstat_is_initialized = false;
+static bool pgstat_is_shutdown = false;
+#endif
 
 
 /* ----------
@@ -361,6 +364,7 @@ static void pgstat_send_connstats(bool disconnect, TimestampTz last_report);
 static PgStat_TableStatus *get_tabstat_entry(Oid rel_id, bool isshared);
 
 static void pgstat_setup_memcxt(void);
+static void pgstat_assert_is_up(void);
 
 static void pgstat_setheader(PgStat_MsgHdr *hdr, StatMsgType mtype);
 static void pgstat_send(void *msg, int len);
@@ -377,10 +381,10 @@ static void pgstat_recv_resetreplslotcounter(PgStat_MsgResetreplslotcounter *msg
 static void pgstat_recv_autovac(PgStat_MsgAutovacStart *msg, int len);
 static void pgstat_recv_vacuum(PgStat_MsgVacuum *msg, int len);
 static void pgstat_recv_analyze(PgStat_MsgAnalyze *msg, int len);
-static void pgstat_recv_anl_ancestors(PgStat_MsgAnlAncestors *msg, int len);
 static void pgstat_recv_archiver(PgStat_MsgArchiver *msg, int len);
 static void pgstat_recv_queuestat(PgStat_MsgQueuestat *msg, int len); /* GPDB */
 static void pgstat_recv_bgwriter(PgStat_MsgBgWriter *msg, int len);
+static void pgstat_recv_checkpointer(PgStat_MsgCheckpointer *msg, int len);
 static void pgstat_recv_wal(PgStat_MsgWal *msg, int len);
 static void pgstat_recv_slru(PgStat_MsgSLRU *msg, int len);
 static void pgstat_recv_funcstat(PgStat_MsgFuncstat *msg, int len);
@@ -885,6 +889,8 @@ pgstat_report_stat(bool disconnect)
 	PgStat_MsgTabstat shared_msg;
 	TabStatusArray *tsa;
 	int			i;
+
+	pgstat_assert_is_up();
 
 	/*
 	 * Don't expend a clock check if nothing to do.
@@ -1633,9 +1639,6 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
  *
  * Caller must provide new live- and dead-tuples estimates, as well as a
  * flag indicating whether to reset the changes_since_analyze counter.
- * Exceptional support only changes_since_analyze for partitioned tables,
- * though they don't have any data.  This counter will tell us whether
- * partitioned tables need autoanalyze or not.
  * --------
  */
 void
@@ -1658,30 +1661,23 @@ pgstat_report_analyze(Relation rel,
 	 * collector ends up with the right numbers if we abort instead of
 	 * committing.)
 	 *
-	 * For partitioned tables, we don't report live and dead tuples, because
-	 * such tables don't have any data.
+	 * Waste no time on partitioned tables, though.
 	 */
-	if (rel->pgstat_info != NULL)
+	if (rel->pgstat_info != NULL &&
+		rel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
 	{
 		PgStat_TableXactStatus *trans;
 
-		if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-			/* If this rel is partitioned, skip modifying */
-			livetuples = deadtuples = 0;
-		else
+		for (trans = rel->pgstat_info->trans; trans; trans = trans->upper)
 		{
-			for (trans = rel->pgstat_info->trans; trans; trans = trans->upper)
-			{
-				livetuples -= trans->tuples_inserted - trans->tuples_deleted;
-				deadtuples -= trans->tuples_updated + trans->tuples_deleted;
-			}
-			/* count stuff inserted by already-aborted subxacts, too */
-			deadtuples -= rel->pgstat_info->t_counts.t_delta_dead_tuples;
-			/* Since ANALYZE's counts are estimates, we could have underflowed */
-			livetuples = Max(livetuples, 0);
-			deadtuples = Max(deadtuples, 0);
+			livetuples -= trans->tuples_inserted - trans->tuples_deleted;
+			deadtuples -= trans->tuples_updated + trans->tuples_deleted;
 		}
-
+		/* count stuff inserted by already-aborted subxacts, too */
+		deadtuples -= rel->pgstat_info->t_counts.t_delta_dead_tuples;
+		/* Since ANALYZE's counts are estimates, we could have underflowed */
+		livetuples = Max(livetuples, 0);
+		deadtuples = Max(deadtuples, 0);
 	}
 
 	pgstat_setheader(&msg.m_hdr, PGSTAT_MTYPE_ANALYZE);
@@ -1693,48 +1689,6 @@ pgstat_report_analyze(Relation rel,
 	msg.m_live_tuples = livetuples;
 	msg.m_dead_tuples = deadtuples;
 	pgstat_send(&msg, sizeof(msg));
-
-}
-
-/*
- * pgstat_report_anl_ancestors
- *
- *	Send list of partitioned table ancestors of the given partition to the
- *	collector.  The collector is in charge of propagating the analyze tuple
- *	counts from the partition to its ancestors.  This is necessary so that
- *	other processes can decide whether to analyze the partitioned tables.
- */
-void
-pgstat_report_anl_ancestors(Oid relid)
-{
-	PgStat_MsgAnlAncestors msg;
-	List	   *ancestors;
-	ListCell   *lc;
-
-	pgstat_setheader(&msg.m_hdr, PGSTAT_MTYPE_ANL_ANCESTORS);
-	msg.m_databaseid = MyDatabaseId;
-	msg.m_tableoid = relid;
-	msg.m_nancestors = 0;
-
-	ancestors = get_partition_ancestors(relid);
-	foreach(lc, ancestors)
-	{
-		Oid			ancestor = lfirst_oid(lc);
-
-		msg.m_ancestors[msg.m_nancestors] = ancestor;
-		if (++msg.m_nancestors >= PGSTAT_NUM_ANCESTORENTRIES)
-		{
-			pgstat_send(&msg, offsetof(PgStat_MsgAnlAncestors, m_ancestors[0]) +
-						msg.m_nancestors * sizeof(Oid));
-			msg.m_nancestors = 0;
-		}
-	}
-
-	if (msg.m_nancestors > 0)
-		pgstat_send(&msg, offsetof(PgStat_MsgAnlAncestors, m_ancestors[0]) +
-					msg.m_nancestors * sizeof(Oid));
-
-	list_free(ancestors);
 }
 
 /* --------
@@ -1992,6 +1946,8 @@ pgstat_init_function_usage(FunctionCallInfo fcinfo,
 PgStat_BackendFunctionEntry *
 find_funcstat_entry(Oid func_id)
 {
+	pgstat_assert_is_up();
+
 	if (pgStatFunctions == NULL)
 		return NULL;
 
@@ -2072,9 +2028,10 @@ pgstat_initstats(Relation rel)
 	Oid			rel_id = rel->rd_id;
 	char		relkind = rel->rd_rel->relkind;
 
-	/* We only count stats for things that have storage */
-	if (!RELKIND_HAS_STORAGE(relkind) &&
-		relkind != RELKIND_PARTITIONED_TABLE)
+	/*
+	 * We only count stats for relations with storage and partitioned tables
+	 */
+	if (!RELKIND_HAS_STORAGE(relkind) && relkind != RELKIND_PARTITIONED_TABLE)
 	{
 		rel->pgstat_info = NULL;
 		return;
@@ -2109,6 +2066,8 @@ get_tabstat_entry(Oid rel_id, bool isshared)
 	PgStat_TableStatus *entry;
 	TabStatusArray *tsa;
 	bool		found;
+
+	pgstat_assert_is_up();
 
 	/*
 	 * Create hash table if we don't have it already.
@@ -2864,6 +2823,37 @@ pgstat_fetch_stat_archiver(void)
 	return &archiverStats;
 }
 
+/*
+ * ---------
+ * pgstat_fetch_stat_bgwriter() -
+ *
+ *	Support function for the SQL-callable pgstat* functions. Returns
+ *	a pointer to the bgwriter statistics struct.
+ * ---------
+ */
+PgStat_BgWriterStats *
+pgstat_fetch_stat_bgwriter(void)
+{
+	backend_read_statsfile();
+
+	return &globalStats.bgwriter;
+}
+
+/*
+ * ---------
+ * pgstat_fetch_stat_checkpointer() -
+ *
+ *	Support function for the SQL-callable pgstat* functions. Returns
+ *	a pointer to the checkpointer statistics struct.
+ * ---------
+ */
+PgStat_CheckpointerStats *
+pgstat_fetch_stat_checkpointer(void)
+{
+	backend_read_statsfile();
+
+	return &globalStats.checkpointer;
+}
 
 /*
  * ---------
@@ -2939,6 +2929,8 @@ pgstat_fetch_replslot(NameData slotname)
 static void
 pgstat_shutdown_hook(int code, Datum arg)
 {
+	Assert(!pgstat_is_shutdown);
+
 	/*
 	 * If we got as far as discovering our own database ID, we can report what
 	 * we did to the collector.  Otherwise, we'd be sending an invalid
@@ -2947,13 +2939,17 @@ pgstat_shutdown_hook(int code, Datum arg)
 	 */
 	if (OidIsValid(MyDatabaseId))
 		pgstat_report_stat(true);
+
+#ifdef USE_ASSERT_CHECKING
+	pgstat_is_shutdown = true;
+#endif
 }
 
 /* ----------
  * pgstat_initialize() -
  *
- *	Initialize pgstats state, and set up our on-proc-exit hook.
- *	Called from InitPostgres and AuxiliaryProcessMain.
+ *	Initialize pgstats state, and set up our on-proc-exit hook. Called from
+ *	BaseInit().
  *
  *	NOTE: MyDatabaseId isn't set yet; so the shutdown hook has to be careful.
  * ----------
@@ -2961,15 +2957,21 @@ pgstat_shutdown_hook(int code, Datum arg)
 void
 pgstat_initialize(void)
 {
+	Assert(!pgstat_is_initialized);
+
 	/*
 	 * Initialize prevWalUsage with pgWalUsage so that pgstat_send_wal() can
-	 * calculate how much pgWalUsage counters are increased by substracting
+	 * calculate how much pgWalUsage counters are increased by subtracting
 	 * prevWalUsage from pgWalUsage.
 	 */
 	prevWalUsage = pgWalUsage;
 
 	/* Set up a process-exit hook to clean up */
-	on_shmem_exit(pgstat_shutdown_hook, 0);
+	before_shmem_exit(pgstat_shutdown_hook, 0);
+
+#ifdef USE_ASSERT_CHECKING
+	pgstat_is_initialized = true;
+#endif
 }
 
 /* ------------------------------------------------------------
@@ -3001,6 +3003,8 @@ static void
 pgstat_send(void *msg, int len)
 {
 	int			rc;
+
+	pgstat_assert_is_up();
 
 	if (pgStatSock == PGINVALID_SOCKET)
 		return;
@@ -3054,6 +3058,8 @@ pgstat_send_bgwriter(void)
 	/* We assume this initializes to zeroes */
 	static const PgStat_MsgBgWriter all_zeroes;
 
+	pgstat_assert_is_up();
+
 	/*
 	 * Non hot standby mirror should not send bgwriter statistics to the
 	 * stat collector, since stat collector is not started when mirror
@@ -3068,19 +3074,60 @@ pgstat_send_bgwriter(void)
 	 * this case, avoid sending a completely empty message to the stats
 	 * collector.
 	 */
-	if (memcmp(&BgWriterStats, &all_zeroes, sizeof(PgStat_MsgBgWriter)) == 0)
+	if (memcmp(&PendingBgWriterStats, &all_zeroes, sizeof(PgStat_MsgBgWriter)) == 0)
 		return;
 
 	/*
 	 * Prepare and send the message
 	 */
-	pgstat_setheader(&BgWriterStats.m_hdr, PGSTAT_MTYPE_BGWRITER);
-	pgstat_send(&BgWriterStats, sizeof(BgWriterStats));
+	pgstat_setheader(&PendingBgWriterStats.m_hdr, PGSTAT_MTYPE_BGWRITER);
+	pgstat_send(&PendingBgWriterStats, sizeof(PendingBgWriterStats));
 
 	/*
 	 * Clear out the statistics buffer, so it can be re-used.
 	 */
-	MemSet(&BgWriterStats, 0, sizeof(BgWriterStats));
+	MemSet(&PendingBgWriterStats, 0, sizeof(PendingBgWriterStats));
+}
+
+/* ----------
+ * pgstat_send_checkpointer() -
+ *
+ *		Send checkpointer statistics to the collector
+ * ----------
+ */
+void
+pgstat_send_checkpointer(void)
+{
+	/* We assume this initializes to zeroes */
+	static const PgStat_MsgCheckpointer all_zeroes;
+
+	/*
+	 * GPDB: Non hot standby mirror should not send checkpointer statistics
+	 * to the stat collector either (see pgstat_send_bgwriter()): the stat
+	 * collector is not started when the mirror is not in hot standby mode,
+	 * and the checkpointer does run restartpoints there.
+	 */
+	if (!EnableHotStandby && IsRoleMirror())
+		return;
+
+	/*
+	 * This function can be called even if nothing at all has happened. In
+	 * this case, avoid sending a completely empty message to the stats
+	 * collector.
+	 */
+	if (memcmp(&PendingCheckpointerStats, &all_zeroes, sizeof(PgStat_MsgCheckpointer)) == 0)
+		return;
+
+	/*
+	 * Prepare and send the message
+	 */
+	pgstat_setheader(&PendingCheckpointerStats.m_hdr, PGSTAT_MTYPE_CHECKPOINTER);
+	pgstat_send(&PendingCheckpointerStats, sizeof(PendingCheckpointerStats));
+
+	/*
+	 * Clear out the statistics buffer, so it can be re-used.
+	 */
+	MemSet(&PendingCheckpointerStats, 0, sizeof(PendingCheckpointerStats));
 }
 
 /*
@@ -3387,7 +3434,7 @@ pgstat_send_wal(bool force)
 
 		/*
 		 * Calculate how much WAL usage counters were increased by
-		 * substracting the previous counters from the current ones. Fill the
+		 * subtracting the previous counters from the current ones. Fill the
 		 * results in WAL stats message.
 		 */
 		MemSet(&walusage, 0, sizeof(WalUsage));
@@ -3652,10 +3699,6 @@ PgstatCollectorMain(int argc, char *argv[])
 					pgstat_recv_analyze(&msg.msg_analyze, len);
 					break;
 
-				case PGSTAT_MTYPE_ANL_ANCESTORS:
-					pgstat_recv_anl_ancestors(&msg.msg_anl_ancestors, len);
-					break;
-
 				case PGSTAT_MTYPE_ARCHIVER:
 					pgstat_recv_archiver(&msg.msg_archiver, len);
 					break;
@@ -3666,6 +3709,10 @@ PgstatCollectorMain(int argc, char *argv[])
 
 				case PGSTAT_MTYPE_QUEUESTAT:  /* GPDB */
 					pgstat_recv_queuestat((PgStat_MsgQueuestat *) &msg, len);
+					break;
+
+				case PGSTAT_MTYPE_CHECKPOINTER:
+					pgstat_recv_checkpointer(&msg.msg_checkpointer, len);
 					break;
 
 				case PGSTAT_MTYPE_WAL:
@@ -3874,7 +3921,6 @@ pgstat_get_tab_entry(PgStat_StatDBEntry *dbentry, Oid tableoid, bool create)
 		result->n_live_tuples = 0;
 		result->n_dead_tuples = 0;
 		result->changes_since_analyze = 0;
-		result->changes_since_analyze_reported = 0;
 		result->inserts_since_vacuum = 0;
 		result->blocks_fetched = 0;
 		result->blocks_hit = 0;
@@ -4235,6 +4281,7 @@ pgstat_read_statsfiles(Oid onlydb, bool permanent, bool deep)
 	PgStat_StatQueueEntry *queueentry; /* GPDB */
 	HTAB	   *queuehash = NULL;  /* GPDB */
 	int			i;
+	TimestampTz	ts;
 
 	/*
 	 * The tables will live in pgStatLocalContext.
@@ -4275,15 +4322,16 @@ pgstat_read_statsfiles(Oid onlydb, bool permanent, bool deep)
 	 * Set the current timestamp (will be kept only in case we can't load an
 	 * existing statsfile).
 	 */
-	globalStats.stat_reset_timestamp = GetCurrentTimestamp();
-	archiverStats.stat_reset_timestamp = globalStats.stat_reset_timestamp;
-	walStats.stat_reset_timestamp = globalStats.stat_reset_timestamp;
+	ts = GetCurrentTimestamp();
+	globalStats.bgwriter.stat_reset_timestamp = ts;
+	archiverStats.stat_reset_timestamp = ts;
+	walStats.stat_reset_timestamp = ts;
 
 	/*
 	 * Set the same reset timestamp for all SLRU items too.
 	 */
 	for (i = 0; i < SLRU_NUM_ELEMENTS; i++)
-		slruStats[i].stat_reset_timestamp = globalStats.stat_reset_timestamp;
+		slruStats[i].stat_reset_timestamp = ts;
 
 	/*
 	 * Try to open the stats file. If it doesn't exist, the backends simply
@@ -4921,6 +4969,8 @@ backend_read_statsfile(void)
 	Oid			inquiry_db;
 	int			count;
 
+	pgstat_assert_is_up();
+
 	/* already read it? */
 	if (pgStatDBHash)
 		return;
@@ -5057,6 +5107,17 @@ pgstat_setup_memcxt(void)
 												   ALLOCSET_SMALL_SIZES);
 }
 
+/*
+ * Stats should only be reported after pgstat_initialize() and before
+ * pgstat_shutdown(). This check is put in a few central places to catch
+ * violations of this rule more easily.
+ */
+static void
+pgstat_assert_is_up(void)
+{
+	Assert(pgstat_is_initialized && !pgstat_is_shutdown);
+}
+
 
 /* ----------
  * pgstat_clear_snapshot() -
@@ -5071,6 +5132,8 @@ pgstat_setup_memcxt(void)
 void
 pgstat_clear_snapshot(void)
 {
+	pgstat_assert_is_up();
+
 	/* Release memory, if any was allocated */
 	if (pgStatLocalContext)
 		MemoryContextDelete(pgStatLocalContext);
@@ -5233,7 +5296,6 @@ pgstat_recv_tabstat(PgStat_MsgTabstat *msg, int len)
 			tabentry->n_live_tuples = tabmsg->t_counts.t_delta_live_tuples;
 			tabentry->n_dead_tuples = tabmsg->t_counts.t_delta_dead_tuples;
 			tabentry->changes_since_analyze = tabmsg->t_counts.t_changed_tuples;
-			tabentry->changes_since_analyze_reported = 0;
 			tabentry->inserts_since_vacuum = tabmsg->t_counts.t_tuples_inserted;
 			tabentry->blocks_fetched = tabmsg->t_counts.t_blocks_fetched;
 			tabentry->blocks_hit = tabmsg->t_counts.t_blocks_hit;
@@ -5418,9 +5480,9 @@ pgstat_recv_resetsharedcounter(PgStat_MsgResetsharedcounter *msg, int len)
 {
 	if (msg->m_resettarget == RESET_BGWRITER)
 	{
-		/* Reset the global background writer statistics for the cluster. */
+		/* Reset the global, bgwriter and checkpointer statistics for the cluster. */
 		memset(&globalStats, 0, sizeof(globalStats));
-		globalStats.stat_reset_timestamp = GetCurrentTimestamp();
+		globalStats.bgwriter.stat_reset_timestamp = GetCurrentTimestamp();
 	}
 	else if (msg->m_resettarget == RESET_ARCHIVER)
 	{
@@ -5444,7 +5506,8 @@ pgstat_recv_resetsharedcounter(PgStat_MsgResetsharedcounter *msg, int len)
 /* ----------
  * pgstat_recv_resetsinglecounter() -
  *
- *	Reset a statistics for a single object
+ *	Reset a statistics for a single object, which may be of current
+ *	database or shared across all databases in the cluster.
  * ----------
  */
 static void
@@ -5452,7 +5515,10 @@ pgstat_recv_resetsinglecounter(PgStat_MsgResetsinglecounter *msg, int len)
 {
 	PgStat_StatDBEntry *dbentry;
 
-	dbentry = pgstat_get_db_entry(msg->m_databaseid, false);
+	if (IsSharedRelation(msg->m_objectid))
+		dbentry = pgstat_get_db_entry(InvalidOid, false);
+	else
+		dbentry = pgstat_get_db_entry(msg->m_databaseid, false);
 
 	if (!dbentry)
 		return;
@@ -5631,10 +5697,7 @@ pgstat_recv_analyze(PgStat_MsgAnalyze *msg, int len)
 	 * have no good way to estimate how many of those there were.
 	 */
 	if (msg->m_resetcounter)
-	{
 		tabentry->changes_since_analyze = 0;
-		tabentry->changes_since_analyze_reported = 0;
-	}
 
 	if (msg->m_autovacuum)
 	{
@@ -5648,29 +5711,6 @@ pgstat_recv_analyze(PgStat_MsgAnalyze *msg, int len)
 	}
 }
 
-static void
-pgstat_recv_anl_ancestors(PgStat_MsgAnlAncestors *msg, int len)
-{
-	PgStat_StatDBEntry *dbentry;
-	PgStat_StatTabEntry *tabentry;
-
-	dbentry = pgstat_get_db_entry(msg->m_databaseid, true);
-
-	tabentry = pgstat_get_tab_entry(dbentry, msg->m_tableoid, true);
-
-	for (int i = 0; i < msg->m_nancestors; i++)
-	{
-		Oid			ancestor_relid = msg->m_ancestors[i];
-		PgStat_StatTabEntry *ancestor;
-
-		ancestor = pgstat_get_tab_entry(dbentry, ancestor_relid, true);
-		ancestor->changes_since_analyze +=
-			tabentry->changes_since_analyze - tabentry->changes_since_analyze_reported;
-	}
-
-	tabentry->changes_since_analyze_reported = tabentry->changes_since_analyze;
-
-}
 
 /* ----------
  * pgstat_recv_archiver() -
@@ -5708,16 +5748,27 @@ pgstat_recv_archiver(PgStat_MsgArchiver *msg, int len)
 static void
 pgstat_recv_bgwriter(PgStat_MsgBgWriter *msg, int len)
 {
-	globalStats.timed_checkpoints += msg->m_timed_checkpoints;
-	globalStats.requested_checkpoints += msg->m_requested_checkpoints;
-	globalStats.checkpoint_write_time += msg->m_checkpoint_write_time;
-	globalStats.checkpoint_sync_time += msg->m_checkpoint_sync_time;
-	globalStats.buf_written_checkpoints += msg->m_buf_written_checkpoints;
-	globalStats.buf_written_clean += msg->m_buf_written_clean;
-	globalStats.maxwritten_clean += msg->m_maxwritten_clean;
-	globalStats.buf_written_backend += msg->m_buf_written_backend;
-	globalStats.buf_fsync_backend += msg->m_buf_fsync_backend;
-	globalStats.buf_alloc += msg->m_buf_alloc;
+	globalStats.bgwriter.buf_written_clean += msg->m_buf_written_clean;
+	globalStats.bgwriter.maxwritten_clean += msg->m_maxwritten_clean;
+	globalStats.bgwriter.buf_alloc += msg->m_buf_alloc;
+}
+
+/* ----------
+ * pgstat_recv_checkpointer() -
+ *
+ *	Process a CHECKPOINTER message.
+ * ----------
+ */
+static void
+pgstat_recv_checkpointer(PgStat_MsgCheckpointer *msg, int len)
+{
+	globalStats.checkpointer.timed_checkpoints += msg->m_timed_checkpoints;
+	globalStats.checkpointer.requested_checkpoints += msg->m_requested_checkpoints;
+	globalStats.checkpointer.checkpoint_write_time += msg->m_checkpoint_write_time;
+	globalStats.checkpointer.checkpoint_sync_time += msg->m_checkpoint_sync_time;
+	globalStats.checkpointer.buf_written_checkpoints += msg->m_buf_written_checkpoints;
+	globalStats.checkpointer.buf_written_backend += msg->m_buf_written_backend;
+	globalStats.checkpointer.buf_fsync_backend += msg->m_buf_fsync_backend;
 }
 
 
@@ -6370,6 +6421,8 @@ pgstat_slru_name(int slru_idx)
 static inline PgStat_MsgSLRU *
 slru_entry(int slru_idx)
 {
+	pgstat_assert_is_up();
+
 	/*
 	 * The postmaster should never register any SLRU statistics counts; if it
 	 * did, the counts would be duplicated into child processes via fork().

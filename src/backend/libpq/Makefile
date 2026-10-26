@@ -16,6 +16,7 @@ override CPPFLAGS += -I$(libpq_srcdir) -I$(top_builddir)/src/port
 # be-fsstubs is here for historical reasons, probably belongs elsewhere
 
 OBJS = \
+	auth-sasl.o \
 	auth-scram.o \
 	auth.o \
 	be-fsstubs.o \

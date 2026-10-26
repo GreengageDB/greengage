@@ -552,6 +552,22 @@ static struct config_enum_entry default_toast_compression_options[] = {
 	{NULL, 0, false}
 };
 
+static const struct config_enum_entry wal_compression_options[] = {
+	{"pglz", WAL_COMPRESSION_PGLZ, false},
+#ifdef USE_LZ4
+	{"lz4", WAL_COMPRESSION_LZ4, false},
+#endif
+	{"on", WAL_COMPRESSION_PGLZ, false},
+	{"off", WAL_COMPRESSION_NONE, false},
+	{"true", WAL_COMPRESSION_PGLZ, true},
+	{"false", WAL_COMPRESSION_NONE, true},
+	{"yes", WAL_COMPRESSION_PGLZ, true},
+	{"no", WAL_COMPRESSION_NONE, true},
+	{"1", WAL_COMPRESSION_PGLZ, true},
+	{"0", WAL_COMPRESSION_NONE, true},
+	{NULL, 0, false}
+};
+
 /*
  * Options for enum values stored in other modules
  */
@@ -660,6 +676,7 @@ static int	max_index_keys;
 static int	max_identifier_length;
 static int	block_size;
 static int	segment_size;
+static int	shared_memory_size_mb;
 static int	wal_block_size;
 static bool data_checksums;
 static bool integer_datetimes;
@@ -1081,12 +1098,12 @@ static struct config_bool ConfigureNamesBool[] =
 		NULL, NULL, NULL
 	},
 	{
-		{"enable_resultcache", PGC_USERSET, QUERY_TUNING_METHOD,
-			gettext_noop("Enables the planner's use of result caching."),
+		{"enable_memoize", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Enables the planner's use of memoization."),
 			NULL,
 			GUC_EXPLAIN
 		},
-		&enable_resultcache,
+		&enable_memoize,
 		true,
 		NULL, NULL, NULL
 	},
@@ -1341,16 +1358,6 @@ static struct config_bool ConfigureNamesBool[] =
 			NULL
 		},
 		&wal_log_hints,
-		false,
-		NULL, NULL, NULL
-	},
-
-	{
-		{"wal_compression", PGC_SUSET, WAL_SETTINGS,
-			gettext_noop("Compresses full-page writes written in WAL file."),
-			NULL
-		},
-		&wal_compression,
 		false,
 		NULL, NULL, NULL
 	},
@@ -2368,7 +2375,18 @@ static struct config_int ConfigureNamesInt[] =
 			GUC_UNIT_BLOCKS
 		},
 		&NBuffers,
-		4096, 16, INT_MAX / 2,
+		16384, 16, INT_MAX / 2,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"shared_memory_size", PGC_INTERNAL, PRESET_OPTIONS,
+			gettext_noop("Shows the size of the server's main shared memory area (rounded up to the nearest MB)."),
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_UNIT_MB
+		},
+		&shared_memory_size_mb,
+		0, 0, INT_MAX,
 		NULL, NULL, NULL
 	},
 
@@ -3571,13 +3589,13 @@ static struct config_int ConfigureNamesInt[] =
 	},
 
 	{
-		{"debug_invalidate_system_caches_always", PGC_SUSET, DEVELOPER_OPTIONS,
-			gettext_noop("Aggressively invalidate system caches for debugging purposes."),
+		{"debug_discard_caches", PGC_SUSET, DEVELOPER_OPTIONS,
+			gettext_noop("Aggressively flush system caches for debugging purposes."),
 			NULL,
 			GUC_NOT_IN_SAMPLE
 		},
-		&debug_invalidate_system_caches_always,
-#ifdef CLOBBER_CACHE_ENABLED
+		&debug_discard_caches,
+#ifdef DISCARD_CACHES_ENABLED
 		/* Set default based on older compile-time-only cache clobber macros */
 #if defined(CLOBBER_CACHE_RECURSIVELY)
 		3,
@@ -3587,9 +3605,9 @@ static struct config_int ConfigureNamesInt[] =
 		0,
 #endif
 		0, 5,
-#else							/* not CLOBBER_CACHE_ENABLED */
+#else							/* not DISCARD_CACHES_ENABLED */
 		0, 0, 0,
-#endif							/* not CLOBBER_CACHE_ENABLED */
+#endif							/* not DISCARD_CACHES_ENABLED */
 		NULL, NULL, NULL
 	},
 
@@ -4882,6 +4900,16 @@ static struct config_enum ConfigureNamesEnum[] =
 		},
 		&pgstat_track_functions,
 		TRACK_FUNC_OFF, track_function_options,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"wal_compression", PGC_SUSET, WAL_SETTINGS,
+			gettext_noop("Compresses full-page writes written in WAL file with specified method."),
+			NULL
+		},
+		&wal_compression,
+		WAL_COMPRESSION_NONE, wal_compression_options,
 		NULL, NULL, NULL
 	},
 

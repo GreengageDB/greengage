@@ -18,6 +18,9 @@
 #include "postgres.h"
 
 #include <unistd.h>
+#ifdef USE_LZ4
+#include <lz4.h>
+#endif
 
 #include "access/transam.h"
 #include "access/xlog_internal.h"
@@ -26,11 +29,6 @@
 #include "catalog/pg_control.h"
 #include "common/pg_lzcompress.h"
 #include "replication/origin.h"
-
-#ifdef USE_ZSTD
-/* Zstandard library is provided */
-#include <zstd.h>
-#endif
 
 #ifndef FRONTEND
 #include "miscadmin.h"
@@ -49,9 +47,6 @@ static bool ValidXLogRecordHeader(XLogReaderState *state, XLogRecPtr RecPtr,
 static bool ValidXLogRecord(XLogReaderState *state, XLogRecord *record,
 							XLogRecPtr recptr);
 static void ResetDecoder(XLogReaderState *state);
-static bool zstd_decompress_backupblock(const char *source, int32 slen,
-										char *dest, int32 rawsize,
-										char *errormessage);
 static void WALOpenSegmentInit(WALOpenSegment *seg, WALSegmentContext *segcxt,
 							   int segsize, const char *waldir);
 
@@ -1342,7 +1337,7 @@ DecodeXLogRecord(XLogReaderState *state, XLogRecord *record, char **errormsg)
 
 				blk->apply_image = ((blk->bimg_info & BKPIMAGE_APPLY) != 0);
 
-				if (blk->bimg_info & BKPIMAGE_IS_COMPRESSED)
+				if (BKPIMAGE_COMPRESSED(blk->bimg_info))
 				{
 					if (blk->bimg_info & BKPIMAGE_HAS_HOLE)
 						COPY_HEADER_FIELD(&blk->hole_length, sizeof(uint16));
@@ -1387,29 +1382,28 @@ DecodeXLogRecord(XLogReaderState *state, XLogRecord *record, char **errormsg)
 				}
 
 				/*
-				 * cross-check that bimg_len < BLCKSZ if the IS_COMPRESSED
-				 * flag is set.
+				 * Cross-check that bimg_len < BLCKSZ if it is compressed.
 				 */
-				if ((blk->bimg_info & BKPIMAGE_IS_COMPRESSED) &&
+				if (BKPIMAGE_COMPRESSED(blk->bimg_info) &&
 					blk->bimg_len == BLCKSZ)
 				{
 					report_invalid_record(state,
-										  "BKPIMAGE_IS_COMPRESSED set, but block image length %u at %X/%X",
+										  "BKPIMAGE_COMPRESSED set, but block image length %u at %X/%X",
 										  (unsigned int) blk->bimg_len,
 										  LSN_FORMAT_ARGS(state->ReadRecPtr));
 					goto err;
 				}
 
 				/*
-				 * cross-check that bimg_len = BLCKSZ if neither HAS_HOLE nor
-				 * IS_COMPRESSED flag is set.
+				 * cross-check that bimg_len = BLCKSZ if neither HAS_HOLE is
+				 * set nor COMPRESSED().
 				 */
 				if (!(blk->bimg_info & BKPIMAGE_HAS_HOLE) &&
-					!(blk->bimg_info & BKPIMAGE_IS_COMPRESSED) &&
+					!BKPIMAGE_COMPRESSED(blk->bimg_info) &&
 					blk->bimg_len != BLCKSZ)
 				{
 					report_invalid_record(state,
-										  "neither BKPIMAGE_HAS_HOLE nor BKPIMAGE_IS_COMPRESSED set, but block image length is %u at %X/%X",
+										  "neither BKPIMAGE_HAS_HOLE nor BKPIMAGE_COMPRESSED set, but block image length is %u at %X/%X",
 										  (unsigned int) blk->data_len,
 										  LSN_FORMAT_ARGS(state->ReadRecPtr));
 					goto err;
@@ -1607,20 +1601,47 @@ RestoreBlockImage(XLogReaderState *record, uint8 block_id, char *page)
 	bkpb = &record->blocks[block_id];
 	ptr = bkpb->bkp_image;
 
-	if (bkpb->bimg_info & BKPIMAGE_IS_COMPRESSED)
+	if (BKPIMAGE_COMPRESSED(bkpb->bimg_info))
 	{
-		char errormessage[MAX_ERRORMSG_LEN];
 		/* If a backup block image is compressed, decompress it */
-		if (!zstd_decompress_backupblock(ptr, bkpb->bimg_len, tmp.data,
-										 BLCKSZ - bkpb->hole_length,
-										 errormessage))
+		bool		decomp_success = true;
+
+		if ((bkpb->bimg_info & BKPIMAGE_COMPRESS_PGLZ) != 0)
 		{
-			report_invalid_record(record, "invalid compressed image at %X/%X, block %d (%s)",
+			if (pglz_decompress(ptr, bkpb->bimg_len, tmp.data,
+								BLCKSZ - bkpb->hole_length, true) < 0)
+				decomp_success = false;
+		}
+		else if ((bkpb->bimg_info & BKPIMAGE_COMPRESS_LZ4) != 0)
+		{
+#ifdef USE_LZ4
+			if (LZ4_decompress_safe(ptr, tmp.data,
+									bkpb->bimg_len, BLCKSZ - bkpb->hole_length) <= 0)
+				decomp_success = false;
+#else
+			report_invalid_record(record, "image at %X/%X compressed with %s not supported by build, block %d",
 								  LSN_FORMAT_ARGS(record->ReadRecPtr),
-								  block_id,
-								  errormessage);
+								  "LZ4",
+								  block_id);
+			return false;
+#endif
+		}
+		else
+		{
+			report_invalid_record(record, "image at %X/%X compressed with unknown method, block %d",
+								  LSN_FORMAT_ARGS(record->ReadRecPtr),
+								  block_id);
 			return false;
 		}
+
+		if (!decomp_success)
+		{
+			report_invalid_record(record, "invalid compressed image at %X/%X, block %d",
+								  LSN_FORMAT_ARGS(record->ReadRecPtr),
+								  block_id);
+			return false;
+		}
+
 		ptr = tmp.data;
 	}
 
@@ -1640,67 +1661,6 @@ RestoreBlockImage(XLogReaderState *record, uint8 block_id, char *page)
 	}
 
 	return true;
-}
-
-bool
-zstd_decompress_backupblock(const char *source, int32 slen, char *dest,
-							int32 rawsize, char *errormessage)
-{
-#ifdef USE_ZSTD
-		unsigned long long uncompressed_size;
-		int dst_length_used;
-		static ZSTD_DCtx  *cxt = NULL;      /* ZSTD decompression context */
-		if (!cxt)
-		{
-			cxt = ZSTD_createDCtx();
-			if (!cxt)
-			{
-				snprintf(errormessage, MAX_ERRORMSG_LEN, "out of memory");
-				return false;
-			}
-		}
-
-		uncompressed_size = ZSTD_getFrameContentSize(source, slen);
-		if (uncompressed_size == ZSTD_CONTENTSIZE_UNKNOWN)
-		{
-			snprintf(errormessage, MAX_ERRORMSG_LEN,
-					 "decompressed size not known");
-			return false;
-		}
-
-		if (uncompressed_size == ZSTD_CONTENTSIZE_ERROR)
-		{
-			snprintf(errormessage, MAX_ERRORMSG_LEN,
-					 "error computing decompression size");
-			return false;
-		}
-
-		if (uncompressed_size > rawsize)
-		{
-			snprintf(errormessage, MAX_ERRORMSG_LEN,
-					 "too large ("UINT64_FORMAT") size after decompression",
-					 (uint64) uncompressed_size);
-			return false;
-		}
-
-		dst_length_used = ZSTD_decompressDCtx(cxt,
-											  dest, rawsize,
-											  source, slen);
-
-		if (ZSTD_isError(dst_length_used))
-		{
-			snprintf(errormessage, MAX_ERRORMSG_LEN,
-					 "%s error encountered on decompression",
-					 ZSTD_getErrorName(dst_length_used));
-			return false;
-		}
-
-		Assert(dst_length_used == rawsize);
-		return true;
-#endif
-		snprintf(errormessage, MAX_ERRORMSG_LEN,
-				 "binary not compiled with ZSTD support");
-		return false;
 }
 
 #ifndef FRONTEND

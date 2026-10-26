@@ -665,27 +665,27 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 	 */
 	switch (nodeTag(plan))
 	{
-		case T_SeqScan: /* Rely on structure equivalence */
+		case T_SeqScan:
 			{
-				Scan    *splan = (Scan *) plan;
+				SeqScan    *splan = (SeqScan *) plan;
 
 				if (cdb_expr_requires_full_eval((Node *)plan->targetlist))
 					return cdb_insert_result_node(root, plan, rtoffset);
 
-				splan->scanrelid += rtoffset;
+				splan->scan.scanrelid += rtoffset;
 
 				/* If the scan appears below a shareinput, we hit this assert. */
 #ifdef USE_ASSERT_CHECKING
-				Assert(splan->scanrelid <= list_length(root->glob->finalrtable) && "Scan node's relid is outside the finalrtable!");
-				RangeTblEntry *rte = rt_fetch(splan->scanrelid, root->glob->finalrtable);
+				Assert(splan->scan.scanrelid <= list_length(root->glob->finalrtable) && "Scan node's relid is outside the finalrtable!");
+				RangeTblEntry *rte = rt_fetch(splan->scan.scanrelid, root->glob->finalrtable);
 				Assert((rte->rtekind == RTE_RELATION || rte->rtekind == RTE_CTE) && "Scan plan should refer to a scan relation");
 #endif
 
-				splan->plan.targetlist =
-					fix_scan_list(root, splan->plan.targetlist,
+				splan->scan.plan.targetlist =
+					fix_scan_list(root, splan->scan.plan.targetlist,
 								  rtoffset, NUM_EXEC_TLIST(plan));
-				splan->plan.qual =
-					fix_scan_list(root, splan->plan.qual,
+				splan->scan.plan.qual =
+					fix_scan_list(root, splan->scan.plan.qual,
 								  rtoffset, NUM_EXEC_QUAL(plan));
 			}
 			break;
@@ -983,19 +983,19 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 			set_hash_references(root, plan, rtoffset);
 			break;
 
-		case T_ResultCache:
+		case T_Memoize:
 			{
-				ResultCache *rcplan = (ResultCache *) plan;
+				Memoize    *mplan = (Memoize *) plan;
 
 				/*
-				 * Result Cache does not evaluate its targetlist.  It just
-				 * uses the same targetlist from its outer subnode.
+				 * Memoize does not evaluate its targetlist.  It just uses the
+				 * same targetlist from its outer subnode.
 				 */
 				set_dummy_tlist_references(plan, rtoffset);
 
-				rcplan->param_exprs = fix_scan_list(root, rcplan->param_exprs,
-													rtoffset,
-													NUM_EXEC_TLIST(plan));
+				mplan->param_exprs = fix_scan_list(root, mplan->param_exprs,
+												   rtoffset,
+												   NUM_EXEC_TLIST(plan));
 				break;
 			}
 
@@ -2031,6 +2031,9 @@ fix_expr_common(PlannerInfo *root, Node *node)
 
 		if (!OidIsValid(saop->hashfuncid))
 			record_plan_function_dependency(root, saop->hashfuncid);
+
+		if (!OidIsValid(saop->negfuncid))
+			record_plan_function_dependency(root, saop->negfuncid);
 	}
 	else if (IsA(node, Const))
 	{
@@ -3539,11 +3542,11 @@ record_plan_function_dependency(PlannerInfo *root, Oid funcid)
 	 * For performance reasons, we don't bother to track built-in functions;
 	 * we just assume they'll never change (or at least not in ways that'd
 	 * invalidate plans using them).  For this purpose we can consider a
-	 * built-in function to be one with OID less than FirstBootstrapObjectId.
+	 * built-in function to be one with OID less than FirstUnpinnedObjectId.
 	 * Note that the OID generator guarantees never to generate such an OID
 	 * after startup, even at OID wraparound.
 	 */
-	if (funcid >= (Oid) FirstBootstrapObjectId)
+	if (funcid >= (Oid) FirstUnpinnedObjectId)
 	{
 		PlanInvalItem *inval_item = makeNode(PlanInvalItem);
 
@@ -3580,7 +3583,7 @@ record_plan_type_dependency(PlannerInfo *root, Oid typid)
 	 * As in record_plan_function_dependency, ignore the possibility that
 	 * someone would change a built-in domain.
 	 */
-	if (typid >= (Oid) FirstBootstrapObjectId)
+	if (typid >= (Oid) FirstUnpinnedObjectId)
 	{
 		PlanInvalItem *inval_item = makeNode(PlanInvalItem);
 

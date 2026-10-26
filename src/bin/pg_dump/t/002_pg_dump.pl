@@ -10,7 +10,6 @@ use TestLib;
 use Test::More;
 
 my $tempdir       = TestLib::tempdir;
-my $tempdir_short = TestLib::tempdir_short;
 
 ###############################################################
 # Definition of the pg_dump runs to make.
@@ -126,6 +125,14 @@ my %pgdump_runs = (
 			'pg_dump', '--no-sync', '-c', '-f',
 			"$tempdir/defaults_no_public_clean.sql",
 			'regress_pg_dump_test',
+		],
+	},
+	defaults_public_owner => {
+		database => 'regress_public_owner',
+		dump_cmd => [
+			'pg_dump', '--no-sync', '-f',
+			"$tempdir/defaults_public_owner.sql",
+			'regress_public_owner',
 		],
 	},
 
@@ -640,6 +647,27 @@ my %tests = (
 		unlike => { no_owner => 1, },
 	},
 
+	'ALTER SCHEMA public OWNER TO' => {
+		# see test "REVOKE CREATE ON SCHEMA public" for causative create_sql
+		regexp => qr/^ALTER SCHEMA public OWNER TO .+;/m,
+		like   => {
+			%full_runs, section_pre_data => 1,
+		},
+		unlike => { no_owner => 1, },
+	},
+
+	'ALTER SCHEMA public OWNER TO (w/o ACL changes)' => {
+		database     => 'regress_public_owner',
+		create_order => 100,
+		create_sql =>
+		  'ALTER SCHEMA public OWNER TO "regress_quoted  \"" role";',
+		# GPDB: every Greengage dump grants SELECT on the gp_* catalog views
+		# from cdb_schema.sql (they have no pg_init_privs entries), so ignore
+		# those.
+		regexp => qr/^(GRANT|REVOKE) (?!SELECT ON TABLE pg_catalog\.gp_)/m,
+		unlike => { defaults_public_owner => 1 },
+	},
+
 	'ALTER SEQUENCE test_table_col1_seq' => {
 		regexp => qr/^
 			\QALTER SEQUENCE dump_test.test_table_col1_seq OWNED BY dump_test.test_table.col1;\E
@@ -975,6 +1003,26 @@ my %tests = (
 
 		# this shouldn't ever get emitted anymore
 		like => {},
+	},
+
+	'COMMENT ON SCHEMA public' => {
+		regexp => qr/^COMMENT ON SCHEMA public IS .+;/m,
+		# regress_public_owner emits this, due to create_sql of next test
+		# GPDB: binary upgrade drops and re-creates the public schema to
+		# preserve its OID, so its comment is dumped too.
+		like => {
+			binary_upgrade     => 1,
+			pg_dumpall_dbprivs => 1,
+			pg_dumpall_exclude => 1,
+		},
+	},
+
+	'COMMENT ON SCHEMA public IS NULL' => {
+		database     => 'regress_public_owner',
+		create_order => 100,
+		create_sql   => 'COMMENT ON SCHEMA public IS NULL;',
+		regexp       => qr/^COMMENT ON SCHEMA public IS '';/m,
+		like         => { defaults_public_owner => 1 },
 	},
 
 	'COMMENT ON TABLE dump_test.test_table' => {
@@ -1400,6 +1448,18 @@ my %tests = (
 		create_order => 1,
 		create_sql   => 'CREATE ROLE regress_dump_test_role;',
 		regexp       => qr/^CREATE ROLE regress_dump_test_role;/m,
+		like         => {
+			pg_dumpall_dbprivs       => 1,
+			pg_dumpall_exclude       => 1,
+			pg_dumpall_globals       => 1,
+			pg_dumpall_globals_clean => 1,
+		},
+	},
+
+	'CREATE ROLE regress_quoted...' => {
+		create_order => 1,
+		create_sql   => 'CREATE ROLE "regress_quoted  \"" role";',
+		regexp       => qr/^CREATE ROLE "regress_quoted  \\"" role";/m,
 		like         => {
 			pg_dumpall_dbprivs       => 1,
 			pg_dumpall_exclude       => 1,
@@ -2571,12 +2631,68 @@ my %tests = (
 		},
 	},
 
-	# this shouldn't ever get emitted
-	'Creation of row-level trigger in partition' => {
+	'Disabled trigger on partition is altered' => {
+		create_order => 93,
+		create_sql =>
+		  'CREATE TABLE dump_test_second_schema.measurement_y2006m3
+						PARTITION OF dump_test.measurement
+						FOR VALUES FROM (\'2006-03-01\') TO (\'2006-04-01\');
+						ALTER TABLE dump_test_second_schema.measurement_y2006m3 DISABLE TRIGGER test_trigger;
+						CREATE TABLE dump_test_second_schema.measurement_y2006m4
+						PARTITION OF dump_test.measurement
+						FOR VALUES FROM (\'2006-04-01\') TO (\'2006-05-01\');
+						ALTER TABLE dump_test_second_schema.measurement_y2006m4 ENABLE REPLICA TRIGGER test_trigger;
+						CREATE TABLE dump_test_second_schema.measurement_y2006m5
+						PARTITION OF dump_test.measurement
+						FOR VALUES FROM (\'2006-05-01\') TO (\'2006-06-01\');
+						ALTER TABLE dump_test_second_schema.measurement_y2006m5 ENABLE ALWAYS TRIGGER test_trigger;
+						',
 		regexp => qr/^
-			\QCREATE TRIGGER test_trigger AFTER INSERT ON dump_test_second_schema.measurement\E
+			\QALTER TABLE dump_test_second_schema.measurement_y2006m3 DISABLE TRIGGER test_trigger;\E
 			/xm,
-		like => {},
+		like => {
+			%full_runs,
+			section_post_data => 1,
+			role              => 1,
+			binary_upgrade    => 1,
+		},
+	},
+
+	'Replica trigger on partition is altered' => {
+		regexp => qr/^
+			\QALTER TABLE dump_test_second_schema.measurement_y2006m4 ENABLE REPLICA TRIGGER test_trigger;\E
+			/xm,
+		like => {
+			%full_runs,
+			section_post_data => 1,
+			role              => 1,
+			binary_upgrade    => 1,
+		},
+	},
+
+	'Always trigger on partition is altered' => {
+		regexp => qr/^
+			\QALTER TABLE dump_test_second_schema.measurement_y2006m5 ENABLE ALWAYS TRIGGER test_trigger;\E
+			/xm,
+		like => {
+			%full_runs,
+			section_post_data => 1,
+			role              => 1,
+			binary_upgrade    => 1,
+		},
+	},
+
+	# We should never see the creation of a trigger on a partition
+	'Disabled trigger on partition is not created' => {
+		regexp => qr/CREATE TRIGGER test_trigger.*ON dump_test_second_schema/,
+		like   => {},
+		unlike => { %full_runs, %dump_test_schema_runs },
+	},
+
+	# Triggers on partitions should not be dropped individually
+	'Triggers on partitions are not dropped' => {
+		regexp => qr/DROP TRIGGER test_trigger.*ON dump_test_second_schema/,
+		like   => {}
 	},
 
 	'CREATE TABLE test_fourth_table_zero_col' => {
@@ -2807,7 +2923,7 @@ my %tests = (
 		create_sql   => 'CREATE STATISTICS dump_test.test_ext_stats_expr
 							ON (2 * col1) FROM dump_test.test_fifth_table',
 		regexp => qr/^
-			\QCREATE STATISTICS dump_test.test_ext_stats_expr ON ((2 * col1)) FROM dump_test.test_fifth_table;\E
+			\QCREATE STATISTICS dump_test.test_ext_stats_expr ON (2 * col1) FROM dump_test.test_fifth_table;\E
 		    /xms,
 		like =>
 		  { %full_runs, %dump_test_schema_runs, section_post_data => 1, },
@@ -3232,9 +3348,12 @@ my %tests = (
 	},
 
 	'GRANT SELECT ON TABLE measurement_y2006m2' => {
-		create_order => 92,
-		create_sql   => 'GRANT SELECT ON
-						   TABLE dump_test_second_schema.measurement_y2006m2
+		create_order => 94,
+		create_sql   => 'GRANT SELECT ON TABLE
+						   dump_test_second_schema.measurement_y2006m2,
+						   dump_test_second_schema.measurement_y2006m3,
+						   dump_test_second_schema.measurement_y2006m4,
+						   dump_test_second_schema.measurement_y2006m5
 						   TO regress_dump_test_role;',
 		regexp =>
 		  qr/^\QGRANT SELECT ON TABLE dump_test_second_schema.measurement_y2006m2 TO regress_dump_test_role;\E/m,
@@ -3444,6 +3563,23 @@ my %tests = (
 		unlike => { no_privs => 1, },
 	},
 
+	# With the exception of the public schema, we don't dump ownership changes
+	# for objects originating at initdb.  Hence, any GRANT or REVOKE affecting
+	# owner privileges for those objects should reference the bootstrap
+	# superuser, not the dump-time owner.
+	'REVOKE EXECUTE ON FUNCTION pg_stat_reset FROM regress_dump_test_role' =>
+	  {
+		create_order => 15,
+		create_sql   => '
+			ALTER FUNCTION pg_stat_reset OWNER TO regress_dump_test_role;
+			REVOKE EXECUTE ON FUNCTION pg_stat_reset
+			  FROM regress_dump_test_role;',
+		regexp => qr/^[^-].*pg_stat_reset.* regress_dump_test_role/m,
+
+		# this shouldn't ever get emitted
+		like => {},
+	  },
+
 	'REVOKE SELECT ON TABLE pg_proc FROM public' => {
 		create_order => 45,
 		create_sql   => 'REVOKE SELECT ON TABLE pg_proc FROM public;',
@@ -3455,13 +3591,27 @@ my %tests = (
 
 	'REVOKE CREATE ON SCHEMA public FROM public' => {
 		create_order => 16,
-		create_sql   => 'REVOKE CREATE ON SCHEMA public FROM public;',
-		regexp       => qr/^
-			\QREVOKE ALL ON SCHEMA public FROM PUBLIC;\E
+		create_sql   => '
+			REVOKE CREATE ON SCHEMA public FROM public;
+			ALTER SCHEMA public OWNER TO "regress_quoted  \"" role";
+			REVOKE ALL ON SCHEMA public FROM "regress_quoted  \"" role";',
+		regexp => qr/^
+			\QREVOKE ALL ON SCHEMA public FROM "regress_quoted  \E\\""\ role";
+			\n\QREVOKE ALL ON SCHEMA public FROM PUBLIC;\E
 			\n\QGRANT USAGE ON SCHEMA public TO PUBLIC;\E
 			/xm,
 		like => { %full_runs, section_pre_data => 1, },
-		unlike => { no_privs => 1, },
+		unlike => { binary_upgrade => 1, no_privs => 1, },
+	},
+
+	# GPDB: binary upgrade re-creates the public schema, so its ACL is dumped
+	# relative to the CREATE SCHEMA default, which has no PUBLIC privileges.
+	'REVOKE CREATE ON SCHEMA public FROM public (binary upgrade)' => {
+		regexp => qr/^
+			\QREVOKE ALL ON SCHEMA public FROM "regress_quoted  \E\\""\ role";
+			\n\QGRANT USAGE ON SCHEMA public TO PUBLIC;\E
+			/xm,
+		like => { binary_upgrade => 1, },
 	},
 
 	'REVOKE USAGE ON LANGUAGE plpgsql FROM public' => {
@@ -3538,7 +3688,7 @@ my %tests = (
 #########################################
 # Create a PG instance to test actually dumping from
 
-my $node = get_new_node('main');
+my $node = PostgresNode->new('main');
 $node->init;
 $node->start;
 
@@ -3562,8 +3712,9 @@ if ($collation_check_stderr !~ /ERROR: /)
 # Determine whether build supports LZ4.
 my $supports_lz4 = check_pg_config("#define HAVE_LIBLZ4 1");
 
-# Create a second database for certain tests to work against
+# Create additional databases for mutations of schema public
 $node->psql('postgres', 'create database regress_pg_dump_test;');
+$node->psql('postgres', 'create database regress_public_owner;');
 
 # Start with number of command_fails_like()*2 tests below (each
 # command_fails_like is actually 2 tests)

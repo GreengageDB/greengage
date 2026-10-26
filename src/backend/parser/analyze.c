@@ -2010,9 +2010,12 @@ transformSetOperationStmt(ParseState *pstate, SelectStmt *stmt)
 
 /*
  * Make a SortGroupClause node for a SetOperationStmt's groupClauses
+ *
+ * If require_hash is true, the caller is indicating that they need hash
+ * support or they will fail.  So look extra hard for hash support.
  */
 SortGroupClause *
-makeSortGroupClauseForSetOp(Oid rescoltype)
+makeSortGroupClauseForSetOp(Oid rescoltype, bool require_hash)
 {
 	SortGroupClause *grpcl = makeNode(SortGroupClause);
 	Oid			sortop;
@@ -2024,6 +2027,15 @@ makeSortGroupClauseForSetOp(Oid rescoltype)
 							 false, true, false,
 							 &sortop, &eqop, NULL,
 							 &hashable);
+
+	/*
+	 * The type cache doesn't believe that record is hashable (see
+	 * cache_record_field_properties()), but if the caller really needs hash
+	 * support, we can assume it does.  Worst case, if any components of the
+	 * record don't support hashing, we will fail at execution.
+	 */
+	if (require_hash && (rescoltype == RECORDOID || rescoltype == RECORDARRAYOID))
+		hashable = true;
 
 	/* we don't have a tlist yet, so can't assign sortgrouprefs */
 	grpcl->tleSortGroupRef = 0;
@@ -2368,6 +2380,8 @@ transformSetOperationTree_internal(ParseState *pstate, SelectStmt *stmt,
 		/* Process an internal node (set operation node) */
 		SetOperationStmt *op = makeNode(SetOperationStmt);
 		const char *context;
+		bool recursive = (pstate->p_parent_cte &&
+						  pstate->p_parent_cte->cterecursive);
 
 		context = (stmt->op == SETOP_UNION ? "UNION" :
 				   (stmt->op == SETOP_INTERSECT ? "INTERSECT" :
@@ -2401,9 +2415,7 @@ transformSetOperationTree_internal(ParseState *pstate, SelectStmt *stmt,
 		 * We will do another coercion at the top, after processing the second
 		 * branch.
 		 */
-		if (isTopLevel &&
-			pstate->p_parent_cte &&
-			pstate->p_parent_cte->cterecursive)
+		if (isTopLevel && recursive)
 		{
 			List *ltargetlist;
 			List *selected_types;
@@ -2474,6 +2486,8 @@ coerceSetOpTypes(ParseState *pstate, Node *sop,
 		ListCell   *pct;
 		ListCell   *pcm;
 		const char *context;
+		bool		recursive = (pstate->p_parent_cte &&
+								 pstate->p_parent_cte->cterecursive);
 
 		Assert(IsA(op, SetOperationStmt));
 
@@ -2636,8 +2650,9 @@ coerceSetOpTypes(ParseState *pstate, Node *sop,
 				setup_parser_errposition_callback(&pcbstate, pstate,
 												  bestlocation);
 
+				/* If it's a recursive union, we need to require hashing support. */
 				op->groupClauses = lappend(op->groupClauses,
-										   makeSortGroupClauseForSetOp(rescoltype));
+										   makeSortGroupClauseForSetOp(rescoltype, recursive));
 
 				cancel_parser_errposition_callback(&pcbstate);
 			}
@@ -3664,13 +3679,22 @@ transformLockingClause(ParseState *pstate, Query *qry, LockingClause *lc,
 
 	if (lockedRels == NIL)
 	{
-		/* all regular tables used in query */
+		/*
+		 * Lock all regular tables used in query and its subqueries.  We
+		 * examine inFromCl to exclude auto-added RTEs, particularly NEW/OLD
+		 * in rules.  This is a bit of an abuse of a mostly-obsolete flag, but
+		 * it's convenient.  We can't rely on the namespace mechanism that has
+		 * largely replaced inFromCl, since for example we need to lock
+		 * base-relation RTEs even if they are masked by upper joins.
+		 */
 		i = 0;
 		foreach(rt, qry->rtable)
 		{
 			RangeTblEntry *rte = (RangeTblEntry *) lfirst(rt);
 
 			++i;
+			if (!rte->inFromCl)
+				continue;
 			switch (rte->rtekind)
 			{
 				case RTE_RELATION:
@@ -3705,7 +3729,11 @@ transformLockingClause(ParseState *pstate, Query *qry, LockingClause *lc,
 	}
 	else
 	{
-		/* just the named tables */
+		/*
+		 * Lock just the named tables.  As above, we allow locking any base
+		 * relation regardless of alias-visibility rules, so we need to
+		 * examine inFromCl to exclude OLD/NEW.
+		 */
 		foreach(l, lockedRels)
 		{
 			RangeVar   *thisrel = (RangeVar *) lfirst(l);
@@ -3726,6 +3754,8 @@ transformLockingClause(ParseState *pstate, Query *qry, LockingClause *lc,
 				RangeTblEntry *rte = (RangeTblEntry *) lfirst(rt);
 
 				++i;
+				if (!rte->inFromCl)
+					continue;
 				if (strcmp(rte->eref->aliasname, thisrel->relname) == 0)
 				{
 					switch (rte->rtekind)

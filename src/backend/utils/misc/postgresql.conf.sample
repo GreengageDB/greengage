@@ -24,7 +24,8 @@
 # "postgres -c log_connections=on".  Some parameters can be changed at run time
 # with the "SET" SQL command.
 #
-# Memory units:  kB = kilobytes        Time units:  ms  = milliseconds
+# Memory units:  B  = bytes            Time units:  us  = microseconds
+#                kB = kilobytes                     ms  = milliseconds
 #                MB = megabytes                     s   = seconds
 #                GB = gigabytes                     min = minutes
 #                TB = terabytes                     h   = hours
@@ -221,7 +222,8 @@ max_prepared_transactions = 250		# can be 0 or more
 #full_page_writes = on			# recover from partial page writes
 #wal_log_hints = off			# also do full page writes of non-critical updates
 					# (change requires restart)
-#wal_compression = off			# enable compression of full-page writes
+#wal_compression = off			# enables compression of full-page writes;
+					# off, pglz, lz4, or on
 #wal_init_zero = on			# zero-fill new WAL files
 #wal_recycle = on			# recycle WAL files
 #wal_buffers = -1			# min 32kB, -1 sets based on shared_buffers
@@ -369,7 +371,7 @@ max_prepared_transactions = 250		# can be 0 or more
 #enable_indexscan = on
 #enable_indexonlyscan = on
 #enable_material = on
-#enable_resultcache = on
+#enable_memoize = on
 #enable_mergejoin = on
 #enable_nestloop = on
 #enable_parallel_append = on

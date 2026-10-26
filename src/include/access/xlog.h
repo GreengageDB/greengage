@@ -38,48 +38,6 @@ extern int	sync_method;
 extern PGDLLIMPORT TimeLineID ThisTimeLineID;	/* current TLI */
 
 /*
- * Prior to 8.4, all activity during recovery was carried out by the startup
- * process. This local variable continues to be used in many parts of the
- * code to indicate actions taken by RecoveryManagers. Other processes that
- * potentially perform work during recovery should check RecoveryInProgress().
- * See XLogCtl notes in xlog.c.
- */
-extern bool InRecovery;
-
-/*
- * Like InRecovery, standbyState is only valid in the startup process.
- * In all other processes it will have the value STANDBY_DISABLED (so
- * InHotStandby will read as false).
- *
- * In DISABLED state, we're performing crash recovery or hot standby was
- * disabled in postgresql.conf.
- *
- * In INITIALIZED state, we've run InitRecoveryTransactionEnvironment, but
- * we haven't yet processed a RUNNING_XACTS or shutdown-checkpoint WAL record
- * to initialize our primary-transaction tracking system.
- *
- * When the transaction tracking is initialized, we enter the SNAPSHOT_PENDING
- * state. The tracked information might still be incomplete, so we can't allow
- * connections yet, but redo functions must update the in-memory state when
- * appropriate.
- *
- * In SNAPSHOT_READY mode, we have full knowledge of transactions that are
- * (or were) running on the primary at the current WAL location. Snapshots
- * can be taken, and read-only queries can be run.
- */
-typedef enum
-{
-	STANDBY_DISABLED,
-	STANDBY_INITIALIZED,
-	STANDBY_SNAPSHOT_PENDING,
-	STANDBY_SNAPSHOT_READY
-} HotStandbyState;
-
-extern HotStandbyState standbyState;
-
-#define InHotStandby (standbyState >= STANDBY_SNAPSHOT_PENDING)
-
-/*
  * Recovery target type.
  * Only set during a Point in Time recovery, not when in standby mode.
  */
@@ -123,7 +81,7 @@ extern bool EnableHotStandby;
 
 extern bool fullPageWrites;
 extern bool wal_log_hints;
-extern bool wal_compression;
+extern int	wal_compression;
 extern bool wal_init_zero;
 extern bool wal_recycle;
 extern bool *wal_consistency_checking;
@@ -173,6 +131,14 @@ typedef enum WalLevel
 	WAL_LEVEL_REPLICA,
 	WAL_LEVEL_LOGICAL
 } WalLevel;
+
+/* Compression algorithms for WAL */
+typedef enum WalCompression
+{
+	WAL_COMPRESSION_NONE = 0,
+	WAL_COMPRESSION_PGLZ,
+	WAL_COMPRESSION_LZ4
+} WalCompression;
 
 /* Recovery states */
 typedef enum RecoveryState
@@ -303,7 +269,7 @@ extern XLogRecPtr XLogInsertRecord(struct XLogRecData *rdata,
 extern void XLogFlush(XLogRecPtr RecPtr);
 extern bool XLogBackgroundFlush(void);
 extern bool XLogNeedsFlush(XLogRecPtr RecPtr);
-extern int	XLogFileInit(XLogSegNo segno, bool *use_existent, bool use_lock);
+extern int	XLogFileInit(XLogSegNo segno);
 extern int	XLogFileOpen(XLogSegNo segno);
 
 extern void CheckXLogRemoved(XLogSegNo segno, TimeLineID tli);

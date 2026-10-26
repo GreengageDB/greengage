@@ -411,8 +411,10 @@ _readInsertStmt(void)
 	READ_NODE_FIELD(relation);
 	READ_NODE_FIELD(cols);
 	READ_NODE_FIELD(selectStmt);
+	READ_NODE_FIELD(onConflictClause);
 	READ_NODE_FIELD(returningList);
 	READ_NODE_FIELD(withClause);
+	READ_ENUM_FIELD(override, OverridingKind);
 	READ_DONE();
 }
 
@@ -950,7 +952,7 @@ _readDynamicSeqScan(void)
 {
 	READ_LOCALS(DynamicSeqScan);
 
-	ReadCommonScan(&local_node->seqscan);
+	ReadCommonScan(&local_node->seqscan.scan);
 	READ_NODE_FIELD(partOids);
 	READ_NODE_FIELD(part_prune_info);
 	READ_NODE_FIELD(join_prune_paramids);
@@ -1566,6 +1568,7 @@ _readLockingClause(void)
 
 	READ_NODE_FIELD(lockedRels);
 	READ_ENUM_FIELD(strength, LockClauseStrength);
+	READ_ENUM_FIELD(waitPolicy, LockWaitPolicy);
 
 	READ_DONE();
 }
@@ -2396,6 +2399,33 @@ readNodeBinary(void)
 			case T_SortBy:
 				return_value = _readSortBy();
 				break;
+			case T_WindowDef:
+				return_value = _readWindowDef();
+				break;
+			case T_RangeSubselect:
+				return_value = _readRangeSubselect();
+				break;
+			case T_RangeFunction:
+				return_value = _readRangeFunction();
+				break;
+			case T_RangeTableSample:
+				return_value = _readRangeTableSample();
+				break;
+			case T_RangeTableFunc:
+				return_value = _readRangeTableFunc();
+				break;
+			case T_RangeTableFuncCol:
+				return_value = _readRangeTableFuncCol();
+				break;
+			case T_InferClause:
+				return_value = _readInferClause();
+				break;
+			case T_OnConflictClause:
+				return_value = _readOnConflictClause();
+				break;
+			case T_XmlSerialize:
+				return_value = _readXmlSerialize();
+				break;
 			case T_TypeCast:
 				return_value = _readTypeCast();
 				break;
@@ -2626,6 +2656,10 @@ readNodeBinary(void)
 				return_value = _readAlterTableMoveAllStmt();
 				break;
 
+			case T_PublicationTable:
+				return_value = _readPublicationTable();
+				break;
+
 			case T_CreatePublicationStmt:
 				return_value = _readCreatePublicationStmt();
 				break;
@@ -2669,8 +2703,8 @@ readNodeBinary(void)
 			case T_RowIdentityVarInfo:
 				return_value = _readRowIdentityVarInfo();
 				break;
-			case T_ResultCache:
-				return_value = _readResultCache();
+			case T_Memoize:
+				return_value = _readMemoize();
 				break;
 			case T_ReturnStmt:
 				return_value = _readReturnStmt();

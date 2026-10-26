@@ -49,10 +49,8 @@ DECLARE_FOREIGN_KEY((attrelid, attnum), pg_attribute, (attrelid, attnum));
 
 DECLARE_TOAST(pg_attribute_encoding, 6233, 6234);
 
-DECLARE_INDEX(pg_attribute_encoding_attrelid_index, 6236, on pg_attribute_encoding using btree(attrelid oid_ops));
-#define AttributeEncodingAttrelidIndexId	6236
-DECLARE_UNIQUE_INDEX_PKEY(pg_attribute_encoding_attrelid_attnum_index, 6237, on pg_attribute_encoding using btree(attrelid oid_ops, attnum int2_ops));
-#define AttributeEncodingAttrelidAttnumIndexId	6237
+DECLARE_INDEX(pg_attribute_encoding_attrelid_index, 6236, AttributeEncodingAttrelidIndexId, on pg_attribute_encoding using btree(attrelid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_attribute_encoding_attrelid_attnum_index, 6237, AttributeEncodingAttrelidAttnumIndexId, on pg_attribute_encoding using btree(attrelid oid_ops, attnum int2_ops));
 
 
 extern PGFunction *get_funcs_for_compression(char *compresstype);

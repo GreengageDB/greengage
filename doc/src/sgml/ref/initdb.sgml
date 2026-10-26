@@ -306,6 +306,9 @@ PostgreSQL documentation
        <para>
         Safely write all database files to disk and exit.  This does not
         perform any of the normal <application>initdb</application> operations.
+        Generally, this option is useful for ensuring reliable recovery after
+        changing <xref linkend="guc-fsync"/> from <literal>off</literal> to
+        <literal>on</literal>.
        </para>
       </listitem>
      </varlistentry>
@@ -408,6 +411,17 @@ PostgreSQL documentation
         The bootstrap backend is the program <command>initdb</command>
         uses to create the catalog tables.  This option generates a tremendous
         amount of extremely boring output.
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><option>--discard-caches</option></term>
+      <listitem>
+       <para>
+        Run the bootstrap backend with the
+        <literal>debug_discard_caches=1</literal> option.
+        This takes a very long time and is only of use for deep debugging.
        </para>
       </listitem>
      </varlistentry>

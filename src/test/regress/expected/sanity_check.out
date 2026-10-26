@@ -95,6 +95,7 @@ num_exp_sqrt|t
 num_exp_sub|t
 num_input_test|f
 num_result|f
+num_typemod_test|f
 nummultirange_test|t
 numrange_test|t
 onek|t
@@ -217,6 +218,8 @@ tmp|f
 trigger_parted|t
 trigger_parted_p1|t
 trigger_parted_p1_1|t
+trigger_parted_p2|t
+trigger_parted_p2_2|t
 varchar_tbl|f
 view_base_table|t
 -- restore normal output mode

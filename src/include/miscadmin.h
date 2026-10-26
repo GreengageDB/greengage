@@ -525,15 +525,13 @@ extern ProcessingMode Mode;
 /*
  * Auxiliary-process type identifiers.  These used to be in bootstrap.h
  * but it seems saner to have them here, with the ProcessingMode stuff.
- * The MyAuxProcType global is defined and set in bootstrap.c.
+ * The MyAuxProcType global is defined and set in auxprocess.c.
  */
 
 typedef enum
 {
 	NotAnAuxProcess = -1,
-	CheckerProcess = 0,
-	BootstrapProcess,
-	StartupProcess,
+	StartupProcess = 0,
 	BgWriterProcess,
 	ArchiverProcess,
 	CheckpointerProcess,
@@ -545,7 +543,6 @@ typedef enum
 
 extern AuxProcType MyAuxProcType;
 
-#define AmBootstrapProcess()		(MyAuxProcType == BootstrapProcess)
 #define AmStartupProcess()			(MyAuxProcType == StartupProcess)
 #define AmBackgroundWriterProcess() (MyAuxProcType == BgWriterProcess)
 #define AmArchiverProcess()			(MyAuxProcType == ArchiverProcess)
@@ -591,6 +588,6 @@ extern bool BackupInProgress(void);
 extern void CancelBackup(void);
 
 /* in executor/nodeHash.c */
-extern int	get_hash_mem(void);
+extern size_t get_hash_memory_limit(void);
 
 #endif							/* MISCADMIN_H */

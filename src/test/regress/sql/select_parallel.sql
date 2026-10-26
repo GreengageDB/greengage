@@ -238,6 +238,7 @@ begin
           right join (values (1),(2),(3)) v(x) on true
     loop
         ln := regexp_replace(ln, 'Memory: \S*',  'Memory: xxx');
+        ln := regexp_replace(ln, 'Segments: \S*  Max: \S*kB \(segment \S*\)',  'Segments: x  Max: xxkB (segment x)');
         return next ln;
     end loop;
 end;

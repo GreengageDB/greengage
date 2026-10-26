@@ -2625,7 +2625,7 @@ reset enable_nestloop;
 set work_mem to '64kB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 set enable_mergejoin to off;
-set enable_resultcache to off;
+set enable_memoize to off;
 explain (costs off)
 select count(*) from tenk1 a, tenk1 b
   where a.hundred = b.thousand and (b.fivethous % 10) < 10;
@@ -2654,7 +2654,7 @@ select count(*) from tenk1 a, tenk1 b
 reset work_mem;
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 reset enable_mergejoin;
-reset enable_resultcache;
+reset enable_memoize;
 --
 -- regression test for 8.2 bug with improper re-ordering of left joins
 --
@@ -3679,6 +3679,14 @@ select unique1 from tenk1, lateral f_immutable_int4(1) x where x = unique1;
          Index Cond: (unique1 = 1)
  Optimizer: Postgres query optimizer
 (4 rows)
+
+explain (costs off)
+select unique1 from tenk1, lateral f_immutable_int4(1) x where x in (select 17);
+             QUERY PLAN              
+-------------------------------------
+ Result
+   One-Time Filter: false
+(3 rows)
 
 explain (costs off)
 select unique1, x from tenk1 join f_immutable_int4(1) x on unique1 = x;
@@ -5540,7 +5548,7 @@ explain (costs off)
          ->  Partial Aggregate
                ->  Nested Loop
                      ->  Seq Scan on tenk1 a
-                     ->  Result Cache
+                     ->  Memoize
                            Cache Key: a.two
                            ->  Function Scan on generate_series g
  Optimizer: Postgres query optimizer
@@ -5555,7 +5563,7 @@ explain (costs off)
          ->  Partial Aggregate
                ->  Nested Loop
                      ->  Seq Scan on tenk1 a
-                     ->  Result Cache
+                     ->  Memoize
                            Cache Key: a.two
                            ->  Function Scan on generate_series g
  Optimizer: Postgres query optimizer
@@ -5571,7 +5579,7 @@ explain (costs off)
          ->  Partial Aggregate
                ->  Nested Loop
                      ->  Seq Scan on tenk1 a
-                     ->  Result Cache
+                     ->  Memoize
                            Cache Key: a.two
                            ->  Function Scan on generate_series g
  Optimizer: Postgres query optimizer

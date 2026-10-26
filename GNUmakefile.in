@@ -39,12 +39,15 @@ endif
 docs:
 	$(MAKE) -C doc all
 
-$(call recurse,world,doc src config contrib gpcontrib,all)
-world:
-	+@echo "PostgreSQL, contrib, and documentation successfully made. Ready to install."
+$(call recurse,world,doc src config contrib gpcontrib gpMgmt,all)
 
-# build src/ before contrib/
-world-contrib-recurse: world-src-recurse
+# build src/ before contrib/, gpcontrib/ and gpMgmt/
+world-contrib-recurse world-gpcontrib-recurse world-gpMgmt-recurse: world-src-recurse
+
+$(call recurse,world-bin,src config contrib gpcontrib gpMgmt,all)
+
+# build src/ before contrib/, gpcontrib/ and gpMgmt/
+world-bin-contrib-recurse world-bin-gpcontrib-recurse world-bin-gpMgmt-recurse: world-bin-src-recurse
 
 html man:
 	$(MAKE) -C doc $@
@@ -79,12 +82,15 @@ endif
 install-docs:
 	$(MAKE) -C doc install
 
-$(call recurse,install-world,doc src config contrib gpcontrib,install)
-install-world:
-	+@echo "PostgreSQL, contrib, and documentation installation complete."
+$(call recurse,install-world,doc src config contrib gpcontrib gpMgmt,install)
 
-# build src/ before contrib/
-install-world-contrib-recurse: install-world-src-recurse
+# build src/ before contrib/, gpcontrib/ and gpMgmt/
+install-world-contrib-recurse install-world-gpcontrib-recurse install-world-gpMgmt-recurse: install-world-src-recurse
+
+$(call recurse,install-world-bin,src config contrib gpcontrib gpMgmt,install)
+
+# build src/ before contrib/, gpcontrib/ and gpMgmt/
+install-world-bin-contrib-recurse install-world-bin-gpcontrib-recurse install-world-bin-gpMgmt-recurse: install-world-bin-src-recurse
 
 $(call recurse,installdirs uninstall init-po update-po,doc src config gpcontrib)
 

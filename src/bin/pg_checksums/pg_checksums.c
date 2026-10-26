@@ -15,6 +15,7 @@
 #include "postgres_fe.h"
 
 #include <dirent.h>
+#include <limits.h>
 #include <time.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -24,6 +25,7 @@
 #include "common/file_perm.h"
 #include "common/file_utils.h"
 #include "common/logging.h"
+#include "fe_utils/option_utils.h"
 #include "getopt_long.h"
 #include "pg_getopt.h"
 #include "storage/bufpage.h"
@@ -31,8 +33,10 @@
 #include "storage/checksum_impl.h"
 
 
-static int64 files = 0;
-static int64 blocks = 0;
+static int64 files_scanned = 0;
+static int64 files_written = 0;
+static int64 blocks_scanned = 0;
+static int64 blocks_written = 0;
 static int64 badblocks = 0;
 static ControlFileData *ControlFile;
 
@@ -195,6 +199,7 @@ scan_file(const char *fn, BlockNumber segmentno)
 	int			f;
 	BlockNumber blockno;
 	int			flags;
+	int64		blocks_written_in_file = 0;
 
 	Assert(mode == PG_MODE_ENABLE ||
 		   mode == PG_MODE_CHECK);
@@ -208,7 +213,7 @@ scan_file(const char *fn, BlockNumber segmentno)
 		exit(1);
 	}
 
-	files++;
+	files_scanned++;
 
 	for (blockno = 0;; blockno++)
 	{
@@ -227,7 +232,7 @@ scan_file(const char *fn, BlockNumber segmentno)
 							 blockno, fn, r, BLCKSZ);
 			exit(1);
 		}
-		blocks++;
+		blocks_scanned++;
 
 		/*
 		 * Since the file size is counted as total_size for progress status
@@ -255,6 +260,15 @@ scan_file(const char *fn, BlockNumber segmentno)
 		else if (mode == PG_MODE_ENABLE)
 		{
 			int			w;
+
+			/*
+			 * Do not rewrite if the checksum is already set to the expected
+			 * value.
+			 */
+			if (header->pd_checksum == csum)
+				continue;
+
+			blocks_written_in_file++;
 
 			/* Set checksum in page header */
 			header->pd_checksum = csum;
@@ -290,6 +304,13 @@ scan_file(const char *fn, BlockNumber segmentno)
 			pg_log_info("checksums verified in file \"%s\"", fn);
 		if (mode == PG_MODE_ENABLE)
 			pg_log_info("checksums enabled in file \"%s\"", fn);
+	}
+
+	/* Update write counters if any write activity has happened */
+	if (blocks_written_in_file > 0)
+	{
+		files_written++;
+		blocks_written += blocks_written_in_file;
 	}
 
 	close(f);
@@ -499,11 +520,10 @@ main(int argc, char *argv[])
 				mode = PG_MODE_ENABLE;
 				break;
 			case 'f':
-				if (atoi(optarg) == 0)
-				{
-					pg_log_error("invalid filenode specification, must be numeric: %s", optarg);
+				if (!option_parse_int(optarg, "-f/--filenode", 0,
+									  INT_MAX,
+									  NULL))
 					exit(1);
-				}
 				only_filenode = pstrdup(optarg);
 				break;
 			case 'N':
@@ -637,8 +657,8 @@ main(int argc, char *argv[])
 			progress_report(true);
 
 		printf(_("Checksum operation completed\n"));
-		printf(_("Files scanned:  %s\n"), psprintf(INT64_FORMAT, files));
-		printf(_("Blocks scanned: %s\n"), psprintf(INT64_FORMAT, blocks));
+		printf(_("Files scanned:   %s\n"), psprintf(INT64_FORMAT, files_scanned));
+		printf(_("Blocks scanned:  %s\n"), psprintf(INT64_FORMAT, blocks_scanned));
 		if (mode == PG_MODE_CHECK)
 		{
 			printf(_("Bad checksums:  %s\n"), psprintf(INT64_FORMAT, badblocks));
@@ -646,6 +666,11 @@ main(int argc, char *argv[])
 
 			if (badblocks > 0)
 				exit(1);
+		}
+		else if (mode == PG_MODE_ENABLE)
+		{
+			printf(_("Files written:  %s\n"), psprintf(INT64_FORMAT, files_written));
+			printf(_("Blocks written: %s\n"), psprintf(INT64_FORMAT, blocks_written));
 		}
 	}
 

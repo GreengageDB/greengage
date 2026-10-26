@@ -60,7 +60,8 @@ static void PublicationAddTables(Oid pubid, List *rels, bool if_not_exists,
 static void PublicationDropTables(Oid pubid, List *rels, bool missing_ok);
 
 static void
-parse_publication_options(List *options,
+parse_publication_options(ParseState *pstate,
+						  List *options,
 						  bool *publish_given,
 						  PublicationActions *pubactions,
 						  bool *publish_via_partition_root_given,
@@ -90,9 +91,7 @@ parse_publication_options(List *options,
 			ListCell   *lc;
 
 			if (*publish_given)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 
 			/*
 			 * If publish option was given only the explicitly listed actions
@@ -133,9 +132,7 @@ parse_publication_options(List *options,
 		else if (strcmp(defel->defname, "publish_via_partition_root") == 0)
 		{
 			if (*publish_via_partition_root_given)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			*publish_via_partition_root_given = true;
 			*publish_via_partition_root = defGetBoolean(defel);
 		}
@@ -150,7 +147,7 @@ parse_publication_options(List *options,
  * Create new publication.
  */
 ObjectAddress
-CreatePublication(CreatePublicationStmt *stmt)
+CreatePublication(ParseState *pstate, CreatePublicationStmt *stmt)
 {
 	Relation	rel;
 	ObjectAddress myself;
@@ -197,7 +194,8 @@ CreatePublication(CreatePublicationStmt *stmt)
 		DirectFunctionCall1(namein, CStringGetDatum(stmt->pubname));
 	values[Anum_pg_publication_pubowner - 1] = ObjectIdGetDatum(GetUserId());
 
-	parse_publication_options(stmt->options,
+	parse_publication_options(pstate,
+							  stmt->options,
 							  &publish_given, &pubactions,
 							  &publish_via_partition_root_given,
 							  &publish_via_partition_root);
@@ -241,6 +239,11 @@ CreatePublication(CreatePublicationStmt *stmt)
 		PublicationAddTables(puboid, rels, true, NULL);
 		CloseTableList(rels);
 	}
+	else if (stmt->for_all_tables)
+	{
+		/* Invalidate relcache so that publication info is rebuilt. */
+		CacheInvalidateRelcacheAll();
+	}
 
 	table_close(rel, RowExclusiveLock);
 
@@ -274,8 +277,8 @@ CreatePublication(CreatePublicationStmt *stmt)
  * Change options of a publication.
  */
 static void
-AlterPublicationOptions(AlterPublicationStmt *stmt, Relation rel,
-						HeapTuple tup)
+AlterPublicationOptions(ParseState *pstate, AlterPublicationStmt *stmt,
+						Relation rel, HeapTuple tup)
 {
 	bool		nulls[Natts_pg_publication];
 	bool		replaces[Natts_pg_publication];
@@ -287,7 +290,8 @@ AlterPublicationOptions(AlterPublicationStmt *stmt, Relation rel,
 	ObjectAddress obj;
 	Form_pg_publication pubform;
 
-	parse_publication_options(stmt->options,
+	parse_publication_options(pstate,
+							  stmt->options,
 							  &publish_given, &pubactions,
 							  &publish_via_partition_root_given,
 							  &publish_via_partition_root);
@@ -412,21 +416,28 @@ AlterPublicationTables(AlterPublicationStmt *stmt, Relation rel,
 
 			foreach(newlc, rels)
 			{
-				Relation	newrel = (Relation) lfirst(newlc);
+				PublicationRelInfo *newpubrel;
 
-				if (RelationGetRelid(newrel) == oldrelid)
+				newpubrel = (PublicationRelInfo *) lfirst(newlc);
+				if (RelationGetRelid(newpubrel->relation) == oldrelid)
 				{
 					found = true;
 					break;
 				}
 			}
-
+			/* Not yet in the list, open it and add to the list */
 			if (!found)
 			{
-				Relation	oldrel = table_open(oldrelid,
-												ShareUpdateExclusiveLock);
+				Relation	oldrel;
+				PublicationRelInfo *pubrel;
 
-				delrels = lappend(delrels, oldrel);
+				/* Wrap relation into PublicationRelInfo */
+				oldrel = table_open(oldrelid, ShareUpdateExclusiveLock);
+
+				pubrel = palloc(sizeof(PublicationRelInfo));
+				pubrel->relation = oldrel;
+
+				delrels = lappend(delrels, pubrel);
 			}
 		}
 
@@ -452,7 +463,7 @@ AlterPublicationTables(AlterPublicationStmt *stmt, Relation rel,
  * AlterPublicationTables.
  */
 void
-AlterPublication(AlterPublicationStmt *stmt)
+AlterPublication(ParseState *pstate, AlterPublicationStmt *stmt)
 {
 	Relation	rel;
 	HeapTuple	tup;
@@ -477,7 +488,7 @@ AlterPublication(AlterPublicationStmt *stmt)
 					   stmt->pubname);
 
 	if (stmt->options)
-		AlterPublicationOptions(stmt, rel, tup);
+		AlterPublicationOptions(pstate, stmt, rel, tup);
 	else
 		AlterPublicationTables(stmt, rel, tup);
 
@@ -530,9 +541,38 @@ RemovePublicationRelById(Oid proid)
 }
 
 /*
- * Open relations specified by a RangeVar list.
- * The returned tables are locked in ShareUpdateExclusiveLock mode in order to
- * add them to a publication.
+ * Remove the publication by mapping OID.
+ */
+void
+RemovePublicationById(Oid pubid)
+{
+	Relation	rel;
+	HeapTuple	tup;
+	Form_pg_publication pubform;
+
+	rel = table_open(PublicationRelationId, RowExclusiveLock);
+
+	tup = SearchSysCache1(PUBLICATIONOID, ObjectIdGetDatum(pubid));
+	if (!HeapTupleIsValid(tup))
+		elog(ERROR, "cache lookup failed for publication %u", pubid);
+
+	pubform = (Form_pg_publication)GETSTRUCT(tup);
+
+	/* Invalidate relcache so that publication info is rebuilt. */
+	if (pubform->puballtables)
+		CacheInvalidateRelcacheAll();
+
+	CatalogTupleDelete(rel, &tup->t_self);
+
+	ReleaseSysCache(tup);
+
+	table_close(rel, RowExclusiveLock);
+}
+
+/*
+ * Open relations specified by a PublicationTable list.
+ * In the returned list of PublicationRelInfo, tables are locked
+ * in ShareUpdateExclusiveLock mode in order to add them to a publication.
  */
 static List *
 OpenTableList(List *tables)
@@ -546,15 +586,16 @@ OpenTableList(List *tables)
 	 */
 	foreach(lc, tables)
 	{
-		RangeVar   *rv = castNode(RangeVar, lfirst(lc));
-		bool		recurse = rv->inh;
+		PublicationTable *t = lfirst_node(PublicationTable, lc);
+		bool		recurse = t->relation->inh;
 		Relation	rel;
 		Oid			myrelid;
+		PublicationRelInfo *pub_rel;
 
 		/* Allow query cancel in case this takes a long time */
 		CHECK_FOR_INTERRUPTS();
 
-		rel = table_openrv(rv, ShareUpdateExclusiveLock);
+		rel = table_openrv(t->relation, ShareUpdateExclusiveLock);
 		myrelid = RelationGetRelid(rel);
 
 		/*
@@ -570,7 +611,9 @@ OpenTableList(List *tables)
 			continue;
 		}
 
-		rels = lappend(rels, rel);
+		pub_rel = palloc(sizeof(PublicationRelInfo));
+		pub_rel->relation = rel;
+		rels = lappend(rels, pub_rel);
 		relids = lappend_oid(relids, myrelid);
 
 		/*
@@ -603,7 +646,9 @@ OpenTableList(List *tables)
 
 				/* find_all_inheritors already got lock */
 				rel = table_open(childrelid, NoLock);
-				rels = lappend(rels, rel);
+				pub_rel = palloc(sizeof(PublicationRelInfo));
+				pub_rel->relation = rel;
+				rels = lappend(rels, pub_rel);
 				relids = lappend_oid(relids, childrelid);
 			}
 		}
@@ -624,9 +669,10 @@ CloseTableList(List *rels)
 
 	foreach(lc, rels)
 	{
-		Relation	rel = (Relation) lfirst(lc);
+		PublicationRelInfo *pub_rel;
 
-		table_close(rel, NoLock);
+		pub_rel = (PublicationRelInfo *) lfirst(lc);
+		table_close(pub_rel->relation, NoLock);
 	}
 }
 
@@ -643,7 +689,8 @@ PublicationAddTables(Oid pubid, List *rels, bool if_not_exists,
 
 	foreach(lc, rels)
 	{
-		Relation	rel = (Relation) lfirst(lc);
+		PublicationRelInfo *pub_rel = (PublicationRelInfo *) lfirst(lc);
+		Relation	rel = pub_rel->relation;
 		ObjectAddress obj;
 
 		/* Must be owner of the table or superuser. */
@@ -651,7 +698,7 @@ PublicationAddTables(Oid pubid, List *rels, bool if_not_exists,
 			aclcheck_error(ACLCHECK_NOT_OWNER, get_relkind_objtype(rel->rd_rel->relkind),
 						   RelationGetRelationName(rel));
 
-		obj = publication_add_relation(pubid, rel, if_not_exists);
+		obj = publication_add_relation(pubid, pub_rel, if_not_exists);
 		if (stmt)
 		{
 			EventTriggerCollectSimpleCommand(obj, InvalidObjectAddress,
@@ -675,7 +722,8 @@ PublicationDropTables(Oid pubid, List *rels, bool missing_ok)
 
 	foreach(lc, rels)
 	{
-		Relation	rel = (Relation) lfirst(lc);
+		PublicationRelInfo *pubrel = (PublicationRelInfo *) lfirst(lc);
+		Relation	rel = pubrel->relation;
 		Oid			relid = RelationGetRelid(rel);
 
 		prid = GetSysCacheOid2(PUBLICATIONRELMAP, Anum_pg_publication_rel_oid,

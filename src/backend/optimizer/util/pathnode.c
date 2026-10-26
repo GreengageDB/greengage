@@ -1008,7 +1008,7 @@ create_seqscan_path(PlannerInfo *root, RelOptInfo *rel,
 	pathnode->pathtarget = rel->reltarget;
 	pathnode->param_info = get_baserel_parampathinfo(root, rel,
 													 required_outer);
-	pathnode->parallel_aware = parallel_workers > 0 ? true : false;
+	pathnode->parallel_aware = (parallel_workers > 0);
 	pathnode->parallel_safe = rel->consider_parallel;
 	pathnode->parallel_workers = parallel_workers;
 	pathnode->pathkeys = NIL;	/* seqscan has unordered result */
@@ -1145,7 +1145,7 @@ create_bitmap_heap_path(PlannerInfo *root,
 	pathnode->path.pathtarget = rel->reltarget;
 	pathnode->path.param_info = get_baserel_parampathinfo(root, rel,
 														  required_outer);
-	pathnode->path.parallel_aware = parallel_degree > 0 ? true : false;
+	pathnode->path.parallel_aware = (parallel_degree > 0);
 	pathnode->path.parallel_safe = rel->consider_parallel;
 	pathnode->path.parallel_workers = parallel_degree;
 	pathnode->path.pathkeys = NIL;	/* always unordered */
@@ -2069,20 +2069,19 @@ create_material_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath)
 }
 
 /*
- * create_resultcache_path
- *	  Creates a path corresponding to a ResultCache plan, returning the
- *	  pathnode.
+ * create_memoize_path
+ *	  Creates a path corresponding to a Memoize plan, returning the pathnode.
  */
-ResultCachePath *
-create_resultcache_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
-						List *param_exprs, List *hash_operators,
-						bool singlerow, double calls)
+MemoizePath *
+create_memoize_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
+					List *param_exprs, List *hash_operators,
+					bool singlerow, double calls)
 {
-	ResultCachePath *pathnode = makeNode(ResultCachePath);
+	MemoizePath *pathnode = makeNode(MemoizePath);
 
 	Assert(subpath->parent == rel);
 
-	pathnode->path.pathtype = T_ResultCache;
+	pathnode->path.pathtype = T_Memoize;
 	pathnode->path.parent = rel;
 	pathnode->path.pathtarget = rel->reltarget;
 	pathnode->path.param_info = subpath->param_info;
@@ -2104,17 +2103,16 @@ create_resultcache_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 	pathnode->calls = calls;
 
 	/*
-	 * For now we set est_entries to 0.  cost_resultcache_rescan() does all
-	 * the hard work to determine how many cache entries there are likely to
-	 * be, so it seems best to leave it up to that function to fill this field
-	 * in.  If left at 0, the executor will make a guess at a good value.
+	 * For now we set est_entries to 0.  cost_memoize_rescan() does all the
+	 * hard work to determine how many cache entries there are likely to be,
+	 * so it seems best to leave it up to that function to fill this field in.
+	 * If left at 0, the executor will make a guess at a good value.
 	 */
 	pathnode->est_entries = 0;
 
 	/*
 	 * Add a small additional charge for caching the first entry.  All the
-	 * harder calculations for rescans are performed in
-	 * cost_resultcache_rescan().
+	 * harder calculations for rescans are performed in cost_memoize_rescan().
 	 */
 	pathnode->path.startup_cost = subpath->startup_cost + cpu_tuple_cost;
 	pathnode->path.total_cost = subpath->total_cost + cpu_tuple_cost;
@@ -2353,9 +2351,8 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 		 * planner.c).
 		 */
 		int			hashentrysize = subpath->pathtarget->width + 64;
-		int			hash_mem = get_hash_mem();
 
-		if (hashentrysize * pathnode->path.rows > hash_mem * 1024L)
+		if (hashentrysize * pathnode->path.rows > get_hash_memory_limit())
 		{
 			/*
 			 * We should not try to hash.  Hack the SpecialJoinInfo to
@@ -3762,10 +3759,10 @@ create_nestloop_path(PlannerInfo *root,
 
 
 	pathnode = makeNode(NestPath);
-	pathnode->path.pathtype = T_NestLoop;
-	pathnode->path.parent = joinrel;
-	pathnode->path.pathtarget = joinrel->reltarget;
-	pathnode->path.param_info =
+	pathnode->jpath.path.pathtype = T_NestLoop;
+	pathnode->jpath.path.parent = joinrel;
+	pathnode->jpath.path.pathtarget = joinrel->reltarget;
+	pathnode->jpath.path.param_info =
 		get_joinrel_parampathinfo(root,
 								  joinrel,
 								  outer_path,
@@ -3773,25 +3770,25 @@ create_nestloop_path(PlannerInfo *root,
 								  extra->sjinfo,
 								  required_outer,
 								  &restrict_clauses);
-	pathnode->path.parallel_aware = false;
-	pathnode->path.parallel_safe = joinrel->consider_parallel &&
+	pathnode->jpath.path.parallel_aware = false;
+	pathnode->jpath.path.parallel_safe = joinrel->consider_parallel &&
 		outer_path->parallel_safe && inner_path->parallel_safe;
 	/* This is a foolish way to estimate parallel_workers, but for now... */
-	pathnode->path.parallel_workers = outer_path->parallel_workers;
-	pathnode->path.pathkeys = pathkeys;
-	pathnode->jointype = jointype;
-	pathnode->inner_unique = extra->inner_unique;
-	pathnode->outerjoinpath = outer_path;
-	pathnode->innerjoinpath = inner_path;
-	pathnode->joinrestrictinfo = restrict_clauses;
+	pathnode->jpath.path.parallel_workers = outer_path->parallel_workers;
+	pathnode->jpath.path.pathkeys = pathkeys;
+	pathnode->jpath.jointype = jointype;
+	pathnode->jpath.inner_unique = extra->inner_unique;
+	pathnode->jpath.outerjoinpath = outer_path;
+	pathnode->jpath.innerjoinpath = inner_path;
+	pathnode->jpath.joinrestrictinfo = restrict_clauses;
 
-	pathnode->path.locus = join_locus;
-	pathnode->path.motionHazard = outer_path->motionHazard || inner_path->motionHazard;
+	pathnode->jpath.path.locus = join_locus;
+	pathnode->jpath.path.motionHazard = outer_path->motionHazard || inner_path->motionHazard;
 
 	/* we're only as rescannable as our child plans */
-	pathnode->path.rescannable = outer_path->rescannable && inner_path->rescannable;
+	pathnode->jpath.path.rescannable = outer_path->rescannable && inner_path->rescannable;
 
-	pathnode->path.sameslice_relids = bms_union(inner_path->sameslice_relids, outer_path->sameslice_relids);
+	pathnode->jpath.path.sameslice_relids = bms_union(inner_path->sameslice_relids, outer_path->sameslice_relids);
 
 	/*
 	 * inner_path & outer_path are possibly modified above. Let's recalculate
@@ -3809,7 +3806,7 @@ create_nestloop_path(PlannerInfo *root,
 		return (Path *) create_unique_rowid_path(root,
 												 joinrel,
 												 (Path *) pathnode,
-												 pathnode->innerjoinpath->parent->relids,
+												 pathnode->jpath.innerjoinpath->parent->relids,
 												 rowidexpr_id);
 	}
 
@@ -3832,7 +3829,7 @@ create_nestloop_path(PlannerInfo *root,
 	 */
 	return turn_volatile_seggen_to_singleqe(root,
 											(Path *) pathnode,
-											(Node *) (pathnode->joinrestrictinfo));
+											(Node *) (pathnode->jpath.joinrestrictinfo));
 }
 
 /*
@@ -5899,16 +5896,16 @@ reparameterize_path(PlannerInfo *root, Path *path,
 									   apath->path.parallel_aware,
 									   -1);
 			}
-		case T_ResultCache:
+		case T_Memoize:
 			{
-				ResultCachePath *rcpath = (ResultCachePath *) path;
+				MemoizePath *mpath = (MemoizePath *) path;
 
-				return (Path *) create_resultcache_path(root, rel,
-														rcpath->subpath,
-														rcpath->param_exprs,
-														rcpath->hash_operators,
-														rcpath->singlerow,
-														rcpath->calls);
+				return (Path *) create_memoize_path(root, rel,
+													mpath->subpath,
+													mpath->param_exprs,
+													mpath->hash_operators,
+													mpath->singlerow,
+													mpath->calls);
 			}
 		default:
 			break;
@@ -6076,13 +6073,15 @@ do { \
 		case T_NestPath:
 			{
 				JoinPath   *jpath;
+				NestPath   *npath;
 
-				FLAT_COPY_PATH(jpath, path, NestPath);
+				FLAT_COPY_PATH(npath, path, NestPath);
 
+				jpath = (JoinPath *) npath;
 				REPARAMETERIZE_CHILD_PATH(jpath->outerjoinpath);
 				REPARAMETERIZE_CHILD_PATH(jpath->innerjoinpath);
 				ADJUST_CHILD_ATTRS(jpath->joinrestrictinfo);
-				new_path = (Path *) jpath;
+				new_path = (Path *) npath;
 			}
 			break;
 
@@ -6128,13 +6127,13 @@ do { \
 			}
 			break;
 
-		case T_ResultCachePath:
+		case T_MemoizePath:
 			{
-				ResultCachePath *rcpath;
+				MemoizePath *mpath;
 
-				FLAT_COPY_PATH(rcpath, path, ResultCachePath);
-				REPARAMETERIZE_CHILD_PATH(rcpath->subpath);
-				new_path = (Path *) rcpath;
+				FLAT_COPY_PATH(mpath, path, MemoizePath);
+				REPARAMETERIZE_CHILD_PATH(mpath->subpath);
+				new_path = (Path *) mpath;
 			}
 			break;
 

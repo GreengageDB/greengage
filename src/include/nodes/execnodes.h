@@ -63,7 +63,7 @@ typedef Datum (*ExprStateEvalFunc) (struct ExprState *expression,
 
 typedef struct ExprState
 {
-	NodeTag		tag;
+	NodeTag		type;
 
 	uint8		flags;			/* bitmask of EEO_FLAG_* bits, see above */
 
@@ -2431,11 +2431,11 @@ typedef struct MaterialState
 								 * when this node has outputted its last row? */
 } MaterialState;
 
-struct ResultCacheEntry;
-struct ResultCacheTuple;
-struct ResultCacheKey;
+struct MemoizeEntry;
+struct MemoizeTuple;
+struct MemoizeKey;
 
-typedef struct ResultCacheInstrumentation
+typedef struct MemoizeInstrumentation
 {
 	uint64		cache_hits;		/* number of rescans where we've found the
 								 * scan parameter values to be cached */
@@ -2448,31 +2448,31 @@ typedef struct ResultCacheInstrumentation
 									 * able to free enough space to store the
 									 * current scan's tuples. */
 	uint64		mem_peak;		/* peak memory usage in bytes */
-} ResultCacheInstrumentation;
+} MemoizeInstrumentation;
 
 /* ----------------
- *	 Shared memory container for per-worker resultcache information
+ *	 Shared memory container for per-worker memoize information
  * ----------------
  */
-typedef struct SharedResultCacheInfo
+typedef struct SharedMemoizeInfo
 {
 	int			num_workers;
-	ResultCacheInstrumentation sinstrument[FLEXIBLE_ARRAY_MEMBER];
-} SharedResultCacheInfo;
+	MemoizeInstrumentation sinstrument[FLEXIBLE_ARRAY_MEMBER];
+} SharedMemoizeInfo;
 
 /* ----------------
- *	 ResultCacheState information
+ *	 MemoizeState information
  *
- *		resultcache nodes are used to cache recent and commonly seen results
- *		from a parameterized scan.
+ *		memoize nodes are used to cache recent and commonly seen results from
+ *		a parameterized scan.
  * ----------------
  */
-typedef struct ResultCacheState
+typedef struct MemoizeState
 {
 	ScanState	ss;				/* its first field is NodeTag */
-	int			rc_status;		/* value of ExecResultCache state machine */
+	int			mstatus;		/* value of ExecMemoize state machine */
 	int			nkeys;			/* number of cache keys */
-	struct resultcache_hash *hashtable; /* hash table for cache entries */
+	struct memoize_hash *hashtable; /* hash table for cache entries */
 	TupleDesc	hashkeydesc;	/* tuple descriptor for cache keys */
 	TupleTableSlot *tableslot;	/* min tuple slot for existing cache entries */
 	TupleTableSlot *probeslot;	/* virtual slot used for hash lookups */
@@ -2485,17 +2485,17 @@ typedef struct ResultCacheState
 	uint64		mem_limit;		/* memory limit in bytes for the cache */
 	MemoryContext tableContext; /* memory context to store cache data */
 	dlist_head	lru_list;		/* least recently used entry list */
-	struct ResultCacheTuple *last_tuple;	/* Used to point to the last tuple
-											 * returned during a cache hit and
-											 * the tuple we last stored when
-											 * populating the cache. */
-	struct ResultCacheEntry *entry; /* the entry that 'last_tuple' belongs to
-									 * or NULL if 'last_tuple' is NULL. */
+	struct MemoizeTuple *last_tuple;	/* Used to point to the last tuple
+										 * returned during a cache hit and the
+										 * tuple we last stored when
+										 * populating the cache. */
+	struct MemoizeEntry *entry; /* the entry that 'last_tuple' belongs to or
+								 * NULL if 'last_tuple' is NULL. */
 	bool		singlerow;		/* true if the cache entry is to be marked as
 								 * complete after caching the first tuple. */
-	ResultCacheInstrumentation stats;	/* execution statistics */
-	SharedResultCacheInfo *shared_info; /* statistics for parallel workers */
-} ResultCacheState;
+	MemoizeInstrumentation stats;	/* execution statistics */
+	SharedMemoizeInfo *shared_info; /* statistics for parallel workers */
+} MemoizeState;
 
 /* ----------------
  *	 When performing sorting by multiple keys, it's possible that the input
@@ -2563,6 +2563,7 @@ typedef struct SortState
 	int64		bound_Done;		/* value of bound we did the sort with */
 	void	   *tuplesortstate; /* private state of tuplesort.c */
 	bool		am_worker;		/* are we a worker? */
+	bool		datumSort;		/* Datum sort instead of tuple sort? */
 	SharedSortInfo *shared_info;	/* one entry per worker */
 
 	bool		delayEagerFree;		/* is it safe to free memory used by this node,

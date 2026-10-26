@@ -16,10 +16,11 @@
 #define PUBLICATIONCMDS_H
 
 #include "catalog/objectaddress.h"
-#include "nodes/parsenodes.h"
+#include "parser/parse_node.h"
 
-extern ObjectAddress CreatePublication(CreatePublicationStmt *stmt);
-extern void AlterPublication(AlterPublicationStmt *stmt);
+extern ObjectAddress CreatePublication(ParseState *pstate, CreatePublicationStmt *stmt);
+extern void AlterPublication(ParseState *pstate, AlterPublicationStmt *stmt);
+extern void RemovePublicationById(Oid pubid);
 extern void RemovePublicationRelById(Oid proid);
 
 extern ObjectAddress AlterPublicationOwner(const char *name, Oid newOwnerId);

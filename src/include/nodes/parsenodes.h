@@ -1016,10 +1016,10 @@ typedef struct PartitionCmd
  *	  inFromCl marks those range variables that are listed in the FROM clause.
  *	  It's false for RTEs that are added to a query behind the scenes, such
  *	  as the NEW and OLD variables for a rule, or the subqueries of a UNION.
- *	  This flag is not used anymore during parsing, since the parser now uses
- *	  a separate "namespace" data structure to control visibility, but it is
- *	  needed by ruleutils.c to determine whether RTEs should be shown in
- *	  decompiled queries.
+ *	  This flag is not used during parsing (except in transformLockingClause,
+ *	  q.v.); the parser now uses a separate "namespace" data structure to
+ *	  control visibility.  But it is needed by ruleutils.c to determine
+ *	  whether RTEs should be shown in decompiled queries.
  *
  *	  requiredPerms and checkAsUser specify run-time access permissions
  *	  checks to be performed at query startup.  The user must have *all*
@@ -1441,7 +1441,7 @@ typedef struct SortGroupClause
  *
  * SETS( SIMPLE(1,2), CUBE( SIMPLE(3), SIMPLE(4,5) ) )
  */
-typedef enum
+typedef enum GroupingSetKind
 {
 	GROUPING_SET_EMPTY,
 	GROUPING_SET_SIMPLE,
@@ -2401,7 +2401,7 @@ typedef struct CopyStmt
  * preserve the distinction in VariableSetKind for CreateCommandTag().
  * ----------------------
  */
-typedef enum
+typedef enum VariableSetKind
 {
 	VAR_SET_VALUE,				/* SET var = value */
 	VAR_SET_DEFAULT,			/* SET var TO DEFAULT */
@@ -4158,6 +4158,12 @@ typedef struct AlterTSConfigurationStmt
 	bool		replace;		/* if true - replace dictionary by another */
 	bool		missing_ok;		/* for DROP - skip error if missing? */
 } AlterTSConfigurationStmt;
+
+typedef struct PublicationTable
+{
+	NodeTag		type;
+	RangeVar   *relation;		/* relation to be published */
+} PublicationTable;
 
 typedef struct CreatePublicationStmt
 {

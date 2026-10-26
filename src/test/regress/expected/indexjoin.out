@@ -101,7 +101,7 @@ ORDER BY 1 asc ;
                      ->  Nested Loop  (cost=10000000000.16..10000003597.74 rows=15131 width=8)
                            ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=10000000000.00..10000000008.00 rows=420 width=25)
                                  ->  Seq Scan on my_tt_agg_small tt  (cost=10000000000.00..10000000002.40 rows=140 width=25)
-                           ->  Result Cache  (cost=0.16..7.94 rows=38 width=20)
+                           ->  Memoize  (cost=0.16..7.94 rows=38 width=20)
                                  Cache Key: tt.event_ts, tt.event_ts, tt.symbol
                                  ->  Index Scan using my_tq_agg_small_ets_end_ts_ix on my_tq_agg_small tq  (cost=0.15..7.93 rows=38 width=20)
                                        Index Cond: ((ets <= tt.event_ts) AND (end_ts > tt.event_ts))

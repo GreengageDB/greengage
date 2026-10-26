@@ -67,6 +67,11 @@ ALTER SUBSCRIPTION <replaceable class="parameter">name</replaceable> RENAME TO <
    Commands <command>ALTER SUBSCRIPTION ... REFRESH PUBLICATION</command> and
    <command>ALTER SUBSCRIPTION ... {SET|ADD|DROP} PUBLICATION ...</command> with refresh
    option as true cannot be executed inside a transaction block.
+
+   These commands also cannot be executed when the subscription has
+   <literal>two_phase</literal> commit enabled, unless <literal>copy_data = false</literal>.
+   See column <literal>subtwophasestate</literal> of
+   <xref linkend="catalog-pg-subscription"/> to know the actual two-phase state.
   </para>
  </refsect1>
 
@@ -106,9 +111,7 @@ ALTER SUBSCRIPTION <replaceable class="parameter">name</replaceable> RENAME TO <
       publications, and <literal>DROP</literal> removes the publications from
       the list of publications.  See <xref linkend="sql-createsubscription"/>
       for more information.  By default, this command will also act like
-      <literal>REFRESH PUBLICATION</literal>, except that in case of
-      <literal>ADD</literal> or <literal>DROP</literal>, only the added or
-      dropped publications are refreshed.
+      <literal>REFRESH PUBLICATION</literal>.
      </para>
 
      <para>
@@ -129,8 +132,7 @@ ALTER SUBSCRIPTION <replaceable class="parameter">name</replaceable> RENAME TO <
       </variablelist>
 
       Additionally, refresh options as described
-      under <literal>REFRESH PUBLICATION</literal> may be specified,
-      except in the case of <literal>DROP PUBLICATION</literal>.
+      under <literal>REFRESH PUBLICATION</literal> may be specified.
      </para>
     </listitem>
    </varlistentry>

@@ -242,6 +242,11 @@ static bool have_xact_temporary_files = false;
  */
 static uint64 temporary_files_size = 0;
 
+/* Temporary file access initialized and not yet shut down? */
+#ifdef USE_ASSERT_CHECKING
+static bool temporary_files_allowed = false;
+#endif
+
 /*
  * List of OS handles opened with AllocateFile, AllocateDir and
  * OpenTransientFile.
@@ -343,7 +348,7 @@ static File OpenTemporaryFileInTablespace(Oid tblspcOid, bool rejectError,
 static bool reserveAllocatedDesc(void);
 static int	FreeDesc(AllocateDesc *desc);
 
-static void AtProcExit_Files(int code, Datum arg);
+static void BeforeShmemExit_Files(int code, Datum arg);
 static void CleanupTempFiles(bool isCommit, bool isProcExit);
 static void RemovePgTempRelationFiles(const char *tsdirname);
 static void RemovePgTempRelationFilesInDbspace(const char *dbspacedirname);
@@ -898,6 +903,9 @@ durable_rename_excl(const char *oldfile, const char *newfile, int elevel)
  *
  * This is called during either normal or standalone backend start.
  * It is *not* called in the postmaster.
+ *
+ * Note that this does not initialize temporary file access, that is
+ * separately initialized via InitTemporaryFileAccess().
  */
 void
 InitFileAccess(void)
@@ -915,9 +923,35 @@ InitFileAccess(void)
 	VfdCache->fd = VFD_CLOSED;
 
 	SizeVfdCache = 1;
+}
 
-	/* register proc-exit hook to ensure temp files are dropped at exit */
-	on_proc_exit(AtProcExit_Files, 0);
+/*
+ * InitTemporaryFileAccess --- initialize temporary file access during startup
+ *
+ * This is called during either normal or standalone backend start.
+ * It is *not* called in the postmaster.
+ *
+ * This is separate from InitFileAccess() because temporary file cleanup can
+ * cause pgstat reporting. As pgstat is shut down during before_shmem_exit(),
+ * our reporting has to happen before that. Low level file access should be
+ * available for longer, hence the separate initialization / shutdown of
+ * temporary file handling.
+ */
+void
+InitTemporaryFileAccess(void)
+{
+	Assert(SizeVfdCache != 0);	/* InitFileAccess() needs to have run*/
+	Assert(!temporary_files_allowed);	/* call me only once */
+
+	/*
+	 * Register before-shmem-exit hook to ensure temp files are dropped while
+	 * we can still report stats.
+	 */
+	before_shmem_exit(BeforeShmemExit_Files, 0);
+
+#ifdef USE_ASSERT_CHECKING
+	temporary_files_allowed = true;
+#endif
 }
 
 /*
@@ -930,7 +964,9 @@ InitFileAccess(void)
  * of already_open will give the right answer.  In practice, max_to_probe
  * of a couple of dozen should be enough to ensure good results.
  *
- * We assume stdin (FD 0) is available for dup'ing
+ * We assume stderr (FD 2) is available for dup'ing.  While the calling
+ * script could theoretically close that, it would be a really bad idea,
+ * since then one risks loss of error messages from, e.g., libc.
  */
 static void
 count_usable_fds(int max_to_probe, int *usable_fds, int *already_open)
@@ -974,12 +1010,12 @@ count_usable_fds(int max_to_probe, int *usable_fds, int *already_open)
 			break;
 #endif
 
-		thisfd = dup(0);
+		thisfd = dup(2);
 		if (thisfd < 0)
 		{
 			/* Expect EMFILE or ENFILE, else it's fishy */
 			if (errno != EMFILE && errno != ENFILE)
-				ereport(WARNING, (errmsg("dup(0) failed after %d successes: %m", used)));
+				ereport(WARNING, (errmsg("duplicating stderr file descriptor failed after %d successes: %m", used)));
 			break;
 		}
 
@@ -1087,10 +1123,54 @@ BasicOpenFilePerm(const char *fileName, int fileFlags, mode_t fileMode)
 	int			fd;
 
 tryAgain:
+#ifdef PG_O_DIRECT_USE_F_NOCACHE
+
+	/*
+	 * The value we defined to stand in for O_DIRECT when simulating it with
+	 * F_NOCACHE had better not collide with any of the standard flags.
+	 */
+	StaticAssertStmt((PG_O_DIRECT &
+					  (O_APPEND |
+					   O_CREAT |
+					   O_EXCL |
+					   O_RDWR |
+					   O_RDONLY |
+					   O_SYNC |
+					   O_TRUNC |
+					   O_WRONLY)) == 0,
+					 "PG_O_DIRECT value collides with standard flag");
+#if defined(O_CLOEXEC)
+	StaticAssertStmt((PG_O_DIRECT & O_CLOEXEC) == 0,
+					 "PG_O_DIRECT value collides with O_CLOEXEC");
+#endif
+#if defined(O_DSYNC)
+	StaticAssertStmt((PG_O_DIRECT & O_DSYNC) == 0,
+					 "PG_O_DIRECT value collides with O_DSYNC");
+#endif
+
+	fd = open(fileName, fileFlags & ~PG_O_DIRECT, fileMode);
+#else
 	fd = open(fileName, fileFlags, fileMode);
+#endif
 
 	if (fd >= 0)
+	{
+#ifdef PG_O_DIRECT_USE_F_NOCACHE
+		if (fileFlags & PG_O_DIRECT)
+		{
+			if (fcntl(fd, F_NOCACHE, 1) < 0)
+			{
+				int			save_errno = errno;
+
+				close(fd);
+				errno = save_errno;
+				return -1;
+			}
+		}
+#endif
+
 		return fd;				/* success! */
+	}
 
 	if (errno == EMFILE || errno == ENFILE)
 	{
@@ -1659,6 +1739,8 @@ OpenTemporaryFile(bool interXact, const char *filePrefix)
 {
 	File		file = 0;
 
+	Assert(temporary_files_allowed);	/* check temp file access is up */
+
 	/*
 	 * Make sure the current resource owner has space for this File before we
 	 * open it, if we'll be registering it below.
@@ -1824,6 +1906,8 @@ PathNameCreateTemporaryFile(const char *path, bool error_on_failure)
 {
 	File		file;
 
+	Assert(temporary_files_allowed);	/* check temp file access is up */
+
 	ResourceOwnerEnlargeFiles(CurrentResourceOwner);
 
 	/*
@@ -1861,6 +1945,8 @@ File
 PathNameOpenTemporaryFile(const char *path, int mode)
 {
 	File		file;
+
+	Assert(temporary_files_allowed);	/* check temp file access is up */
 
 	ResourceOwnerEnlargeFiles(CurrentResourceOwner);
 
@@ -1900,7 +1986,7 @@ PathNameDeleteTemporaryFile(const char *path, bool error_on_failure)
 
 	/*
 	 * Unlike FileClose's automatic file deletion code, we tolerate
-	 * non-existence to support BufFileDeleteShared which doesn't know how
+	 * non-existence to support BufFileDeleteFileSet which doesn't know how
 	 * many segments it has to delete until it runs out.
 	 */
 	if (stat_errno == ENOENT)
@@ -3099,15 +3185,20 @@ AtEOXact_Files(bool isCommit)
 }
 
 /*
- * AtProcExit_Files
+ * BeforeShmemExit_Files
  *
- * on_proc_exit hook to clean up temp files during backend shutdown.
+ * before_shmem_access hook to clean up temp files during backend shutdown.
  * Here, we want to clean up *all* temp files including interXact ones.
  */
 static void
-AtProcExit_Files(int code, Datum arg)
+BeforeShmemExit_Files(int code, Datum arg)
 {
 	CleanupTempFiles(false, true);
+
+	/* prevent further temp files from being created */
+#ifdef USE_ASSERT_CHECKING
+	temporary_files_allowed = false;
+#endif
 }
 
 /*

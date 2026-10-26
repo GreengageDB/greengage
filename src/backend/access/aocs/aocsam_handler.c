@@ -1249,7 +1249,6 @@ aoco_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 	 * implementation
 	 */
 	dstrel = smgropen(*newrnode, rel->rd_backend, SMGR_AO);
-	RelationOpenSmgr(rel);
 
 	/*
 	 * Create and copy all forks of the relation, and schedule unlinking of
@@ -1269,7 +1268,7 @@ aoco_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 	 */
 	if (rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED)
 	{
-		Assert (smgrexists(rel->rd_smgr, INIT_FORKNUM));
+		Assert (smgrexists(RelationGetSmgr(rel), INIT_FORKNUM));
 
 		/*
 		 * INIT_FORK is empty, creating it is sufficient, no need to copy

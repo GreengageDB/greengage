@@ -1621,6 +1621,7 @@ _readScalarArrayOpExpr(void)
 	READ_OID_FIELD(opno);
 	READ_OID_FIELD(opfuncid);
 	READ_OID_FIELD(hashfuncid);
+	READ_OID_FIELD(negfuncid);
 	READ_BOOL_FIELD(useOr);
 	READ_OID_FIELD(inputcollid);
 	READ_NODE_FIELD(args);
@@ -2312,6 +2313,136 @@ _readSortBy(void)
 	READ_DONE();
 }
 
+static WindowDef *
+_readWindowDef(void)
+{
+	READ_LOCALS(WindowDef);
+
+	READ_STRING_FIELD(name);
+	READ_STRING_FIELD(refname);
+	READ_NODE_FIELD(partitionClause);
+	READ_NODE_FIELD(orderClause);
+	READ_INT_FIELD(frameOptions);
+	READ_NODE_FIELD(startOffset);
+	READ_NODE_FIELD(endOffset);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static RangeSubselect *
+_readRangeSubselect(void)
+{
+	READ_LOCALS(RangeSubselect);
+
+	READ_BOOL_FIELD(lateral);
+	READ_NODE_FIELD(subquery);
+	READ_NODE_FIELD(alias);
+
+	READ_DONE();
+}
+
+static RangeFunction *
+_readRangeFunction(void)
+{
+	READ_LOCALS(RangeFunction);
+
+	READ_BOOL_FIELD(lateral);
+	READ_BOOL_FIELD(ordinality);
+	READ_BOOL_FIELD(is_rowsfrom);
+	READ_NODE_FIELD(functions);
+	READ_NODE_FIELD(alias);
+	READ_NODE_FIELD(coldeflist);
+
+	READ_DONE();
+}
+
+static RangeTableSample *
+_readRangeTableSample(void)
+{
+	READ_LOCALS(RangeTableSample);
+
+	READ_NODE_FIELD(relation);
+	READ_NODE_FIELD(method);
+	READ_NODE_FIELD(args);
+	READ_NODE_FIELD(repeatable);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static RangeTableFunc *
+_readRangeTableFunc(void)
+{
+	READ_LOCALS(RangeTableFunc);
+
+	READ_BOOL_FIELD(lateral);
+	READ_NODE_FIELD(docexpr);
+	READ_NODE_FIELD(rowexpr);
+	READ_NODE_FIELD(namespaces);
+	READ_NODE_FIELD(columns);
+	READ_NODE_FIELD(alias);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static RangeTableFuncCol *
+_readRangeTableFuncCol(void)
+{
+	READ_LOCALS(RangeTableFuncCol);
+
+	READ_STRING_FIELD(colname);
+	READ_NODE_FIELD(typeName);
+	READ_BOOL_FIELD(for_ordinality);
+	READ_BOOL_FIELD(is_not_null);
+	READ_NODE_FIELD(colexpr);
+	READ_NODE_FIELD(coldefexpr);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static XmlSerialize *
+_readXmlSerialize(void)
+{
+	READ_LOCALS(XmlSerialize);
+
+	READ_ENUM_FIELD(xmloption, XmlOptionType);
+	READ_NODE_FIELD(expr);
+	READ_NODE_FIELD(typeName);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static InferClause *
+_readInferClause(void)
+{
+	READ_LOCALS(InferClause);
+
+	READ_NODE_FIELD(indexElems);
+	READ_NODE_FIELD(whereClause);
+	READ_STRING_FIELD(conname);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static OnConflictClause *
+_readOnConflictClause(void)
+{
+	READ_LOCALS(OnConflictClause);
+
+	READ_ENUM_FIELD(action, OnConflictAction);
+	READ_NODE_FIELD(infer);
+	READ_NODE_FIELD(targetList);
+	READ_NODE_FIELD(whereClause);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
 static TypeCast *
 _readTypeCast(void)
 {
@@ -2804,7 +2935,7 @@ _readSeqScan(void)
 {
 	READ_LOCALS_NO_FIELDS(SeqScan);
 
-	ReadCommonScan(local_node);
+	ReadCommonScan(&local_node->scan);
 
 	READ_DONE();
 }
@@ -3284,12 +3415,12 @@ _readMaterial(void)
 }
 
 /*
- * _readResultCache
+ * _readMemoize
  */
-static ResultCache *
-_readResultCache(void)
+static Memoize *
+_readMemoize(void)
 {
-	READ_LOCALS(ResultCache);
+	READ_LOCALS(Memoize);
 
 	ReadCommonPlan(&local_node->plan);
 
@@ -4219,6 +4350,19 @@ _readVacuumRelation(void)
 	READ_DONE();
 }
 
+/*
+ * GPDB: see _outPublicationTable.
+ */
+static PublicationTable *
+_readPublicationTable(void)
+{
+	READ_LOCALS(PublicationTable);
+
+	READ_NODE_FIELD(relation);
+
+	READ_DONE();
+}
+
 static CreatePublicationStmt *
 _readCreatePublicationStmt()
 {
@@ -4821,8 +4965,8 @@ parseNodeString(void)
 		return_value = _readHashJoin();
 	else if (MATCH("MATERIAL", 8))
 		return_value = _readMaterial();
-	else if (MATCH("RESULTCACHE", 11))
-		return_value = _readResultCache();
+	else if (MATCH("MEMOIZE", 7))
+		return_value = _readMemoize();
 	else if (MATCH("SORT", 4))
 		return_value = _readSort();
 	else if (MATCH("INCREMENTALSORT", 15))
@@ -4965,6 +5109,8 @@ parseNodeString(void)
 		return_value = _readCreateOpFamilyStmt();
 	else if (MATCHX("CREATEPLANGSTMT"))
 		return_value = _readCreatePLangStmt();
+	else if (MATCHX("PUBLICATIONTABLE"))
+		return_value = _readPublicationTable();
 	else if (MATCHX("CREATEPUBLICATIONSTMT"))
 		return_value = _readCreatePublicationStmt();
 	else if (MATCHX("ALTERPUBLICATIONSTMT"))
@@ -5039,6 +5185,24 @@ parseNodeString(void)
 		return_value = _readSliceTable();
 	else if (MATCHX("SORTBY"))
 		return_value = _readSortBy();
+	else if (MATCHX("WINDOWDEF"))
+		return_value = _readWindowDef();
+	else if (MATCHX("RANGESUBSELECT"))
+		return_value = _readRangeSubselect();
+	else if (MATCHX("RANGEFUNCTION"))
+		return_value = _readRangeFunction();
+	else if (MATCHX("RANGETABLESAMPLE"))
+		return_value = _readRangeTableSample();
+	else if (MATCHX("RANGETABLEFUNC"))
+		return_value = _readRangeTableFunc();
+	else if (MATCHX("RANGETABLEFUNCCOL"))
+		return_value = _readRangeTableFuncCol();
+	else if (MATCHX("INFERCLAUSE"))
+		return_value = _readInferClause();
+	else if (MATCHX("ONCONFLICTCLAUSE"))
+		return_value = _readOnConflictClause();
+	else if (MATCHX("XMLSERIALIZE"))
+		return_value = _readXmlSerialize();
 	else if (MATCHX("TABLEVALUEEXPR"))
 		return_value = _readTableValueExpr();
 	else if (MATCHX("TRUNCATESTMT"))
