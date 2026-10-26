@@ -19,6 +19,11 @@ import sys
 import re
 
 try:
+    from shlex import quote
+except ImportError:
+    from pipes import quote
+
+try:
     from gppylib.gpparseopts import OptParser, OptChecker
     from gppylib.gparray import GpArray
     from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts
@@ -356,7 +361,7 @@ def do_change(options):
 
     # Replace literal empty strings with empty quotes, or it will look like the
     # user passed in an incorrect argument, which would be misleading
-    params = [pipes.quote(arg) for arg in sys.argv[1:]]
+    params = [quote(arg) for arg in sys.argv[1:]]
     params = " ".join(params)
     if failure:
         LOGGER.error("finished with errors, parameter string '%s'" % params)
