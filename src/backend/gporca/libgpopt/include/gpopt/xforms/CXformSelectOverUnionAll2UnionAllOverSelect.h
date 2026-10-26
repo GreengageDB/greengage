@@ -30,8 +30,8 @@ class CXformSelectOverUnionAll2UnionAllOverSelect : public CXformExploration
 {
 private:
 public:
-	CXformSelectOverUnionAll2UnionAllOverSelect(const CXformSelectOverUnionAll2UnionAllOverSelect &) =
-		delete;
+	CXformSelectOverUnionAll2UnionAllOverSelect(
+		const CXformSelectOverUnionAll2UnionAllOverSelect &) = delete;
 
 	// ctor
 	explicit CXformSelectOverUnionAll2UnionAllOverSelect(CMemoryPool *mp);

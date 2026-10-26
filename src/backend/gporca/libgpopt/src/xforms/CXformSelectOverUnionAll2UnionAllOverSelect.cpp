@@ -19,8 +19,8 @@
 #include "gpopt/xforms/CXformSelectOverUnionAll2UnionAllOverSelect.h"
 
 #include "gpos/base.h"
-#include "gpopt/base/CUtils.h"
 
+#include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CLogicalSelect.h"
 #include "gpopt/operators/CLogicalUnionAll.h"
 #include "gpopt/operators/CPatternMultiLeaf.h"
@@ -32,34 +32,41 @@ using namespace gpopt;
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformSelect2DynamicBitmapBoolOp::CXformSelect2DynamicBitmapBoolOp
+//		CXformSelectOverUnionAll2UnionAllOverSelect::CXformSelectOverUnionAll2UnionAllOverSelect
 //
 //	@doc:
 //		Ctor
 //
 //---------------------------------------------------------------------------
-CXformSelectOverUnionAll2UnionAllOverSelect::CXformSelectOverUnionAll2UnionAllOverSelect(
-	CMemoryPool *mp)
+CXformSelectOverUnionAll2UnionAllOverSelect::
+	CXformSelectOverUnionAll2UnionAllOverSelect(CMemoryPool *mp)
 	: CXformExploration(GPOS_NEW(mp) CExpression(
-                mp, GPOS_NEW(mp) CLogicalSelect(mp),
-                GPOS_NEW(mp) CExpression(
-                        mp, GPOS_NEW(mp) CLogicalUnionAll(mp), // Union All
-                        GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CPatternMultiLeaf(mp))), // children
-                GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CPatternTree(mp)))) // predicate
+		  mp, GPOS_NEW(mp) CLogicalSelect(mp),
+		  GPOS_NEW(mp) CExpression(
+			  mp, GPOS_NEW(mp) CLogicalUnionAll(mp),  // Union All
+			  GPOS_NEW(mp) CExpression(
+				  mp, GPOS_NEW(mp) CPatternMultiLeaf(mp))),	 // children
+		  GPOS_NEW(mp)
+			  CExpression(mp, GPOS_NEW(mp) CPatternTree(mp))))	// predicate
 {
 }
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformSelect2DynamicBitmapBoolOp::Exfp
+//		CXformSelectOverUnionAll2UnionAllOverSelect::Exfp
 //
 //	@doc:
 //		Compute xform promise for a given expression handle
 //
 //---------------------------------------------------------------------------
 CXform::EXformPromise
-CXformSelectOverUnionAll2UnionAllOverSelect::Exfp(CExpressionHandle &) const
+CXformSelectOverUnionAll2UnionAllOverSelect::Exfp(
+	CExpressionHandle &exprhndl) const
 {
+	if (exprhndl.DeriveHasSubquery(1))
+	{
+		return CXform::ExfpNone;
+	}
 	return CXform::ExfpHigh;
 }
 
@@ -73,8 +80,8 @@ CXformSelectOverUnionAll2UnionAllOverSelect::Exfp(CExpressionHandle &) const
 //---------------------------------------------------------------------------
 void
 CXformSelectOverUnionAll2UnionAllOverSelect::Transform(CXformContext *pxfctxt,
-											CXformResult *pxfres,
-											CExpression *pexpr) const
+													   CXformResult *pxfres,
+													   CExpression *pexpr) const
 {
 	GPOS_ASSERT(nullptr != pxfctxt);
 	GPOS_ASSERT(FPromising(pxfctxt->Pmp(), this, pexpr));
@@ -86,15 +93,36 @@ CXformSelectOverUnionAll2UnionAllOverSelect::Transform(CXformContext *pxfctxt,
 	CExpression *pexprUnionAll = (*pexpr)[0];
 	CExpression *pexprPred = (*pexpr)[1];
 
-	CLogicalUnionAll * popUnionAll = CLogicalUnionAll::PopConvert(pexprUnionAll->Pop());
+	CLogicalUnionAll *popUnionAll =
+		CLogicalUnionAll::PopConvert(pexprUnionAll->Pop());
 
 	// output columns of Union All.
 	CColRefArray *pdrgpcrOutput = popUnionAll->PdrgpcrOutput();
+	CColRefSet *pcrsOutput = GPOS_NEW(mp) CColRefSet(mp, pdrgpcrOutput);
+
 	CColRef2dArray *pdrgpdrgpcrInput = popUnionAll->PdrgpdrgpcrInput();
 
 	// invariant: length of input array of arrays is equal to union arity
 	GPOS_ASSERT(pexprUnionAll->Arity() == pdrgpdrgpcrInput->Size());
 	GPOS_ASSERT(nullptr != (*pexprUnionAll)[0]->Pgexpr());
+
+	// Bail out if the predicate references columns the union does not
+	// produce (outer references, e.g. inside the inner side of a correlated
+	// apply). The remap below copies the predicate with must_exist = true,
+	// which would invent fresh column refs for such columns, and no union
+	// child could satisfy the resulting select
+	BOOL fPushable = pcrsOutput->ContainsAll(pexprPred->DeriveUsedColumns());
+	pcrsOutput->Release();
+	if (!fPushable)
+	{
+		return;
+	}
+
+	if (CUtils::FScalarConstTrue(pexprPred) ||
+		CUtils::FScalarConstFalse(pexprPred))
+	{
+		return;
+	}
 
 	// Replicates the logic from CNormalizer::PushThruSetOp(). We need
 	// to remap the predicate's column references to the children input
@@ -106,24 +134,35 @@ CXformSelectOverUnionAll2UnionAllOverSelect::Transform(CXformContext *pxfctxt,
 		CExpression *pexprChild = (*pexprUnionAll)[ul];
 		CColRefArray *pdrgpcrChild = (*pdrgpdrgpcrInput)[ul];
 
-		UlongToColRefMap *colref_mapping = CUtils::PhmulcrMapping(mp, pdrgpcrOutput, pdrgpcrChild);
-		CExpression *pexprRemappedPred = pexprPred->PexprCopyWithRemappedColumns(
-										mp, colref_mapping, true /*must_exist*/);
-		colref_mapping->Release();
+		pexprPred->AddRef();
+		CExpression *pexprRemappedPred = pexprPred;
+
+		// shortcut similar to CNormalizer::PushThruSetOp()
+		if (!pdrgpcrChild->Equals(pdrgpcrOutput))
+		{
+			UlongToColRefMap *colref_mapping =
+				CUtils::PhmulcrMapping(mp, pdrgpcrOutput, pdrgpcrChild);
+			pexprRemappedPred->Release();
+			pexprRemappedPred = pexprPred->PexprCopyWithRemappedColumns(
+				mp, colref_mapping, true /*must_exist*/);
+			colref_mapping->Release();
+		}
 
 		GPOS_ASSERT(pexprChild->DeriveOutputColumns()->ContainsAll(
-						pexprRemappedPred->DeriveUsedColumns()));
+			pexprRemappedPred->DeriveUsedColumns()));
 
 		pexprChild->AddRef();
-		CExpression *pexprChildSelect = CUtils::PexprLogicalSelect(mp, pexprChild, pexprRemappedPred);
+		CExpression *pexprChildSelect =
+			CUtils::PexprLogicalSelect(mp, pexprChild, pexprRemappedPred);
 		pdrgpexprSubSelects->Append(pexprChildSelect);
-
 	}
 
 	pdrgpcrOutput->AddRef();
 	pdrgpdrgpcrInput->AddRef();
-	CLogicalUnionAll *popNewUnionAll = GPOS_NEW(mp) CLogicalUnionAll(mp, pdrgpcrOutput, pdrgpdrgpcrInput);
-	CExpression *pexprResult = GPOS_NEW(mp) CExpression(mp, popNewUnionAll, pdrgpexprSubSelects);
+	CLogicalUnionAll *popNewUnionAll =
+		GPOS_NEW(mp) CLogicalUnionAll(mp, pdrgpcrOutput, pdrgpdrgpcrInput);
+	CExpression *pexprResult =
+		GPOS_NEW(mp) CExpression(mp, popNewUnionAll, pdrgpexprSubSelects);
 	pxfres->Add(pexprResult);
 }
 
