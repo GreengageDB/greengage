@@ -58,10 +58,7 @@ GRTAGS
 GTAGS
 lib*dll.def
 lib*.pc
-**/debian/*
-!**/debian/co*
-!**/debian/lint*
-!**/debian/rules
+compile_commands.json
 
 # Local excludes in root directory
 /GNUmakefile
