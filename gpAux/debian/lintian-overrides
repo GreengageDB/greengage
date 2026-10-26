@@ -31,7 +31,7 @@ package-has-unnecessary-activation-of-ldconfig-trigger
 # Timezone data files are hardlinked by upstream PostgreSQL build system
 # to save disk space (identical timezone definitions share inodes).
 # This is standard PostgreSQL behavior, not a packaging error.
-package-contains-hardlink pointing *opt/greengagedb/greengage*/share/postgresql/timezone/*
+package-contains-hardlink *opt/greengagedb/greengage*/share/postgresql/timezone/*
 
 # plperl.so is linked against libperl<version> (pinned in shlibs:Depends).
 # The versioned RUNPATH matches the exact Perl version this package depends on.
