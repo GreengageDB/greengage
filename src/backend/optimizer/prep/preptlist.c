@@ -44,13 +44,17 @@
 
 #include "access/sysattr.h"
 #include "access/table.h"
+#include "access/relation.h"
+#include "catalog/partition.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/prep.h"
 #include "optimizer/tlist.h"
+#include "parser/analyze.h"
 #include "parser/parsetree.h"
 #include "parser/parse_coerce.h"
+#include "partitioning/partdesc.h"
 #include "rewrite/rewriteHandler.h"
 #include "utils/rel.h"
 
@@ -242,16 +246,62 @@ preprocess_targetlist(PlannerInfo *root)
 	 * while we have the relation open.
 	 */
 	if (parse->onConflict)
+	{
+		/*
+		 * OnConflictUpdate may modify the distkey of the table through a view
+		 * or a rule, avoiding similar check in analyze.c.
+		 * This can lead to wrong data distribution. Add a check
+		 * here and raise error for such case.
+		 */
+		if (parse->onConflict->action == ONCONFLICT_UPDATE)
+			sanity_check_on_conflict_update(target_rte->relid,
+				parse->onConflict->onConflictSet,
+				parse->onConflict->onConflictWhere);
+
 		parse->onConflict->onConflictSet =
 			expand_targetlist(root, parse->onConflict->onConflictSet,
 							  CMD_UPDATE,
 							  result_relation,
 							  target_relation);
+	}
 
 	if (target_relation)
 		table_close(target_relation, NoLock);
 
 	return tlist;
+}
+
+/*
+ * fixup_columns_attnos
+ *
+ * Returns a bitmapset which contains attribute number of the parent
+ * table based on the given bitmapset of the child. Allocates memory
+ * in current memory context.
+ *
+ * The caller is responsible for cleaning memory up.
+ */
+static Bitmapset *
+fixup_columns_attnos(Relation parent, Relation child, Bitmapset *columns)
+{
+	Bitmapset  *result = NULL;
+	int			index = -1;
+	AttrNumber *part_attnos;
+
+	part_attnos = convert_tuples_by_name_map(RelationGetDescr(parent),
+											 RelationGetDescr(child),
+											 "could not convert row type");
+
+	while ((index = bms_next_member(columns, index)) >= 0)
+	{
+		AttrNumber 	attno = part_attnos[index - 1];
+
+		result = bms_add_member(result,
+								attno - FirstLowInvalidHeapAttributeNumber);
+	}
+
+	pfree(part_attnos);
+
+	return result;
 }
 
 
@@ -466,6 +516,69 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 			 */
 			root->is_split_update = true;
 		}
+
+		/*
+		 * If we're updating values in partitioned table, we need to be aware
+		 * of updating values at partitioning key columns. Because such updates
+		 * could lead to tuples being moved from one leaf-table to another.
+		 * And these leaf-tables could have different distribution policies
+		 * (at second stage of gpexpand some leaf-tables could be partitioned
+		 * randomly and some could be partitioned by hash). So we could
+		 * possible end up in situation where we need to remove tuple from one
+		 * segment and make it appear on other. For that we would need to use
+		 * split update as simple update is capable of deletion and insertion
+		 * of tuples only on one segment.
+		 */
+		Form_pg_class classForm = rel->rd_rel;
+		if (!key_col_updated && root->inhTargetKind != INHKIND_NONE &&
+			(classForm->relkind == RELKIND_RELATION ||
+			classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
+			classForm->relispartition &&
+			!GpPolicyIsHashPartitioned(targetPolicy))
+		{
+			Oid			rootoid = get_top_level_partition_root(RelationGetRelid(rel));
+			GpPolicy   *rootRelPolicy = GpPolicyFetch(rootoid);
+
+			if (GpPolicyIsHashPartitioned(rootRelPolicy))
+			{
+				List* ancestors = get_partition_ancestors(RelationGetRelid(rel));
+
+				ListCell *l;
+				foreach(l, ancestors)
+				{
+					Oid 		ancestoroid;
+					Relation	ancestorRel;
+					Bitmapset  *changed_cols_for_partition_check;
+
+					ancestoroid = lfirst_oid(l);
+					ancestorRel = relation_open(ancestoroid, AccessShareLock);
+
+					changed_cols_for_partition_check =
+						fixup_columns_attnos(ancestorRel, rel, changed_cols);
+
+					/* Check if we're updating partitioning key columns of
+					 * hash-distributed table. We don't need split update on
+					 * tuples from already hash distributed leaf-partition, as
+					 * they could possible be transferred only to randomly
+					 * distributed tables, where final segment doesn't matter.
+					 * Or to other hash-distributed leaf-partitions, where hash
+					 * distribution will be matched.
+					 */
+					if (has_partition_attrs(ancestorRel, changed_cols_for_partition_check, NULL))
+					{
+						root->is_split_update = true;
+					}
+					relation_close(ancestorRel, AccessShareLock);
+					bms_free(changed_cols_for_partition_check);
+
+					if (root->is_split_update)
+						break;
+				}
+				list_free(ancestors);
+			}
+			pfree(rootRelPolicy);
+		}
+		pfree(targetPolicy);
 	}
 
 	/*

@@ -1,9 +1,9 @@
-# Greengage CI Workflow
+# CI Workflows
 
-This directory contains the CI pipelines for the Greengage project,
+This directory contains the CI workflows for the Greengage project,
 orchestrating the build, test, and upload stages for containerized
-environments. The pipeline is designed to be flexible, with parameterized
-inputs for version and target operating systems, allowing it to adapt to
+environments. The workflows are designed to be flexible, with parameterized
+inputs for version and target operating systems, allowing them to adapt to
 different branches and configurations.
 
 ## ⚠️ Important Notice
@@ -14,7 +14,7 @@ repository administrator to update the **Branch Protection Rules** accordingly.
 Without this, new, deleted, or renamed jobs will not be recognized as required
 when checking Pull Requests.
 
-## Overview
+## Greengage CI
 
 The `Greengage CI` workflow triggers on:
 
@@ -33,14 +33,44 @@ operating systems:
   - Behave tests
   - Regression tests
   - Orca tests
-  - Resource group tests
+  - Resource group tests (cgroup v1)
+  - Resource group v2 tests (cgroup v2, version 7.x only)
   - JIT tests (version 7.x only)
   - pg_upgrade test (Ubuntu 22.04 only, no matrix)
 - **Upload**: Retags and pushes final Docker images to GHCR and optionally
   DockerHub. Runs for push to the default branch (retags to `latest`) and tags
   after build.
 - **Package**: Builds Debian packages and optionally tests deployment.
-  Currently supported for version 6.x only.
+  Supported for versions 6.x and 7.x.
+
+## Greengage CI (No Tests)
+
+The `Greengage CI (No Tests)` workflow follows the same build process as
+`Greengage CI`, but does not run test jobs.
+
+It is used for target operating systems where build and package validation is
+required, but the test pipeline is not required.
+
+### Key Features
+
+- **Same Build Process:** Uses the same build workflow and matrix-based
+  configuration as `Greengage CI`.
+
+- **No Tests:** Does not run any test suites.
+
+- **Non-Required Workflow:** Is not configured as a required check for pull
+  requests. Failures do not block pull request merges, but remain visible in
+  GitHub Actions for investigation.
+
+- **Additional OS Targets:** Can be used for operating systems that are not
+  included in the main CI test matrix.
+
+### Behavior
+
+1. **Build:** Builds Docker images for the configured target operating
+   systems.
+
+2. **Tests:** No test jobs are executed.
 
 ## Release Workflow
 
@@ -164,7 +194,7 @@ The workflow is parameterized to support flexibility:
 - **Target OS**: Supports multiple operating systems, defined in the matrix
   strategy. Ubuntu 22.04 uses no version suffix for backward compatibility with
   existing artifact naming; Ubuntu 24.04 support is currently available for
-  version 6.x only.
+  version 6.x and for the `build` and `package` jobs of version 7.x.
 
 ## Usage
 
@@ -235,6 +265,8 @@ of the `greengagedb/greengage-ci` repository:
   [README/REUSABLE-TESTS-REGRESSION.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-REGRESSION.md)
 - Resource group tests:
   [README/REUSABLE-TESTS-RESGROUP.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-RESGROUP.md)
+- Resource group v2 tests:
+  [README/REUSABLE-TESTS-RESGROUP-V2.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-RESGROUP-V2.md)
 - pg_upgrade test:
   [README/REUSABLE-TESTS-PG_UPGRADE.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-PG_UPGRADE.md)
 - Upload process:
