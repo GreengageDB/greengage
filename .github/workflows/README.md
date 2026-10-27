@@ -1,10 +1,10 @@
-# Greengage CI Workflow
+# CI Workflows
 
-This directory contains the CI pipelines for the Greengage project,
+This directory contains the CI workflows for the Greengage project,
 orchestrating the build, test, and upload stages for containerized
-environments. The pipeline is designed to be flexible, with parameterized
-inputs for version and target operating systems, allowing it to adapt to
-different branches and configurations.
+environments. The workflows are designed to be flexible, with parameterized
+inputs for version and target operating systems, allowing them to adapt to
+different configurations within the `6.x` branch.
 
 ## ⚠️ Important Notice
 
@@ -14,7 +14,7 @@ repository administrator to update the **Branch Protection Rules** accordingly.
 Without this, new, deleted, or renamed jobs will not be recognized as required
 when checking Pull Requests.
 
-## Overview
+## Greengage CI
 
 The `Greengage CI` workflow triggers on:
 
@@ -22,8 +22,8 @@ The `Greengage CI` workflow triggers on:
   versioned release tags (`6.*`).
 - **Pull requests** to any branch.
 
-It executes the following jobs in a matrix strategy for multiple target
-operating systems:
+It executes the following jobs in a matrix strategy for Ubuntu target operating
+systems:
 
 - **Build**: Constructs and pushes Docker images to the GitHub Container
   Registry (GHCR) with development commit SHA tag and branchname tag. Runs for
@@ -33,9 +33,43 @@ operating systems:
   - Regression tests
   - Orca tests
   - Resource group tests
+  - Coverage
 - **Upload**: Retags and pushes final Docker images to GHCR and optionally
   DockerHub. Runs for push to `6.x` (retags to `latest`) and tags (uses
   tag like `6.28.2`) after build.
+- **Package**: Builds Debian packages and tests deployment.
+
+## Greengage CI (No Tests)
+
+The `Greengage CI (No Tests)` workflow follows the same build process as
+`Greengage CI`, but does not run test jobs.
+
+It is used for target operating systems where build and package validation is
+required, but the test pipeline is not required.
+
+### Key Features
+
+- **Same Build Process:** Uses the same build workflow as `Greengage CI`,
+  with Rocky Linux as the fixed target operating system.
+
+- **No Tests:** Does not run any test suites.
+
+- **Non-Required Workflow:** Is not configured as a required check for pull
+  requests. Failures do not block pull request merges, but remain visible in
+  GitHub Actions for investigation.
+
+- **Additional OS Targets:** Used for Rocky Linux 8 and 9, which are not
+  included in the main CI test matrix.
+
+### Behavior
+
+1. **Build:** Builds Docker images for Rocky Linux 8 and 9.
+
+2. **Package:** Builds the RPM package for Rocky Linux 8 and 9 in the images
+   from the Build job, checks it with `rpmlint`, and installs it in a clean
+   container.
+
+3. **Tests:** No test jobs are executed.
 
 ## Release Workflow
 
@@ -45,11 +79,8 @@ uses a composite action to manage package deployment.
 
 ### Key Features
 
-- **Triggers:** `release: [published]` - Runs when a release is published,
-including re-publishing.
-- **Concurrency:** Uses the same concurrency group as the CI workflow
-  (`Greengage CI-${{ github.ref }}`) to ensure proper sequencing and prevent
-  race conditions.
+- **Triggers:** `release: [released]` - Runs when a release is published
+  and is not a draft or a pre-release.
 - **Multi-OS Matrix:** Builds and uploads packages for ubuntu 22.04 and
   ubuntu 24.04 in parallel.
 - **Cache-based Artifacts:** Restores built packages from cache using OS and
@@ -66,9 +97,9 @@ including re-publishing.
 
 ### Behavior
 
-1. **Normal Flow (Cache Available):** Restores packages from cache, renames
-   them to the pattern `${PACKAGE_NAME}${VERSION}.${EXT}`, and uploads to the
-   release.
+1. **Normal Flow (Cache Available):** Restores the Debian packages
+   (`.deb`, `.ddeb`) from cache, renames them to the pattern
+   `${PACKAGE_NAME}${VERSION}.${EXT}`, and uploads to the release.
 2. **Cache Miss Scenarios:**
    - **No previous build or previous build successful:** Provides instructions
      to manually trigger the CI build, then restart the release workflow.
@@ -85,8 +116,9 @@ The workflow is parameterized to support flexibility:
 - **Version**: Specifies the Greengage version (e.g., `6`), hardcoded in the
   CI workflow for branch `6.x`.
 - **Target OS**: Supports multiple operating systems, defined in the matrix
-  strategy. Ubuntu 22.04 uses no version suffix for backward compatibility with
-  existing artifact naming; Ubuntu 24.04 support is available.
+  strategy. Ubuntu 22.04 uses no version suffix for backward compatibility
+  with existing artifact naming; Ubuntu 24.04 support is available.
+  Rocky Linux 8 and 9 are handled by the `Greengage CI (No Tests)` workflow.
 
 ## Usage
 
@@ -164,10 +196,14 @@ of the `greengagedb/greengage-ci` repository:
 
 - The pipeline uses `fail-fast: false` for build and package jobs, and
   `fail-fast: true` for test jobs.
-- Tests (behave, regression, orca, resgroup) run only for pull requests.
+- Tests run only for pull requests.
 - Upload runs only for push events to `6.x` or tags (`6.*`).
-- Package job rebuilds production-ready version without debug extensions and
-  creates Debian packages for release.
+- Package job in `Greengage CI` rebuilds production-ready version without
+  debug extensions and creates Debian packages. The RPM package is built by
+  the `Greengage CI (No Tests)` workflow. The release workflow uploads only
+  Debian packages; the RPM package is not uploaded to GitHub releases.
+- The `Greengage CI (No Tests)` workflow is not a required check, so its
+  failures do not block pull request merges.
 - For `greengagedb/greengage`, DockerHub credentials (`DOCKERHUB_TOKEN`,
   `DOCKERHUB_USERNAME`) are mandatory — login failure will stop the workflow.
   For other repositories they are optional — if missing or invalid, DockerHub
