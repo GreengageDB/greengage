@@ -30,6 +30,8 @@ all_counts="count(id), count(segid), count(label), count(active), count(amount),
 cleanup() {
   psql -X -q -v ON_ERROR_STOP=0 postgres >/dev/null 2>&1 <<SQL || true
 DROP FOREIGN TABLE IF EXISTS ${read_table};
+DROP FOREIGN TABLE IF EXISTS ${read_table}_execute;
+DROP FOREIGN TABLE IF EXISTS ${read_table}_schema;
 DROP FOREIGN TABLE IF EXISTS ${denied_table};
 DROP FOREIGN TABLE IF EXISTS ${wrong_token_table};
 DROP FOREIGN TABLE IF EXISTS ${missing_token_table};
@@ -290,5 +292,26 @@ expect_failure \
   "plaintext client" \
   "SSL|TLS|socket|connection|unavailable" \
   "SELECT ${all_columns} FROM ${plaintext_table} LIMIT 1"
+
+for phase in execute schema; do
+  psql -X -q -v ON_ERROR_STOP=1 postgres <<SQL
+CREATE FOREIGN TABLE ${read_table}_${phase} (id int4) SERVER ${secure_server}
+OPTIONS (table_name 'af_perf_read_slow_${phase}');
+SQL
+  started="$(date +%s%N)"
+  if output="$(PGOPTIONS='-c statement_timeout=500' \
+      psql -X -q -v ON_ERROR_STOP=1 postgres \
+      -c "SELECT count(*) FROM ${read_table}_${phase}" 2>&1)"; then
+    echo "mTLS ${phase} cancellation unexpectedly succeeded" >&2
+    exit 1
+  fi
+  elapsed_ms=$(( ($(date +%s%N) - started) / 1000000 ))
+  if [[ "${output}" != *'canceling statement due to statement timeout'* ]] || \
+     (( elapsed_ms > 3000 )); then
+    printf 'mTLS %s cancellation failed (%s ms): %s\n' "${phase}" "${elapsed_ms}" "${output}" >&2
+    exit 1
+  fi
+  echo "PASS: mTLS/Bearer ${phase} cancellation in ${elapsed_ms} ms"
+done
 
 echo "flightsql_security_integration=ok"

@@ -51,6 +51,7 @@ extern "C"
 #include <arrow/util/config.h>
 
 #include "flightsql_endpoint.h"
+#include "flightsql_read_wait.h"
 
 #include <chrono>
 #include <exception>
@@ -221,6 +222,7 @@ public:
 
 	TupleDesc	tupdesc = nullptr;
 	arrow::flight::FlightCallOptions call_options;
+	arrow::flight::FlightCallOptions read_call_options;
 	int			max_batch_bytes = AF_DEFAULT_MAX_BATCH_BYTES;
 	std::string endpoint;
 	std::string descriptor;
@@ -270,6 +272,9 @@ public:
 	int64		fdw_rows = 0;
 	int64		varlena_values = 0;
 	int64		varlena_bytes = 0;
+	std::shared_ptr<FlightSqlReadCancellation> read_cancellation =
+		std::make_shared<FlightSqlReadCancellation>();
+	FlightSqlReadWait read_wait;
 };
 
 static void
@@ -365,6 +370,7 @@ af_flightsql_initialize_state(
 {
 	ArrowFlightConnection connection;
 	int			timeout_ms;
+	int			read_timeout_ms;
 	int			max_batch_bytes;
 	arrow::Result<arrow::flight::Location> location_result;
 
@@ -373,6 +379,7 @@ af_flightsql_initialize_state(
 
 	af_parse_flight_connection(url, &connection);
 	timeout_ms = af_get_url_int_option(url, "timeout_ms", -1, -1, INT_MAX);
+	read_timeout_ms = af_get_url_int_option(url, "read_timeout_ms", -1, -1, INT_MAX);
 	max_batch_bytes = af_get_url_int_option(url, "max_batch_bytes",
 											AF_DEFAULT_MAX_BATCH_BYTES,
 											0, INT_MAX);
@@ -422,6 +429,9 @@ af_flightsql_initialize_state(
 	af_arrow_parse_endpoint_location_allowlist(
 		state, state->endpoint_location_allowlist);
 	af_arrow_apply_auth_header(state);
+	state->read_call_options = state->call_options;
+	state->read_call_options.timeout = arrow::flight::TimeoutDuration(
+		read_timeout_ms > 0 ? (double) read_timeout_ms / 1000.0 : -1);
 }
 
 static bool
@@ -473,7 +483,8 @@ af_flightsql_open_next_endpoint(ArrowFlightStreamState *state,
 				continue;
 			}
 
-			CHECK_FOR_INTERRUPTS();
+			if (FlightSqlInterruptPending())
+				throw std::runtime_error("Flight SQL read interrupted");
 			try
 			{
 				if (state->client == nullptr ||
@@ -490,8 +501,10 @@ af_flightsql_open_next_endpoint(ArrowFlightStreamState *state,
 					state->tls_enabled = previous_tls;
 					state->client =
 						af_arrow_value_or_throw(
-							arrow::flight::FlightClient::Connect(
-								location, client_options),
+							state->read_wait.Run([&] {
+								return FlightSqlConnectReadClient(
+									location, client_options, state->read_cancellation);
+							}, state->read_cancellation),
 							"connect to Flight SQL endpoint");
 					state->current_client_location = location_text;
 					if (origin)
@@ -500,12 +513,16 @@ af_flightsql_open_next_endpoint(ArrowFlightStreamState *state,
 
 				state->reader =
 					af_arrow_value_or_throw(
-						state->client->DoGet(state->call_options,
-											 endpoint.ticket),
+						state->read_wait.Run([&] {
+							return state->client->DoGet(state->read_call_options,
+													   endpoint.ticket);
+						}, state->read_cancellation),
 						"open Flight SQL DoGet stream");
 				std::shared_ptr<arrow::Schema> schema =
 					af_arrow_value_or_throw(state->reader->GetSchema(),
 											"read Flight SQL stream schema");
+				if (FlightSqlInterruptPending())
+					throw std::runtime_error("Flight SQL read interrupted");
 
 				state->endpoint = location_text;
 				state->endpoint_index = endpoint_index;
@@ -516,6 +533,8 @@ af_flightsql_open_next_endpoint(ArrowFlightStreamState *state,
 			}
 			catch (const std::exception& ex)
 			{
+				if (FlightSqlInterruptPending())
+					throw;
 				last_error = ex.what();
 				state->reader.reset();
 				state->client.reset();
@@ -619,19 +638,29 @@ af_flightsql_execute_query_impl(
 		af_arrow_client_options(state.get());
 	state->client =
 		af_arrow_value_or_throw(
-			arrow::flight::FlightClient::Connect(state->origin_location,
-												 client_options),
+			state->read_wait.Run([&] {
+				return FlightSqlConnectReadClient(state->origin_location, client_options,
+												   state->read_cancellation);
+			}, state->read_cancellation),
 			"connect to Flight SQL server");
 	state->origin_client = state->client;
 	state->current_client_location = state->origin_location.ToString();
 
-	CHECK_FOR_INTERRUPTS();
+	if (FlightSqlInterruptPending())
+		throw std::runtime_error("Flight SQL query interrupted");
 	arrow::flight::sql::FlightSqlClient sql_client(state->client);
 	std::unique_ptr<arrow::flight::FlightInfo> info =
 		af_arrow_value_or_throw(
-			sql_client.Execute(state->call_options, query),
+			state->read_wait.Run([&] {
+				return sql_client.Execute(state->call_options, query);
+			}, state->read_cancellation),
 			"execute Flight SQL statement query");
-	CHECK_FOR_INTERRUPTS();
+	if (FlightSqlInterruptPending())
+	{
+		af_flightsql_cancel_info(state->client, state->call_options,
+								 std::move(info));
+		throw std::runtime_error("Flight SQL query interrupted");
+	}
 
 	if (info == nullptr)
 		throw std::runtime_error("Flight SQL query returned no FlightInfo");
@@ -1708,17 +1737,19 @@ af_stream_next_slot(void **flight_state, TupleTableSlot *slot,
 		{
 			uint64		phase_start_us;
 
-			CHECK_FOR_INTERRUPTS();
 			phase_start_us = af_profile_now_us();
 			arrow::flight::FlightStreamChunk chunk =
-				af_arrow_value_or_throw(state->reader->Next(),
+				af_arrow_value_or_throw(state->read_wait.Run([&] {
+					return state->reader->Next();
+				}, state->read_cancellation),
 										"read Arrow Flight record batch");
 			if (state->profile_enabled)
 			{
 				af_profile_add_us(&state->next_us, phase_start_us);
 				state->next_calls++;
 			}
-			CHECK_FOR_INTERRUPTS();
+			if (FlightSqlInterruptPending())
+				throw std::runtime_error("Flight SQL read interrupted");
 
 			if (chunk.data == nullptr)
 			{
@@ -2135,6 +2166,7 @@ af_flightsql_validate_transaction_url(const char *url)
 
 	af_parse_flight_connection(url, &connection);
 	(void) af_get_url_int_option(url, "timeout_ms", -1, -1, INT_MAX);
+	(void) af_get_url_int_option(url, "read_timeout_ms", -1, -1, INT_MAX);
 	(void) af_get_url_int_option(url, "max_batch_bytes",
 								 AF_DEFAULT_MAX_BATCH_BYTES, 0, INT_MAX);
 }
@@ -2312,6 +2344,10 @@ af_flightsql_execute_query(
 	const ArrowFlightSecurityOptions *security_options)
 {
 #ifdef USE_ARROW_FLIGHT
+	char		error[2048];
+
+	CHECK_FOR_INTERRUPTS();
+	af_flightsql_validate_transaction_url(url);
 	try
 	{
 		return af_flightsql_execute_query_impl(
@@ -2319,16 +2355,16 @@ af_flightsql_execute_query(
 	}
 	catch (const std::exception& ex)
 	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FDW_ERROR),
-				 errmsg("Flight SQL query discovery failed: %s", ex.what())));
+		snprintf(error, sizeof(error), "%s", ex.what());
 	}
 	catch (...)
 	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FDW_ERROR),
-				 errmsg("Flight SQL query discovery raised unknown C++ exception")));
+		snprintf(error, sizeof(error), "unknown C++ exception");
 	}
+	CHECK_FOR_INTERRUPTS();
+	ereport(ERROR,
+			(errcode(ERRCODE_FDW_ERROR),
+			 errmsg("Flight SQL query discovery failed: %s", error)));
 #else
 	(void) url;
 	(void) query;
@@ -2542,11 +2578,16 @@ af_flightsql_stream_next_slot(
 	const ArrowFlightSecurityOptions *security_options)
 {
 #ifdef USE_ARROW_FLIGHT
+	char		error[2048];
+	char		context[1024];
+
+	if (flight_state == nullptr)
+		elog(ERROR, "flightsql_fdw: invalid Flight stream state pointer");
+	CHECK_FOR_INTERRUPTS();
+	if (*flight_state == NULL)
+		af_flightsql_validate_transaction_url(url);
 	try
 	{
-		if (flight_state == nullptr)
-			elog(ERROR, "flightsql_fdw: invalid Flight stream state pointer");
-
 		if (*flight_state == NULL)
 		{
 			*flight_state =
@@ -2563,24 +2604,25 @@ af_flightsql_stream_next_slot(
 	{
 		ArrowFlightStreamState *state = flight_state == nullptr ? nullptr :
 			static_cast<ArrowFlightStreamState *>(*flight_state);
-		std::string context = af_format_flight_context(state);
-
-		if (flight_state != nullptr && *flight_state != NULL)
-		{
-			af_flightsql_stream_close(state);
-			*flight_state = NULL;
-		}
-		ereport(ERROR,
-				(errcode(ERRCODE_FDW_ERROR),
-				 errmsg("Flight SQL read failed%s: %s",
-						context.c_str(), ex.what())));
+		snprintf(error, sizeof(error), "%s", ex.what());
+		snprintf(context, sizeof(context), "%s",
+				 af_format_flight_context(state).c_str());
 	}
 	catch (...)
 	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FDW_ERROR),
-				 errmsg("Flight SQL client raised unknown C++ exception")));
+		snprintf(error, sizeof(error), "unknown C++ exception");
+		context[0] = '\0';
 	}
+	if (*flight_state != NULL)
+	{
+		af_flightsql_stream_close(*flight_state);
+		*flight_state = NULL;
+	}
+	/* Unwind C++ objects and stop the reader before PostgreSQL's longjmp. */
+	CHECK_FOR_INTERRUPTS();
+	ereport(ERROR,
+			(errcode(ERRCODE_FDW_ERROR),
+			 errmsg("Flight SQL read failed%s: %s", context, error)));
 #else
 	(void) rel;
 	(void) url;

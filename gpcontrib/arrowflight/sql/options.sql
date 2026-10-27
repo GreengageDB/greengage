@@ -4,12 +4,31 @@ OPTIONS (
     host 'localhost',
     port '8815',
     timeout_ms '1000',
+    read_timeout_ms '-1',
     max_endpoints '100',
     max_plan_bytes '1048576',
     batch_rows '8',
     max_batch_bytes '4096',
     endpoint_location_allowlist 'grpc+tcp://worker1.example:9005,grpc+tcp://worker2.example:9005'
 );
+
+ALTER SERVER flightsql_options_srv OPTIONS (SET read_timeout_ms '5000');
+ALTER SERVER flightsql_options_srv OPTIONS (SET read_timeout_ms '0');
+ALTER SERVER flightsql_options_srv OPTIONS (SET read_timeout_ms '-1');
+ALTER SERVER flightsql_options_srv OPTIONS (SET read_timeout_ms '-2');
+ALTER SERVER flightsql_options_srv OPTIONS (SET read_timeout_ms 'invalid');
+
+CREATE FOREIGN TABLE flightsql_bad_read_timeout (
+    id int4
+)
+SERVER flightsql_options_srv
+OPTIONS (table_name 'events', read_timeout_ms '1000');
+
+CREATE FOREIGN TABLE flightsql_bad_column_read_timeout (
+    id int4 OPTIONS (read_timeout_ms '1000')
+)
+SERVER flightsql_options_srv
+OPTIONS (table_name 'events');
 
 CREATE SERVER flightsql_bad_auth_no_tls_srv
 FOREIGN DATA WRAPPER flightsql_fdw
@@ -268,6 +287,13 @@ EXPLAIN (COSTS OFF)
 SELECT id
 FROM flightsql_predicate_types_check
 WHERE active IS UNKNOWN;
+
+-- A decimal-looking literal need not be exact on the remote SQL engine.
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_predicate_types_check
+WHERE amount IN (0.1, 0.30000000000000004)
+  AND exact_amount = 0.10000000000000000001;
 
 EXPLAIN (COSTS OFF)
 SELECT id

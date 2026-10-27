@@ -92,6 +92,7 @@ typedef struct FlightSqlModifyState
 	int			timeout_ms;
 	bool		verify_ingested_rows;
 	char	   *transaction_id;
+	char	   *write_transaction_mode;
 	char	   *write_routing_mode;
 	char	   *serialized_mpp_plan;
 	ArrowFlightSecurityOptions security_options;
@@ -371,8 +372,9 @@ flightsql_fdw_validator(PG_FUNCTION_ARGS)
 					 errmsg("flightsql_fdw host is too long")));
 		else if (strcmp(def->defname, "port") == 0)
 			(void) af_parse_int_option_value(value, "port", 1, 65535);
-		else if (strcmp(def->defname, "timeout_ms") == 0)
-			(void) af_parse_int_option_value(value, "timeout_ms", -1,
+		else if (strcmp(def->defname, "timeout_ms") == 0 ||
+				 strcmp(def->defname, "read_timeout_ms") == 0)
+			(void) af_parse_int_option_value(value, def->defname, -1,
 											 INT_MAX);
 		else if (strcmp(def->defname, "max_endpoints") == 0)
 			(void) af_parse_int_option_value(value, "max_endpoints", 1,
@@ -555,7 +557,8 @@ flightsql_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 	}
 
 	projected_attrs = flightsql_projected_attrs(baserel, baserel->relid,
-												local_exprs);
+												list_concat(list_copy(local_exprs),
+															list_copy(remote_exprs)));
 	if (projected_attrs == NIL)
 	{
 		Relation	rel = table_open(foreigntableid, NoLock);
@@ -1157,6 +1160,17 @@ flightsql_BeginForeignModify(ModifyTableState *mtstate, ResultRelInfo *rinfo,
 	state->transaction_id =
 		pstrdup(strVal(list_nth(fdw_private,
 							   FLIGHTSQL_MODIFY_TRANSACTION_ID)));
+	state->write_transaction_mode =
+		pstrdup(strVal(list_nth(fdw_private,
+							   FLIGHTSQL_MODIFY_TRANSACTION_MODE)));
+	if (Gp_role != GP_ROLE_DISPATCH &&
+		strcmp(state->write_transaction_mode,
+			   AF_FLIGHT_SQL_WRITE_TRANSACTION_REQUIRED) == 0 &&
+		state->transaction_id[0] == '\0')
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("Flight SQL required transaction was not prepared on the dispatcher"),
+				 errhint("Execute the INSERT through the coordinator, not a utility connection to a segment.")));
 	state->write_routing_mode =
 		pstrdup(strVal(list_nth(fdw_private,
 							   FLIGHTSQL_MODIFY_WRITE_ROUTING_MODE)));
@@ -1930,6 +1944,7 @@ flightsql_is_valid_option(const char *option, Oid catalog)
 			strcmp(option, "auth_token_file") == 0 ||
 			strcmp(option, "endpoint_location_allowlist") == 0 ||
 			strcmp(option, "timeout_ms") == 0 ||
+			strcmp(option, "read_timeout_ms") == 0 ||
 			strcmp(option, "max_endpoints") == 0 ||
 			strcmp(option, "max_plan_bytes") == 0 ||
 			strcmp(option, "batch_rows") == 0 ||
@@ -2172,6 +2187,8 @@ flightsql_connection_url(Oid foreigntableid)
 	char	   *port = flightsql_get_option(server->options, "port");
 	char	   *tls = flightsql_get_option(server->options, "tls");
 	char	   *timeout = flightsql_get_option(server->options, "timeout_ms");
+	char	   *read_timeout = flightsql_get_option(server->options,
+													 "read_timeout_ms");
 	StringInfoData url;
 	bool		has_query = false;
 
@@ -2188,8 +2205,14 @@ flightsql_connection_url(Oid foreigntableid)
 		has_query = true;
 	}
 	if (timeout != NULL)
+	{
 		appendStringInfo(&url, "%ctimeout_ms=%s", has_query ? '&' : '?',
 						 timeout);
+		has_query = true;
+	}
+	if (read_timeout != NULL)
+		appendStringInfo(&url, "%cread_timeout_ms=%s", has_query ? '&' : '?',
+						 read_timeout);
 	return url.data;
 }
 
@@ -2209,7 +2232,7 @@ flightsql_predicate_pushdown_enabled(Oid foreigntableid)
 
 static List *
 flightsql_projected_attrs(RelOptInfo *baserel, Index scan_relid,
-						  List *local_exprs)
+						  List *expressions)
 {
 	Bitmapset  *attrs_used = NULL;
 	List	   *result = NIL;
@@ -2218,7 +2241,8 @@ flightsql_projected_attrs(RelOptInfo *baserel, Index scan_relid,
 
 	pull_varattnos((Node *) baserel->reltarget->exprs, scan_relid,
 				   &attrs_used);
-	foreach(lc, local_exprs)
+	/* Remote-filter fields must also pass FlightInfo and DoGet type checks. */
+	foreach(lc, expressions)
 		pull_varattnos((Node *) lfirst(lc), scan_relid, &attrs_used);
 
 	if (bms_is_member(0 - FirstLowInvalidHeapAttributeNumber, attrs_used))

@@ -66,6 +66,7 @@ docker compose -p "${PROJECT_NAME}" -f "${COMPOSE_FILE}" exec -T \
       cd /home/gpadmin/gpdb_src/gpcontrib/arrowflight_test
       make -s installcheck USE_ARROW_FLIGHT=1
       bash tools/run_flightsql_clickhouse_integration.sh
+      bash tools/run_flightsql_clickhouse_correctness.sh
     '
   "
 

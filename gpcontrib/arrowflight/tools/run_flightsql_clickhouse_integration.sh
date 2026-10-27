@@ -289,7 +289,7 @@ predicate_query_count="$(
     FROM system.query_log
     WHERE type = 'QueryFinish'
       AND is_initial_query = 1
-      AND query LIKE 'SELECT id AS id FROM \"default\".${read_table} WHERE %'
+      AND query LIKE 'SELECT id AS id, label AS label, active AS active, d AS d FROM \"default\".${read_table} WHERE %'
       AND query LIKE '%id >= 123450%'
       AND query LIKE '%id < 123550%'
       AND query LIKE '%active%'
@@ -309,7 +309,7 @@ predicate_remote_rows="$(
     FROM system.query_log
     WHERE type = 'QueryFinish'
       AND is_initial_query = 1
-      AND query LIKE 'SELECT id AS id FROM \"default\".${read_table} WHERE %'
+      AND query LIKE 'SELECT id AS id, label AS label, active AS active, d AS d FROM \"default\".${read_table} WHERE %'
       AND query LIKE '%id >= 123450%'
   " | tr -d '[:space:]'
 )"
@@ -335,7 +335,7 @@ predicate_postgres_remote="$(
     FROM system.query_log
     WHERE type = 'QueryFinish'
       AND is_initial_query = 1
-      AND query LIKE 'SELECT id AS id FROM \"default\".${read_table} WHERE %'
+      AND query LIKE 'SELECT id AS id, label AS label, active AS active FROM \"default\".${read_table} WHERE %'
       AND query LIKE '%id >= 223450%'
       AND query LIKE '%id < 223550%'
       AND query LIKE '%label <> ''missing''%'

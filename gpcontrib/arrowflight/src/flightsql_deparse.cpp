@@ -313,15 +313,11 @@ flightsql_comparison_is_safe(Oid left_type, Oid right_type,
 		right == FLIGHTSQL_PREDICATE_INTEGER)
 		return true;
 
-	if ((left == FLIGHTSQL_PREDICATE_INTEGER ||
-		 left == FLIGHTSQL_PREDICATE_NUMERIC) &&
-		(right == FLIGHTSQL_PREDICATE_INTEGER ||
-		 right == FLIGHTSQL_PREDICATE_NUMERIC))
-		return true;
-
-	if (left == FLIGHTSQL_PREDICATE_FLOAT &&
-		right == FLIGHTSQL_PREDICATE_FLOAT)
-		return flightsql_operator_is_equality(operator_name);
+	/*
+	 * SQL numeric literals need not have PostgreSQL's type or precision on the
+	 * remote server.  Keep float/numeric comparisons (including IN) local:
+	 * local rechecks cannot recover rows discarded by an inexact remote filter.
+	 */
 
 	if (left == FLIGHTSQL_PREDICATE_BOOL &&
 		right == FLIGHTSQL_PREDICATE_BOOL)

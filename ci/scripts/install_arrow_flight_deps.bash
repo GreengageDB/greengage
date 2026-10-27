@@ -9,6 +9,7 @@ install_ubuntu_deps() {
 	apt-get update
 	apt-get install -y -V \
 		ca-certificates \
+		libgrpc++-dev \
 		libprotobuf-dev \
 		lsb-release \
 		pkg-config \
@@ -56,6 +57,7 @@ install_rhel_deps() {
 	dnf config-manager --set-enabled epel || :
 	dnf config-manager --set-enabled powertools || :
 	dnf config-manager --set-enabled crb || :
+	dnf install -y grpc-devel
 
 	if [ -n "${arrow_package_version}" ]; then
 		dnf install -y \
@@ -81,4 +83,4 @@ else
 	exit 1
 fi
 
-pkg-config --exists arrow arrow-flight arrow-flight-sql protobuf
+pkg-config --exists arrow arrow-flight arrow-flight-sql protobuf grpc++

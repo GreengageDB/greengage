@@ -665,12 +665,14 @@ class BenchmarkRecordBatchReader : public arrow::RecordBatchReader
 	BenchmarkRecordBatchReader(
 		std::vector<std::shared_ptr<arrow::RecordBatch>> batches,
 		std::shared_ptr<arrow::Schema> schema, int delay_ms,
-		std::atomic<int> *active_reads, std::mutex *active_log_mutex)
+		std::atomic<int> *active_reads, std::mutex *active_log_mutex,
+		const arrow::flight::ServerCallContext *context)
 		: batches_(std::move(batches)),
 		  schema_(std::move(schema)),
 		  delay_ms_(delay_ms),
 		  active_reads_(active_reads),
-		  active_log_mutex_(active_log_mutex)
+		  active_log_mutex_(active_log_mutex),
+		  context_(context)
 	{
 		std::lock_guard<std::mutex> lock(*active_log_mutex_);
 		const int active = active_reads_->fetch_add(1) + 1;
@@ -697,9 +699,13 @@ class BenchmarkRecordBatchReader : public arrow::RecordBatchReader
 	arrow::Status
 	ReadNext(std::shared_ptr<arrow::RecordBatch> *batch) override
 	{
-		if (delay_ms_ > 0)
+		for (int remaining = delay_ms_; remaining > 0; remaining -= 10)
+		{
+			if (context_->is_cancelled())
+				return arrow::Status::Cancelled("benchmark read cancelled");
 			std::this_thread::sleep_for(
-				std::chrono::milliseconds(delay_ms_));
+				std::chrono::milliseconds(std::min(remaining, 10)));
+		}
 
 		if (next_batch_ >= batches_.size())
 		{
@@ -717,6 +723,7 @@ class BenchmarkRecordBatchReader : public arrow::RecordBatchReader
 	int			delay_ms_;
 	std::atomic<int> *active_reads_;
 	std::mutex *active_log_mutex_;
+	const arrow::flight::ServerCallContext *context_;
 	size_t		next_batch_ = 0;
 };
 
@@ -977,7 +984,7 @@ class BenchmarkFlightSqlServer
 
 	arrow::Result<std::unique_ptr<arrow::flight::FlightInfo>>
 	GetFlightInfoStatement(
-		const arrow::flight::ServerCallContext & /*context*/,
+		const arrow::flight::ServerCallContext &context,
 		const arrow::flight::sql::StatementQuery &command,
 		const arrow::flight::FlightDescriptor &descriptor) override
 	{
@@ -990,6 +997,8 @@ class BenchmarkFlightSqlServer
 		std::cerr << "flightsql_benchmark_query number="
 				  << statement_number << " sql=" << command.query
 				  << std::endl;
+		if (QueryReferencesTable(command.query, "af_perf_read_slow_execute"))
+			ARROW_RETURN_NOT_OK(WaitReadPhase(context, "Execute"));
 
 		if (QueryReferencesTable(command.query, kMetricsTable))
 		{
@@ -1006,7 +1015,11 @@ class BenchmarkFlightSqlServer
 				QueryReferencesTable(command.query, "af_perf_read_schema_duplicate") ?
 				"duplicate:" :
 				QueryReferencesTable(command.query, "af_perf_read_schema_alias") ?
-				"alias:" : "";
+				"alias:" :
+				QueryReferencesTable(command.query, "af_perf_read_slow_batch") ?
+				"slow_batch:" :
+				QueryReferencesTable(command.query, "af_perf_read_slow_schema") ?
+				"slow_schema:" : "";
 			const int endpoint_count =
 				QueryEndpointCount(command.query, kReadTable, endpoints_);
 
@@ -1026,6 +1039,12 @@ class BenchmarkFlightSqlServer
 							std::to_string(endpoint_count) + ":" +
 							std::to_string(endpoint_index),
 							advertised_location_));
+					if (QueryReferencesTable(command.query, "af_perf_read_blackhole"))
+					{
+						ARROW_ASSIGN_OR_RAISE(auto blackhole,
+							arrow::flight::Location::ForGrpcTcp("greengage", 19090));
+						endpoint.locations = {blackhole};
+					}
 				endpoints.push_back(std::move(endpoint));
 			}
 			total_rows =
@@ -1075,7 +1094,7 @@ class BenchmarkFlightSqlServer
 
 	arrow::Result<std::unique_ptr<arrow::flight::FlightDataStream>>
 	DoGetStatement(
-		const arrow::flight::ServerCallContext & /*context*/,
+		const arrow::flight::ServerCallContext &context,
 		const arrow::flight::sql::StatementQueryTicket &command) override
 	{
 		std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
@@ -1084,7 +1103,7 @@ class BenchmarkFlightSqlServer
 		int			endpoint_count = -1;
 		std::string read_handle = command.statement_handle;
 		std::string variant;
-		for (const char *prefix : {"duplicate:", "alias:"})
+		for (const char *prefix : {"duplicate:", "alias:", "slow_batch:", "slow_schema:"})
 		{
 			if (read_handle.rfind(prefix, 0) == 0)
 			{
@@ -1093,6 +1112,8 @@ class BenchmarkFlightSqlServer
 				break;
 			}
 		}
+		if (variant == "slow_schema:")
+			ARROW_RETURN_NOT_OK(WaitReadPhase(context, "DoGetSchema"));
 
 		if (command.statement_handle == kMetricsTable)
 		{
@@ -1136,10 +1157,34 @@ class BenchmarkFlightSqlServer
 		if (schema == nullptr)
 			schema = batches.front()->schema();
 		auto reader = std::make_shared<BenchmarkRecordBatchReader>(
-			std::move(batches), std::move(schema), read_delay_ms_,
-			&active_reads_, &active_log_mutex_);
+			std::move(batches), std::move(schema),
+			variant == "slow_batch:" ? 10000 : read_delay_ms_,
+			&active_reads_, &active_log_mutex_, &context);
 
 		return std::make_unique<arrow::flight::RecordBatchStream>(reader);
+	}
+
+	arrow::Status WaitReadPhase(const arrow::flight::ServerCallContext &context,
+							   const char *phase)
+	{
+		{
+			std::lock_guard<std::mutex> lock(active_log_mutex_);
+
+			std::cerr << "flightsql_wait_open phase=" << phase
+					  << " active=" << ++active_waits_ << std::endl;
+		}
+		for (int elapsed = 0; elapsed < 10000 && !context.is_cancelled(); elapsed += 10)
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		const bool cancelled = context.is_cancelled();
+		{
+			std::lock_guard<std::mutex> lock(active_log_mutex_);
+
+			std::cerr << "flightsql_wait_close phase=" << phase
+					  << " cancelled=" << cancelled
+					  << " active=" << --active_waits_ << std::endl;
+		}
+		return cancelled ? arrow::Status::Cancelled("read phase cancelled") :
+			arrow::Status::OK();
 	}
 
 	arrow::Result<int64_t>
@@ -2106,6 +2151,7 @@ class BenchmarkFlightSqlServer
 		std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
 		":" + std::to_string(std::random_device{}());
 	std::atomic<int> active_reads_{0};
+	int active_waits_ = 0;
 	std::atomic<int> active_ingests_{0};
 	std::atomic<bool> mpp_janitor_stop_{false};
 	std::mutex active_log_mutex_;

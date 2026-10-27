@@ -135,8 +135,11 @@ compose exec -T greengage bash -lc "
     cd /home/gpadmin/gpdb_src/gpcontrib/arrowflight_test
     make -s installcheck USE_ARROW_FLIGHT=1
     bash tools/run_flightsql_mpp_route_test.sh
+    bash tools/run_flightsql_read_client_test.sh
     bash tools/run_flightsql_synthetic_integration.sh
     bash tools/run_flightsql_schema_integration.sh
+    bash tools/run_flightsql_timeout_integration.sh
+    bash tools/run_flightsql_cancel_integration.sh
     bash tools/run_flightsql_mpp_integration.sh
     bash tools/run_flightsql_security_integration.sh
     FLIGHTSQL_TXN_HOST=flightsql-txn-faults \
@@ -150,6 +153,9 @@ compose exec -T greengage bash -lc "
       bash tools/run_flightsql_transaction_integration.sh
   '
 "
+
+require_log flightsql-synthetic-delay 'flightsql_wait_close phase=Execute cancelled=1 active=0'
+require_log flightsql-synthetic-delay 'flightsql_wait_close phase=DoGetSchema cancelled=1 active=0'
 
 abandoned_operation="$(
   compose exec -T flightsql-mpp-control \

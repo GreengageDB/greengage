@@ -5,6 +5,7 @@ OBJS = \
 	src/arrowflight.o \
 	src/flightsql_deparse.o \
 	src/flightsql_reader.o \
+	src/flightsql_read_client.o \
 	src/flightsql_fdw.o \
 	src/flightsql_mpp.o \
 	src/arrowflight_common.o \
@@ -31,8 +32,8 @@ MPP_PROTO_STAMP = $(MPP_PROTO_DIR)/.flightsql_mpp.stamp
 OBJS += src/generated/flightsql_mpp.pb.o
 PG_CPPFLAGS += -DUSE_ARROW_FLIGHT \
 	-I$(CURDIR)/$(MPP_PROTO_DIR) \
-	$(shell pkg-config --cflags arrow arrow-flight arrow-flight-sql protobuf)
-SHLIB_LINK += $(shell pkg-config --libs arrow arrow-flight arrow-flight-sql protobuf)
+	$(shell pkg-config --cflags arrow arrow-flight arrow-flight-sql protobuf grpc++)
+SHLIB_LINK += $(shell pkg-config --libs arrow arrow-flight arrow-flight-sql protobuf grpc++)
 
 $(MPP_PROTO_STAMP): $(MPP_PROTO)
 	$(MKDIR_P) $(MPP_PROTO_DIR)

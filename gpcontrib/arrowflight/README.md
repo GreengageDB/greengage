@@ -64,17 +64,18 @@ return at least `N` independently consumable endpoints.
 Greengage represents the source scan with a `Strewn` locus. Endpoint assignment balances Flight streams independently of
 Greengage table distribution, so the planner adds Motion when a later operation requires a specific distribution.
 
-The remote SQL selects only columns required by the local plan and includes predicates from the portable subset
-described below. Filter columns that are not otherwise needed are not returned. `EXPLAIN` shows the generated Flight SQL
-query without executing it.
+The remote SQL selects columns required by the local plan and by pushed predicates.
+Returning filter columns lets the FDW check their Arrow types and timezone metadata
+against the foreign table definition, even when the SELECT list does not use them.
+`EXPLAIN` shows the generated Flight SQL query without executing it.
 
 Predicate pushdown is intentionally conservative because Flight SQL servers may use different SQL dialects. The FDW
 pushes:
 
 - `AND`, `OR`, and `NOT`;
-- `=`, `<>`, `<`, `<=`, `>`, and `>=` for integers, numeric, date, and whole-second timestamp literals without time
+- `=`, `<>`, `<`, `<=`, `>`, and `>=` for integers, date, and whole-second timestamp literals without time
   zone;
-- `=` and `<>` for boolean, finite floating-point, text, varchar, and enum values;
+- `=` and `<>` for boolean, text, varchar, and enum values;
 - `IS NULL` and `IS NOT NULL` on columns, bare boolean columns, boolean
   `IS UNKNOWN` null tests, and constant `IN`/`NOT IN` lists with at most 1000 non-null values.
 
@@ -82,7 +83,11 @@ Functions, expression casts, parameters, boolean `IS TRUE` tests, time and fract
 ordering, `char`, timezone-dependent timestamps, and non-portable types remain local. Lists containing `NULL` also
 remain local because `NOT IN` null semantics differ between SQL engines. Conjuncts are classified separately, so a
 supported `id > 0` is still pushed when another `AND` conjunct uses an unsupported function. An `OR` is pushed only when
-every branch is safe. Set `predicate_pushdown=false` on a server or table to keep all predicates in Greengage.
+every branch is safe. Comparisons and `IN` lists involving `float4`, `float8`, or
+`numeric` stay local: SQL engines can infer different types and precision for the
+same numeric literal. This also avoids dependence on `extra_float_digits` when
+formatting float constants. Set `predicate_pushdown=false` on a server or table
+to keep all predicates in Greengage.
 
 ### Write
 
@@ -146,7 +151,8 @@ setup when required, and plan validation have succeeded.
   transaction per local transaction, reuses it for subsequent INSERTs through the same foreign server,
   passes its opaque transaction ID to every QE ingest, rolls it back on Greengage abort, and commits it
   during Greengage `PRE_COMMIT`. The statement fails before streaming if the server does not explicitly advertise bulk
-  ingest and transaction support.
+  ingest and transaction support. Direct utility connections to segments are
+  rejected because they have no coordinator-prepared transaction ID.
 
 Only one foreign server can participate in `required` writes within a local transaction. A write through a second
 server is rejected before its remote execution. Nested writes inside an existing remote transaction require the
@@ -163,6 +169,11 @@ This makes the remote QE streams all-or-nothing, but it is not an XA transaction
 database. A failure after the remote `PRE_COMMIT` succeeds but before the local commit completes can leave the two
 systems inconsistent. Prepared distributed transactions are rejected. Do not use `auto_commit` where even remote-stream
 atomicity is required.
+
+The ClickHouse integration tests cover `origin` with `auto_commit`.
+`required` and `planned` are tested against the development service, not a
+third-party database implementing those capabilities. They require a separate
+compatibility test with the intended production service.
 
 #### Planned write service contract
 
@@ -199,6 +210,20 @@ ingest stream after `ExecuteIngest` starts.
 
 Active readers and writers are registered with the Greengage
 `ResourceOwner`. Query cancellation, errors, and transaction abort close Flight streams and release client resources.
+Read cancellation covers `Execute`/`GetFlightInfo`, connection establishment,
+the initial `DoGet` schema, and subsequent batches. The backend polls its
+interrupt flags while a signal-blocked worker performs the RPC. On cancellation,
+it cancels the active gRPC context and waits for the worker before raising the
+PostgreSQL error. The worker does not call PostgreSQL APIs.
+
+The extension uses Arrow's transport interface to retain a cancellation handle
+before the first response arrives. Arrow still decodes the IPC schemas,
+dictionaries, and RecordBatches; no Arrow library patch is required. The remote
+service must observe RPC cancellation to stop its own query work.
+
+`timeout_ms` bounds discovery/control RPCs, while `read_timeout_ms` covers each
+complete `DoGet`, including local batch consumption. Neither is an idle timeout.
+
 Read rescans are not supported; a plan that requires rescan fails instead of replaying an already consumed stream.
 Abort callbacks share a five-second budget for remote cleanup, even when `timeout_ms` has no deadline. A shorter
 configured timeout still applies. Failed cleanup is reported as a warning; a disconnected server must eventually
@@ -218,7 +243,8 @@ CREATE SERVER analytics_flightsql
         mpp_execute 'all segments',
         host 'clickhouse.example.internal',
         port '9005',
-        timeout_ms '60000'
+        timeout_ms '60000',
+        read_timeout_ms '600000'
         );
 ```
 
@@ -273,7 +299,8 @@ The `rows` option is only a planner estimate. It does not limit the number of ro
 | `tls_client_key_file`         |           none | PEM client private key for mTLS. Must be paired with the client certificate.                                                                                          |
 | `auth_token_file`             |           none | File containing a Bearer token sent with Flight RPCs.                                                                                                                 |
 | `endpoint_location_allowlist` |           none | Comma-separated exact `grpc+tcp://host:port` or `grpc+tls://host:port` locations allowed in `FlightInfo` and planned write routes. Without it, only the configured server location is allowed. |
-| `timeout_ms`                  |           `-1` | Flight RPC timeout in milliseconds; `-1` means no deadline.                                                                                                           |
+| `timeout_ms`                  |           `-1` | Deadline in milliseconds for discovery/control RPCs and each complete write RPC. Does not limit read `DoGet` streams. `-1` or `0` disables it. |
+| `read_timeout_ms`             |           `-1` | Deadline for each complete `DoGet` stream, including schema retrieval and time spent consuming rows locally. `-1` or `0` disables it. Independent of `timeout_ms`. |
 | `max_endpoints`               |        `10000` | Maximum endpoints accepted in one `FlightInfo`.                                                                                                                       |
 | `max_plan_bytes`              |     `16777216` | Maximum serialized `FlightInfo` or MPP ingest plan size dispatched to QEs.                                                                                            |
 | `batch_rows`                  |         `8192` | Maximum rows per outgoing ingest batch.                                                                                                                               |
@@ -339,7 +366,8 @@ CREATE SERVER analytics_flightsql
         auth_token_file '/etc/greengage/flightsql/token',
         endpoint_location_allowlist
         'grpc+tls://flight-worker-1.example.internal:9005,grpc+tls://flight-worker-2.example.internal:9005',
-        timeout_ms '60000'
+        timeout_ms '60000',
+        read_timeout_ms '600000'
         );
 ```
 
@@ -403,10 +431,11 @@ Greengage timestamp range.
 
 ## Build
 
-With Arrow C++ development packages available through `pkg-config`:
+With Arrow C++, Protobuf and gRPC C++ development packages available through
+`pkg-config`:
 
 ```bash
-pkg-config --exists arrow arrow-flight arrow-flight-sql protobuf
+pkg-config --exists arrow arrow-flight arrow-flight-sql protobuf grpc++
 make -C gpcontrib/arrowflight USE_ARROW_FLIGHT=1
 make -C gpcontrib/arrowflight install USE_ARROW_FLIGHT=1
 make -C gpcontrib/arrowflight installcheck USE_ARROW_FLIGHT=1
@@ -447,7 +476,7 @@ Verify the architecture and Arrow C++ dependencies:
 docker run --rm greengage7-u22-arm64-dev:latest \
   bash -lc '
     test "$(uname -m)" = aarch64
-    pkg-config --exists arrow arrow-flight arrow-flight-sql protobuf
+    pkg-config --exists arrow arrow-flight arrow-flight-sql protobuf grpc++
   '
 ```
 
@@ -552,7 +581,11 @@ The measured peak therefore includes that server-side materialization.
   transactions are not supported.
 - Flight RPC failures are not retried automatically. Rerunning an
   `auto_commit` write can duplicate rows unless the remote ingest is idempotent.
-- `timeout_ms` defaults to no deadline. Production servers should set a finite timeout appropriate for their workload.
+- `timeout_ms` and `read_timeout_ms` default to no deadline. Set finite deadlines
+  appropriate for the workload. `read_timeout_ms` covers an entire `DoGet`, not
+  idle time between batches; slow local consumers count against it.
+- Cancelling a read cancels its active RPC; stopping the remote computation
+  still depends on the service's cancellation handling.
 - `max_batch_bytes` is an approximate writer flush threshold. The completed batch queue is bounded and rejects a single
   retained batch larger than its queue budget, but Arrow builders and gRPC buffers remain outside that bound.
 - IPv6 Flight SQL connection URLs are not supported.
