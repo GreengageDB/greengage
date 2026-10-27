@@ -66,6 +66,7 @@ Standard debhelper flow with overrides:
 | `dh_dwz` | Skipped |
 | `dh_fixperms` | Strips executable bit from `.py`, `.pm`, `.sh` files without a shebang |
 | `dh_gencontrol` | Standard |
+| `dh_strip` | Standard, then installs `debian/dbgsym-lintian-overrides` into the `-dbgsym` package |
 
 ## Environment Variables
 
@@ -114,3 +115,4 @@ make -C ./gpAux version-info
 | `debian/rules` | Debhelper overrides, `make dist` integration |
 | `debian/control` | Package metadata, dependencies |
 | `debian/lintian-overrides` | Suppressed lintian warnings |
+| `debian/dbgsym-lintian-overrides` | Suppressed lintian warnings for the `-dbgsym` package |
