@@ -21,6 +21,7 @@ The main components are:
 - `debian/compat` - Debhelper compatibility level
 - `debian/control` - Package metadata and dependencies
 - `debian/copyright` - Copyright information
+- `debian/dbgsym-lintian-overrides` - Lintian warning overrides for the `-dbgsym`
 - `debian/lintian-overrides` - Lintian warning overrides
 - `rpm/greengage6.spec` - RPM spec file defining package metadata and build steps
 - `rpm/greengage6.rpmlintrc` - rpmlint warning overrides, analogous to
@@ -32,8 +33,9 @@ The main components are:
 
 1. **Version Management**:
    - `../VERSION`: Generates version file using `../getversion`
-   - `version-vars`: Sets build variables (`FULL_VERSION`, `PACKAGE_VERSION`,
-     `VERSION_CODENAME`, `IS_RELEASE`, `BUILD_TYPE`) from `../VERSION` file
+   - `version-vars`: Sets build variables (`FULL_VERSION`, `VERSION_CODENAME`,
+     `PACKAGE_VERSION` (with `~` instead of `-`), `IS_RELEASE`, `BUILD_TYPE`)
+     from `../VERSION` file
    - `version-info`: Displays version information for debugging
 
 2. **Packaging Targets**:
@@ -60,6 +62,8 @@ The `debian/rules` file uses debhelper (dh) with custom overrides:
    - Uses the project's `make dist` target for installation
    - Unsets standard compiler flags to avoid conflicts
    - Enables parallel builds using all available CPU cores
+   - Installs `debian/dbgsym-lintian-overrides` into the `-dbgsym` package
+     after `dh_strip`
 
 3. **Control File Generation**:
    - Injects Python dependencies via `-VpythonRequires`, `-VpythonConflicts`
@@ -149,7 +153,7 @@ make -C ./gpAux pkg-rpm GPROOT=/custom/path GPDIR=custom_dir
 
 1. **Version Generation**:
    - Reuses `version-vars` (same as Debian) to derive `PACKAGE_VERSION`,
-     normalized for RPM (`+`/`-` replaced with `.`) and passed to
+     normalized for RPM (`+`/`-` replaced with `.`, `~` is kept) and passed to
      `rpmbuild` via `--define gpdb_version`
 
 2. **Package Building**:
