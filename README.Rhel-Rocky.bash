@@ -28,6 +28,7 @@ case "$OS_VERSION" in
         exit 1
         ;;
 esac
+dnf -y update
 # shellcheck disable=SC2086 # intentional: word splitting for package lists
 dnf -y install \
     apr-devel \

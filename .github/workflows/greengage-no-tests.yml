@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   build:
+    name: Docker image on Rocky Linux ${{ matrix.target_os_version }}
     strategy:
       fail-fast: false
       matrix:
@@ -33,6 +34,7 @@ jobs:
 
   package:
     needs: build
+    name: RPM on Rocky Linux ${{ matrix.target_os_version }}
     strategy:
       fail-fast: false
       matrix:
