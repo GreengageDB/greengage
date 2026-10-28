@@ -346,7 +346,7 @@ PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print 
 MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
 DATE_RFC := $(shell date -R)
 ARTIFACTS_DIR := $(CURDIR)/../Package
-RPM_TOPDIR := $(CURDIR)/../RPM
+RPM_TEMPDIR := $(CURDIR)/../RPM
 
 ../VERSION :
 	@echo "Update $@"
@@ -403,19 +403,19 @@ pkg-rpm : GPDIR    = $(PACKAGE_NAME)
 pkg-rpm : RPM_ARCH = $(shell rpm --eval '%{_arch}')
 pkg-rpm : version-vars
 	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME), ARCH=$(RPM_ARCH)"
-	@rm -rf $(RPM_TOPDIR)
-	@mkdir -p $(addprefix $(RPM_TOPDIR)/,BUILD BUILDROOT RPMS SOURCES SPECS SRPMS)
+	@rm -rf $(RPM_TEMPDIR)
+	@mkdir -p $(addprefix $(RPM_TEMPDIR)/,BUILD BUILDROOT RPMS SOURCES SPECS SRPMS)
 	@rpmbuild -bb \
-		--define "_topdir $(RPM_TOPDIR)" \
+		--define "_topdir $(RPM_TEMPDIR)" \
 		--define "gpdb_version $(subst +,.,$(subst -,.,$(PACKAGE_VERSION)))" \
 		--define "gpdb_release 1" \
 		--define "gproot $(GPROOT)" \
 		--define "gpdir $(GPDIR)" \
 		--define "sourcedir $(CURDIR)/.." \
 		rpm/greengage7.spec
-	@rpmlint -f rpm/greengage7.rpmlintrc $(RPM_TOPDIR)/RPMS/$(RPM_ARCH)/*.rpm
+	@rpmlint -f rpm/greengage7.rpmlintrc $(RPM_TEMPDIR)/RPMS/$(RPM_ARCH)/*.rpm
 	@mkdir -p $(ARTIFACTS_DIR)
-	@mv -f $(RPM_TOPDIR)/RPMS/$(RPM_ARCH)/*.rpm $(ARTIFACTS_DIR)/
+	@mv -f $(RPM_TEMPDIR)/RPMS/$(RPM_ARCH)/*.rpm $(ARTIFACTS_DIR)/
 
 .PHONY: pkg pkg-deb pkg-rpm changelog version-vars version-info
 
