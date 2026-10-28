@@ -163,8 +163,8 @@ Docker, see [README.Linux.md](../README.Linux.md) together with
 
 ### Package Dependencies
 
-The package dependencies and conflicts are listed in the table in
-[Updating Package Metadata](#updating-package-metadata).
+The package dependencies and conflicts are defined in the files listed in the
+[Updating Package Metadata](#updating-package-metadata) section.
 
 The RPM package also requires the library `libxerces-c-3.2.so` (package
 `xerces-c`), which comes from EPEL on Rocky Linux 9. Enable EPEL before
