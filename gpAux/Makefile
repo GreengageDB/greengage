@@ -176,8 +176,8 @@ $(GPPGDIR)/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	cd $(GPPGDIR) && CC="$(strip $(BLD_CC) $(BLD_CFLAGS))"    \
                      CFLAGS=$(INSTCFLAGS) 					  \
                      ./configure $(CONFIGFLAGS)               \
-                         --prefix=$(DISTPATH)                  \
-                         --mandir=$(DISTPATH)/man
+                         --prefix=$(INSTPREFIX)                  \
+                         --mandir=$(INSTPREFIX)/man
 
 Debug/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	rm -rf $(INSTLOC)
@@ -186,8 +186,8 @@ Debug/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	cd Debug && CC="$(strip $(BLD_CC) $(BLD_CFLAGS))"        \
                 CFLAGS=$(INSTCFLAGS)					     \
                 ./configure $(CONFIGFLAGS)                   \
-                    --prefix=$(DISTPATH)                      \
-                    --mandir=$(DISTPATH)/man
+                    --prefix=$(INSTPREFIX)                      \
+                    --mandir=$(INSTPREFIX)/man
 
 Release/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	rm -rf $(INSTLOC)
@@ -196,8 +196,8 @@ Release/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	cd Release && CC="$(strip $(BLD_CC) $(BLD_CFLAGS))"     \
                   CFLAGS=$(INSTCFLAGS) 	                    \
                   ./configure $(CONFIGFLAGS)                \
-                      --prefix=$(DISTPATH)                   \
-                      --mandir=$(DISTPATH)/man
+                      --prefix=$(INSTPREFIX)                   \
+                      --mandir=$(INSTPREFIX)/man
 
 #---------------------------------------------------------------------
 # autoconf
@@ -291,6 +291,7 @@ endif
 
 devel : INSTCFLAGS=$(DEBUGFLAGS)
 devel : INSTLOC=$(DESTDIR)$(DEVPATH)
+devel : INSTPREFIX=$(DEVPATH)
 devel : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDEVPATH)
 devel : CONFIGFLAGS+= --enable-cassert --enable-debug --enable-debug-extensions --enable-depend
 ifdef ENABLE_VPATH_BUILD
@@ -308,6 +309,7 @@ endif
 
 dist : INSTCFLAGS=$(OPTFLAGS)
 dist : INSTLOC=$(DESTDIR)$(DISTPATH)
+dist : INSTPREFIX=$(DISTPATH)
 dist : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDISTPATH)
 ifdef ENABLE_VPATH_BUILD
 dist : BUILDDIR=Release
@@ -320,6 +322,7 @@ endif
 
 dist_prof : INSTCFLAGS=$(PROFFLAGS)
 dist_prof : INSTLOC=$(DESTDIR)$(DISTPATH)
+dist_prof : INSTPREFIX=$(DISTPATH)
 dist_prof : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDISTPATH)
 ifdef ENABLE_VPATH_BUILD
 dist_prof : BUILDDIR=Release
@@ -331,6 +334,7 @@ dist_prof : gccVersionCheck GPROOTDEP RECONFIG $(ISCONFIG)
 endif
 	$(BUILD_STEPS)
 
+dist_faultinj : INSTPREFIX=$(DISTPATH)
 dist_faultinj : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDISTPATH)
 ifdef ENABLE_VPATH_BUILD
 dist_faultinj : BUILDDIR=Release
@@ -360,7 +364,7 @@ RPM_TOPDIR := $(CURDIR)/../RPM
 
 version-vars : ../VERSION
 	$(eval FULL_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION))
-	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g' ../VERSION))
+	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's/ .*//; s/-(?=\w)/~/g' ../VERSION))
 	$(eval VERSION_CODENAME := $(shell . /etc/os-release && echo $$VERSION_CODENAME))
 	$(eval IS_RELEASE := $(if $(findstring +dev,$(PACKAGE_VERSION)),no,yes))
 	$(eval BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build))
@@ -756,7 +760,7 @@ distclean :
 	@if [ -d Release -a -f Release/GNUmakefile ]; then cd Release; $(MAKE) distclean; fi
 	@if [ -d $(GPPGDIR) -a -f $(GPPGDIR)/GNUmakefile ]; then cd $(GPPGDIR); $(MAKE) distclean; fi
 	@if [ -d $(GPMGMT)/bin ]; then cd $(GPMGMT)/bin; $(MAKE) distclean; fi
-	@if [ -d .git ] ; then rm -f VERSION; fi
+	@if [ -d ../.git ] ; then rm -f ../VERSION; fi
 	@rm -f env.sh
 
 distprep : $(ISCONFIG)
