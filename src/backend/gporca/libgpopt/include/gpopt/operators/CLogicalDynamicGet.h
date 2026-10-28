@@ -113,6 +113,32 @@ public:
 		return m_selected_parts;
 	}
 
+	// caller owns the result
+	IMdIdArray *
+	PdrgpmdidSelectedParts(CMemoryPool *mp) const
+	{
+		IMdIdArray *all_part_mdids = this->GetPartitionMdids();
+
+		if (nullptr == m_selected_parts)
+		{
+			all_part_mdids->AddRef();
+			return all_part_mdids;
+		}
+
+		IMdIdArray *selectedMdids = GPOS_NEW(mp) IMdIdArray(mp);
+		for (ULONG ul = 0; ul < all_part_mdids->Size(); ++ul)
+		{
+			if (m_selected_parts->Get(ul))
+			{
+				IMDId *partMdid = (*all_part_mdids)[ul];
+				partMdid->AddRef();
+				selectedMdids->Append(partMdid);
+			}
+		}
+
+		return selectedMdids;
+	}
+
 	// operator specific hash function
 	ULONG HashValue() const override;
 
