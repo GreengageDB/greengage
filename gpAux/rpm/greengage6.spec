@@ -76,6 +76,7 @@ find %{buildroot}%{prefix} -type f \( -perm -u+x -o -name "*.so*" \) \
 
 %files
 %{prefix}
+%dir %{gproot}
 
 %changelog
 * %(LC_ALL=C date "+%%a %%b %%d %%Y") Greengage Team - %{version}-%{release}
