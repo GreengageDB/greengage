@@ -17,6 +17,7 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/table.h"
+#include "access/transam.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
@@ -45,6 +46,7 @@
 #include "catalog/pg_ts_config.h"
 #include "catalog/pg_ts_dict.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_user_mapping.h"
 #include "commands/alter.h"
 #include "commands/dbcommands.h"
@@ -652,6 +654,13 @@ checkSharedDependencies(Oid classId, Oid objectId,
 	StringInfoData alldescs;
 
 	/*
+	 * GPDB: temporary objects of other sessions kept in memory may depend on
+	 * the object through rows that cannot be seen here: fail if any does
+	 * (see tempcat.c).
+	 */
+	tempcat_lock_out_users(classId, objectId, 0);
+
+	/*
 	 * We limit the number of dependencies reported to the client to
 	 * MAX_REPORTED_DEPS, since client software may not deal well with
 	 * enormous error strings.  The server log always gets a full report.
@@ -894,6 +903,14 @@ copyTemplateDependencies(Oid templateDbId, Oid newDbId)
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
 		HeapTuple	newtup;
+
+		/*
+		 * GPDB: not the rows of this session's temporary objects kept in
+		 * memory (see tempcat.c), which the scan returns too: their objects
+		 * do not exist in the new database.
+		 */
+		if (IsTempcatTid(&tup->t_self))
+			continue;
 
 		newtup = heap_modify_tuple(tup, sdepDesc, values, nulls, replace);
 		CatalogTupleInsertWithInfo(sdepRel, newtup, indstate);
@@ -1257,6 +1274,10 @@ isSharedObjectPinned(Oid classId, Oid objectId, Relation sdepRel)
 	SysScanDesc scan;
 	HeapTuple	tup;
 
+	/* GPDB: as in isObjectPinned() */
+	if (objectId >= FirstNormalObjectId)
+		return false;
+
 	ScanKeyInit(&key[0],
 				Anum_pg_shdepend_refclassid,
 				BTEqualStrategyNumber, F_OIDEQ,
@@ -1343,6 +1364,12 @@ shdepDropOwned(List *roleids, DropBehavior behavior)
 							"required by the database system",
 							getObjectDescription(&obj))));
 		}
+
+		/*
+		 * GPDB: temporary objects of other sessions kept in memory are out
+		 * of reach (see tempcat.c): say so.
+		 */
+		tempcat_warn_users(AuthIdRelationId, roleid, "DROP OWNED");
 
 		ScanKeyInit(&key[0],
 					Anum_pg_shdepend_refclassid,
@@ -1492,6 +1519,9 @@ shdepReassignOwned(List *roleids, Oid newrole)
 			 * didn't track these dependencies at all ...
 			 */
 		}
+
+		/* GPDB: see shdepDropOwned() */
+		tempcat_warn_users(AuthIdRelationId, roleid, "REASSIGN OWNED");
 
 		ScanKeyInit(&key[0],
 					Anum_pg_shdepend_refclassid,

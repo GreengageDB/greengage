@@ -44,6 +44,7 @@
 #include "catalog/oid_dispatch.h"
 #include "catalog/pg_type.h"
 #include "catalog/namespace.h"
+#include "catalog/tempcat.h"
 #include "commands/async.h"
 #include "commands/extension.h"
 #include "commands/prepare.h"
@@ -5294,6 +5295,13 @@ PostgresMain(int argc, char *argv[],
 			}
 			if (IsAbortedTransactionBlockState())
 			{
+				/*
+				 * GPDB: the transaction rolled back already: settle the
+				 * in-memory temporary catalog rows it changed, see
+				 * tempcat_idle()
+				 */
+				tempcat_idle();
+
 				strncat(activity, "idle in transaction (aborted)", remain);
 				set_ps_display(activity, false);
 				pgstat_report_activity(STATE_IDLEINTRANSACTION_ABORTED, NULL);
@@ -5333,6 +5341,9 @@ PostgresMain(int argc, char *argv[],
 				 */
 				if (notifyInterruptPending)
 					ProcessNotifyInterrupt();
+
+				/* GPDB: settle the in-memory temporary catalog rows */
+				tempcat_idle();
 
 				pgstat_report_stat(false);
 				pgstat_report_queuestat();

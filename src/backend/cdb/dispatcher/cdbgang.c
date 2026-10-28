@@ -20,6 +20,7 @@
 
 #include "access/xact.h"
 #include "catalog/namespace.h"
+#include "catalog/tempcat.h"
 #include "commands/variable.h"
 #include "common/ip.h"
 #include "nodes/execnodes.h"	/* CdbProcess, Slice, SliceTable */
@@ -877,6 +878,12 @@ GpDropTempTables(void)
 		} PG_END_TRY();
 
 		CancelRemoveTempRelationsCallback();
+
+		/*
+		 * The session went idle before: settle the in-memory temporary
+		 * catalog rows dropped here now, rather than with its next command.
+		 */
+		tempcat_idle();
 	}
 }
 

@@ -151,6 +151,7 @@
 #include "access/distributedlog.h"
 #include "access/twophase.h"  /*max_prepared_xacts*/
 #include "access/xact.h"
+#include "catalog/tempcat.h"
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
 #include "funcapi.h"
@@ -458,6 +459,8 @@ retry:
 	slot->startTimestamp = 0;
 	slot->distributedXid = InvalidDistributedTransactionId;
 	slot->segmateSync = 0;
+	slot->tempcat_handle = DSM_HANDLE_INVALID;
+	slot->tempcat_root = InvalidDsaPointer;
 	/* Remember the writer proc for IsCurrentTransactionIdForReader */
 	slot->writer_proc = MyProc;
 	slot->writer_xact = MyPgXact;
@@ -566,6 +569,8 @@ SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription
 	slot->startTimestamp = 0;
 	slot->distributedXid = InvalidDistributedTransactionId;
 	slot->segmateSync = 0;
+	slot->tempcat_handle = DSM_HANDLE_INVALID;
+	slot->tempcat_root = InvalidDsaPointer;
 
 	sharedSnapshotArray->numSlots -= 1;
 
@@ -573,6 +578,38 @@ SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription
 
 	elog((Debug_print_full_dtm ? LOG : DEBUG5),"SharedSnapshotRemove removed slot for slotId = %d, creator = %s (address %p)",
 		 slotId, creatorDescription, SharedLocalSnapshotSlot);
+}
+
+/*
+ * The in-memory temporary catalog area published by the writer of session
+ * 'sessionId' (see tempcat.c), for processes that serve the session from
+ * outside its gangs: parallel retrieve cursor connections.
+ */
+bool
+SharedSnapshotGetTempcatArea(int32 sessionId, dsa_handle *handle, dsa_pointer *root)
+{
+	volatile SharedSnapshotStruct *arrayP = sharedSnapshotArray;
+	bool		found = false;
+	int			index;
+
+	LWLockAcquire(SharedSnapshotLock, LW_SHARED);
+	for (index = 0; index < arrayP->maxSlots; index++)
+	{
+		volatile SharedSnapshotSlot *slot = &arrayP->slots[index];
+
+		if (slot->slotid == sessionId &&
+			slot->tempcat_handle != DSM_HANDLE_INVALID)
+		{
+			*handle = slot->tempcat_handle;
+			pg_read_barrier();
+			*root = slot->tempcat_root;
+			found = true;
+			break;
+		}
+	}
+	LWLockRelease(SharedSnapshotLock);
+
+	return found;
 }
 
 void
@@ -652,6 +689,9 @@ dumpSharedLocalSnapshot_forCursor(void)
 	pDump->segmateSync = src->segmateSync;
 	pDump->distributedXid = src->distributedXid;
 	pDump->localXid = src->fullXid;
+
+	/* GPDB: the cursor's readers scan in-memory catalog rows with it */
+	tempcat_note_cursor_snapshot(src->snapshot.curcid);
 
 	elog(LOG, "Dump syncmate : %u snapshot to slot %d", src->segmateSync, id);
 

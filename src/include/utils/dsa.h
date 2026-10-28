@@ -73,6 +73,8 @@ typedef pg_atomic_uint64 dsa_pointer_atomic;
 #define DSA_ALLOC_HUGE		0x01	/* allow huge allocation (> 1 GB) */
 #define DSA_ALLOC_NO_OOM	0x02	/* no failure if out-of-memory */
 #define DSA_ALLOC_ZERO		0x04	/* zero allocated memory */
+#define DSA_ALLOC_NO_GROW	0x08	/* GPDB: fail rather than add a segment
+										 * (with DSA_ALLOC_NO_OOM) */
 
 /* A sentinel value for dsa_pointer used to indicate failure to allocate. */
 #define InvalidDsaPointer ((dsa_pointer) 0)
@@ -102,6 +104,7 @@ typedef dsm_handle dsa_handle;
 extern void dsa_startup(void);
 
 extern dsa_area *dsa_create(int tranche_id);
+extern dsa_area *dsa_try_create(int tranche_id);
 extern dsa_area *dsa_create_in_place(void *place, size_t size,
 									 int tranche_id, dsm_segment *segment);
 extern dsa_area *dsa_attach(dsa_handle handle);
@@ -114,12 +117,18 @@ extern void dsa_detach(dsa_area *area);
 extern void dsa_pin(dsa_area *area);
 extern void dsa_unpin(dsa_area *area);
 extern void dsa_set_size_limit(dsa_area *area, size_t limit);
+extern size_t dsa_get_total_size(dsa_area *area);
+extern size_t dsa_get_usable_size(dsa_area *area);
+extern void dsa_set_min_free_space(dsa_area *area, size_t bytes);
+extern void dsa_set_min_free_slots(dsa_area *area, uint32 nslots);
+extern void dsa_set_vmem_tracked(dsa_area *area);
 extern size_t dsa_minimum_size(void);
 extern dsa_handle dsa_get_handle(dsa_area *area);
 extern dsa_pointer dsa_allocate_extended(dsa_area *area, size_t size, int flags);
 extern void dsa_free(dsa_area *area, dsa_pointer dp);
 extern void *dsa_get_address(dsa_area *area, dsa_pointer dp);
 extern void dsa_trim(dsa_area *area);
+extern void dsa_unmap_segments(dsa_area *area);
 extern void dsa_dump(dsa_area *area);
 
 #endif							/* DSA_H */

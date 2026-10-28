@@ -1107,6 +1107,12 @@ CTranslatorDXLToPlStmt::TranslateDXLIndexOnlyScan(
 	}
 
 	index_scan->indexqual = index_cond;
+
+	// GPDB: the index quals in the form that can be checked on the index
+	// tuple, as the planner gives them: their Vars already refer to index
+	// columns.  The executor rechecks lossy index rows with them, and filters
+	// the catalog rows of temporary objects kept in memory (see tempcat.c).
+	index_scan->recheckqual = (List *) gpdb::CopyObject(index_cond);
 	SetParamIds(plan);
 
 	return (Plan *) index_scan;

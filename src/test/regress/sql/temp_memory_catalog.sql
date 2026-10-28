@@ -1,0 +1,1367 @@
+--
+-- Catalog rows of temporary objects kept in memory (catalog/tempcat.c).
+--
+-- With gp_enable_temp_memory_catalog on when the session's temporary schema
+-- is created, the catalog rows of temporary objects never reach the on-disk
+-- catalogs, not even their dependencies on ordinary objects.  Catalog
+-- lookups and scans of the catalogs see the rows in memory.
+--
+
+-- Scans see the rows in memory, which have TIDs with offsets from 0x8000
+-- (32768) up: those of the temporary objects of the session.
+CREATE FUNCTION tc_mem_oids() RETURNS SETOF oid LANGUAGE sql AS $$
+  SELECT oid FROM pg_class WHERE (ctid::text::point)[1] >= 32768
+  UNION SELECT oid FROM pg_type WHERE (ctid::text::point)[1] >= 32768
+  UNION SELECT oid FROM pg_proc WHERE (ctid::text::point)[1] >= 32768
+  UNION SELECT oid FROM pg_namespace WHERE (ctid::text::point)[1] >= 32768
+  UNION SELECT oid FROM pg_constraint WHERE (ctid::text::point)[1] >= 32768
+$$;
+CREATE FUNCTION tc_in_memory(regclass) RETURNS bool LANGUAGE sql AS $$
+  SELECT (ctid::text::point)[1] >= 32768 FROM pg_class WHERE oid = $1
+$$;
+
+-- On-disk catalog rows that belong to the temporary objects of the session
+-- in memory, on the coordinator and on the segments, in the catalogs that
+-- most objects have rows in.
+CREATE FUNCTION tc_disk_rows() RETURNS bigint LANGUAGE sql AS $$
+  WITH m AS (SELECT * FROM tc_mem_oids() o)
+  SELECT sum(n)::bigint FROM (
+    -- (objects in the session's temporary schemas, also any gone to disk)
+    SELECT count(*) AS n FROM pg_class
+     WHERE relnamespace IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_class')
+     WHERE relnamespace IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_type
+     WHERE typnamespace IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_proc
+     WHERE pronamespace IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_class
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_class')
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_type
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_type')
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_attribute
+     WHERE attrelid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_attribute')
+     WHERE attrelid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_depend
+     WHERE refobjid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_depend')
+     WHERE refobjid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_depend
+     WHERE objid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_depend')
+     WHERE objid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_proc
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_proc')
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_constraint
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_constraint')
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_namespace
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_namespace')
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_index
+     WHERE indrelid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_index')
+     WHERE indrelid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_shdepend
+     WHERE objid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+       AND dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_shdepend')
+     WHERE objid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+       AND dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+  ) s
+$$;
+
+SET gp_enable_temp_memory_catalog = on;
+SET optimizer = off;
+
+CREATE TEMP TABLE tc_t (a int PRIMARY KEY, b text DEFAULT 'x' CHECK (b <> ''))
+  DISTRIBUTED BY (a);
+SELECT tc_in_memory('tc_t') AS in_memory,
+       (SELECT (ctid::text::point)[1] >= 32768 FROM pg_namespace
+         WHERE oid = pg_my_temp_schema()) AS namespace_in_memory;
+SELECT relname, relkind, relpersistence FROM pg_class
+ WHERE relnamespace = pg_my_temp_schema() ORDER BY relname;
+SELECT attname, atttypid::regtype FROM pg_attribute
+ WHERE attrelid = 'tc_t'::regclass AND attnum > 0 ORDER BY attnum;
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'tc_t'::regclass ORDER BY 1;
+SELECT column_name, data_type FROM information_schema.columns
+ WHERE table_name = 'tc_t' ORDER BY ordinal_position;
+SELECT indisprimary, indisunique, indkey FROM pg_index WHERE indexrelid = 'tc_t_pkey'::regclass;
+-- Index, index-only and bitmap scans of the catalogs in plans see the rows
+-- in memory too: index and index-only scans in index order, also for merge
+-- joins, which mark and restore positions.  (tc_explain() hides OIDs,
+-- which differ from run to run.)
+CREATE FUNCTION tc_explain(q text) RETURNS SETOF text LANGUAGE plpgsql AS $$
+DECLARE l text;
+BEGIN
+  FOR l IN EXECUTE 'EXPLAIN (costs off) ' || q LOOP
+    RETURN NEXT regexp_replace(l, '''[0-9]+''::oid', '''N''::oid', 'g');
+  END LOOP;
+END $$;
+SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+SELECT tc_explain($$SELECT relkind FROM pg_class WHERE relname = 'tc_t'$$);
+SELECT relkind FROM pg_class WHERE relname = 'tc_t';
+SELECT relkind FROM pg_class WHERE relname = 'tc_t'::text;
+SELECT tc_explain($$SELECT count(*) FROM pg_class WHERE relname IN ('tc_t', 'tc_t_pkey', 'pg_class')$$);
+SELECT count(*) FROM pg_class WHERE relname IN ('tc_t', 'tc_t_pkey', 'pg_class');
+SELECT tc_explain($$SELECT relname FROM pg_class WHERE relname >= 'tc_' AND relname < 'tc`' ORDER BY relname DESC$$);
+SELECT relname FROM pg_class WHERE relname >= 'tc_' AND relname < 'tc`' ORDER BY relname DESC;
+SELECT tc_explain($$SELECT attname FROM pg_attribute WHERE attrelid = 'tc_t'::regclass AND attnum > 0 ORDER BY attnum DESC$$);
+SELECT attname FROM pg_attribute WHERE attrelid = 'tc_t'::regclass AND attnum > 0 ORDER BY attnum DESC;
+RESET enable_bitmapscan;
+SET enable_indexscan = off;
+SET enable_indexonlyscan = off;
+SELECT tc_explain($$SELECT relname FROM pg_class WHERE relname = 'tc_t' AND relnamespace = pg_my_temp_schema()$$);
+SELECT relname FROM pg_class WHERE relname = 'tc_t' AND relnamespace = pg_my_temp_schema();
+SELECT tc_explain($$SELECT relname FROM pg_class WHERE relname = 'tc_t' OR relname = 'pg_class'$$);
+SELECT relname FROM pg_class WHERE relname = 'tc_t' OR relname = 'pg_class' ORDER BY 1;
+RESET enable_indexonlyscan;
+RESET enable_indexscan;
+RESET enable_seqscan;
+-- The same joins with sequential scans, and with merge joins of index and
+-- index-only scans, over ordinary and temporary relations.
+SET enable_indexscan = off;
+SET enable_indexonlyscan = off;
+SET enable_bitmapscan = off;
+SELECT count(*) AS n, sum(a1.atttypid::int8 * a2.attnum) AS s1,
+       sum(a1.attnum * a2.atttypid::int8) AS s2
+  FROM pg_attribute a1 JOIN pg_attribute a2 ON a1.attrelid = a2.attrelid
+ WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass) \gset ref_
+RESET enable_bitmapscan;
+RESET enable_indexonlyscan;
+RESET enable_indexscan;
+SET enable_seqscan = off;
+SET enable_hashjoin = off;
+SET enable_nestloop = off;
+SET enable_mergejoin = on;
+SET enable_sort = off;
+SET enable_material = off;
+-- (the join order depends on the statistics of pg_attribute)
+SELECT bool_or(l LIKE '%Merge Join%') AS merge_join,
+       bool_or(l LIKE '%Index Only Scan%') AS index_only_scan,
+       bool_or(l LIKE '%Index Scan using%') AS index_scan
+  FROM tc_explain($$SELECT count(*), sum(a1.attnum * a2.atttypid::int8)
+  FROM pg_attribute a1 JOIN pg_attribute a2 ON a1.attrelid = a2.attrelid
+ WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass)$$) l;
+SELECT count(*) = :ref_n AND sum(a1.attnum * a2.atttypid::int8) = :ref_s2 AS same
+  FROM pg_attribute a1 JOIN pg_attribute a2 ON a1.attrelid = a2.attrelid
+ WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass);
+SELECT bool_or(l LIKE '%Merge Join%') AS merge_join,
+       bool_or(l LIKE '%Index Only Scan%') AS index_only_scan
+  FROM tc_explain($$SELECT count(*), sum(a1.atttypid::int8 * a2.attnum)
+  FROM pg_attribute a1 JOIN (SELECT attrelid, attnum FROM pg_attribute) a2 ON a1.attrelid = a2.attrelid
+ WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass)$$) l;
+SELECT count(*) = :ref_n AND sum(a1.atttypid::int8 * a2.attnum) = :ref_s1 AS same
+  FROM pg_attribute a1 JOIN (SELECT attrelid, attnum FROM pg_attribute) a2 ON a1.attrelid = a2.attrelid
+ WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass);
+RESET enable_material;
+RESET enable_sort;
+RESET enable_mergejoin;
+RESET enable_nestloop;
+RESET enable_hashjoin;
+RESET enable_seqscan;
+DROP FUNCTION tc_explain(text);
+-- So do the plans of GPORCA, if it plans catalog queries: its index-only
+-- scans recheck the rows in memory too, here against the array.
+SET optimizer = on;
+SET optimizer_enable_coordinator_only_queries = on;
+SELECT count(*) FROM pg_attribute
+ WHERE attrelid IN ('tc_t'::regclass, 'tc_t_pkey'::regclass) AND attnum > 0;
+SELECT relname FROM pg_class WHERE relname IN ('tc_t', 'tc_t_pkey', 'pg_class') ORDER BY 1;
+RESET optimizer_enable_coordinator_only_queries;
+SET optimizer = off;
+-- The segments have them too.
+SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname IN ('tc_t', 'tc_t_pkey');
+-- And nothing of them is on disk.
+SELECT tc_disk_rows();
+SELECT count(*) AS in_memory FROM pg_class
+ WHERE (ctid::text::point)[1] >= 32768 AND gp_segment_id >= -1;
+
+INSERT INTO tc_t SELECT g, g::text FROM generate_series(1, 100) g;
+INSERT INTO tc_t VALUES (1, 'dup');
+INSERT INTO tc_t VALUES (101, '');
+SELECT count(*), sum(a) FROM tc_t;
+-- A plan with motions, run by reader gangs, which see the writer's rows
+SELECT count(*) FROM tc_t t1 JOIN tc_t t2 ON t1.a = t2.a + 1;
+SELECT count(*) FROM tc_t t JOIN gp_dist_random('pg_attribute') a
+  ON a.attrelid = 'tc_t'::regclass AND a.attnum = t.a;
+
+-- TID scans of the catalogs find the rows in memory; sample scans do not
+-- see them, and are refused.
+SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+EXPLAIN (costs off)
+SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_t');
+SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_t');
+RESET enable_bitmapscan;
+RESET enable_seqscan;
+SELECT count(*) FROM pg_class TABLESAMPLE SYSTEM (100) WHERE relname = 'tc_t';
+
+-- DDL and maintenance
+ALTER TABLE tc_t ADD COLUMN c int DEFAULT 7;
+ALTER TABLE tc_t RENAME COLUMN b TO bb;
+ALTER TABLE tc_t ALTER COLUMN c TYPE bigint;
+ALTER TABLE tc_t SET WITH (reorganize = true);
+CREATE INDEX tc_t_bb ON tc_t (bb);
+ANALYZE tc_t;
+SELECT attname, null_frac FROM pg_stats WHERE tablename = 'tc_t' ORDER BY attname;
+VACUUM tc_t;
+TRUNCATE tc_t;
+COMMENT ON TABLE tc_t IS 'kept in memory';
+SELECT obj_description('tc_t'::regclass, 'pg_class');
+SELECT tc_disk_rows();
+-- An index that CREATE INDEX builds over a broken HOT chain on a segment is
+-- marked so on the coordinator too, which plans with it.
+CREATE TEMP TABLE tc_hot (a int, c char) DISTRIBUTED BY (a);
+INSERT INTO tc_hot VALUES (1, '#');
+BEGIN;
+UPDATE tc_hot SET c = '$';
+CREATE INDEX tc_hot_c ON tc_hot (c);
+SELECT indcheckxmin FROM pg_index WHERE indexrelid = 'tc_hot_c'::regclass;
+COMMIT;
+DROP TABLE tc_hot;
+
+-- Other kinds of temporary objects
+CREATE TEMP SEQUENCE tc_seq;
+SELECT nextval('tc_seq'), nextval('tc_seq');
+CREATE TEMP VIEW tc_v AS SELECT a, bb FROM tc_t WHERE a > 0;
+CREATE TYPE pg_temp.tc_comp AS (x int, y text);
+CREATE TYPE pg_temp.tc_enum AS ENUM ('a', 'b', 'c');
+CREATE TYPE pg_temp.tc_enum_dup AS ENUM ('a', 'a');
+CREATE DOMAIN pg_temp.tc_dom AS int CHECK (VALUE > 0);
+CREATE FUNCTION pg_temp.tc_f(x pg_temp.tc_dom) RETURNS int LANGUAGE sql AS 'SELECT x * 2';
+SELECT pg_temp.tc_f(21);
+SELECT pg_temp.tc_f(-1);
+CREATE TEMP TABLE tc_typed (c pg_temp.tc_comp, e pg_temp.tc_enum, d pg_temp.tc_dom)
+  DISTRIBUTED RANDOMLY;
+INSERT INTO tc_typed VALUES ((1, 'one'), 'b', 5);
+SELECT * FROM tc_typed;
+SELECT 'b'::pg_temp.tc_enum < 'c'::pg_temp.tc_enum AS ordered;
+CREATE TEMP TABLE tc_ao (a int, b text) WITH (appendonly = true) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_aocs (a int, b text) WITH (appendonly = true, orientation = column)
+  DISTRIBUTED BY (a);
+INSERT INTO tc_ao SELECT g, g::text FROM generate_series(1, 1000) g;
+INSERT INTO tc_aocs SELECT g, g::text FROM generate_series(1, 1000) g;
+DELETE FROM tc_ao WHERE a <= 500;
+VACUUM tc_ao;
+SELECT count(*) FROM tc_ao;
+SELECT count(*) FROM tc_aocs;
+CREATE TEMP TABLE tc_part (a int, b int) DISTRIBUTED BY (a)
+  PARTITION BY RANGE (b) (START (0) END (10) EVERY (5));
+INSERT INTO tc_part SELECT g, g % 10 FROM generate_series(1, 100) g;
+SELECT count(*) FROM tc_part;
+SELECT tc_disk_rows();
+
+-- Ordinary objects cannot depend on temporary objects kept in memory, nor
+-- can those inherit from or be typed by ordinary ones.
+CREATE TYPE tc_ord_comp AS (x int);
+CREATE TABLE tc_ord_parent (a int) DISTRIBUTED BY (a);
+CREATE FUNCTION public.tc_bad(pg_temp.tc_comp) RETURNS int LANGUAGE sql AS 'SELECT 1';
+CREATE TABLE tc_bad_t (c pg_temp.tc_comp) DISTRIBUTED RANDOMLY;
+CREATE TEMP TABLE tc_child () INHERITS (tc_ord_parent);
+CREATE TEMP TABLE tc_of OF tc_ord_comp;
+CREATE CAST (pg_temp.tc_comp AS text) WITH INOUT;
+CREATE STATISTICS pg_temp.tc_stx ON a FROM tc_ord_parent;
+CREATE TEMP TABLE tc_inh_parent (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_inh_child () INHERITS (tc_inh_parent);
+-- A temporary object can be a member of an extension (e.g. one that the
+-- extension's script creates), as on disk: the membership is in memory.
+ALTER EXTENSION plpgsql ADD FUNCTION pg_temp.tc_f(pg_temp.tc_dom);
+SELECT count(*) FROM pg_depend
+ WHERE objid = 'pg_temp.tc_f(pg_temp.tc_dom)'::regprocedure AND deptype = 'e';
+SELECT tc_disk_rows();
+ALTER EXTENSION plpgsql DROP FUNCTION pg_temp.tc_f(pg_temp.tc_dom);
+-- Its initial privileges are in memory too (pg_init_privs).
+CREATE TEMP TABLE tc_ip (a int) DISTRIBUTED BY (a);
+GRANT SELECT ON tc_ip TO PUBLIC;
+ALTER EXTENSION plpgsql ADD TABLE tc_ip;
+SELECT (ctid::text::point)[1] >= 32768 AS in_memory FROM pg_init_privs
+ WHERE objoid = 'tc_ip'::regclass;
+ALTER EXTENSION plpgsql DROP TABLE tc_ip;
+SELECT count(*) FROM pg_init_privs WHERE objoid = 'tc_ip'::regclass;
+DROP TABLE tc_ip;
+-- A dependency on an ordinary object is in memory too (other sessions are
+-- kept from dropping the object by the session's count of its users).
+CREATE TEMP TABLE tc_uses_ord (c tc_ord_comp) DISTRIBUTED RANDOMLY;
+SELECT classid::regclass, refobjid::regtype, (ctid::text::point)[1] >= 32768 AS in_memory
+  FROM pg_depend
+ WHERE objid = 'tc_uses_ord'::regclass AND refobjid = 'tc_ord_comp'::regtype;
+
+-- Subtransactions and aborts
+BEGIN;
+CREATE TEMP TABLE tc_rb (a int) DISTRIBUTED BY (a);
+SAVEPOINT s;
+CREATE TEMP TABLE tc_rb2 (a int) DISTRIBUTED BY (a);
+ROLLBACK TO s;
+SELECT relname FROM pg_class WHERE relname LIKE 'tc_rb%' ORDER BY 1;
+ROLLBACK;
+SELECT relname FROM pg_class WHERE relname LIKE 'tc_rb%' ORDER BY 1;
+DO $$
+BEGIN
+  FOR i IN 1..20 LOOP
+    BEGIN
+      EXECUTE format('CREATE TEMP TABLE tc_loop%s (a int) DISTRIBUTED BY (a)', i);
+      IF i % 2 = 0 THEN
+        RAISE EXCEPTION 'roll back %', i;
+      END IF;
+    EXCEPTION WHEN raise_exception THEN
+      NULL;
+    END;
+  END LOOP;
+END $$;
+SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_loop%';
+
+-- Creating and dropping temporary tables leaves no dead rows behind in the
+-- on-disk catalogs: not one row inserted or deleted in pg_class,
+-- pg_attribute, pg_type or pg_depend for 200 tables with a primary key.
+CREATE FUNCTION pg_temp.tc_churn_counts() RETURNS TABLE (cat regclass, ins bigint, del bigint)
+  LANGUAGE sql AS $$
+  SELECT c, pg_stat_get_xact_tuples_inserted(c), pg_stat_get_xact_tuples_deleted(c)
+    FROM unnest(ARRAY['pg_class', 'pg_attribute', 'pg_type', 'pg_depend']::regclass[]) c $$;
+BEGIN;
+CREATE TEMP TABLE tc_churn_before AS SELECT * FROM pg_temp.tc_churn_counts() DISTRIBUTED RANDOMLY;
+DO $$
+BEGIN
+  FOR i IN 1..200 LOOP
+    EXECUTE 'CREATE TEMP TABLE tc_churn (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)';
+    EXECUTE 'DROP TABLE tc_churn';
+  END LOOP;
+END $$;
+SELECT a.cat, a.ins - b.ins AS inserted, a.del - b.del AS deleted
+  FROM pg_temp.tc_churn_counts() a JOIN tc_churn_before b USING (cat) ORDER BY 1;
+COMMIT;
+DROP TABLE tc_churn_before;
+
+-- Catalog rows of temporary objects cannot be added with SQL.
+SET allow_system_table_mods = on;
+INSERT INTO pg_description VALUES ('tc_t'::regclass, 'pg_class'::regclass, 1, 'x');
+UPDATE pg_description SET description = 'updated'
+ WHERE objoid = 'tc_t'::regclass AND objsubid = 0;
+SELECT obj_description('tc_t'::regclass, 'pg_class');
+-- Nor can SQL change the columns of the catalog's unique indexes in them:
+-- no index entries refuse a duplicate.
+COMMENT ON COLUMN tc_t.a IS 'column a';
+UPDATE pg_description SET objsubid = 0
+ WHERE objoid = 'tc_t'::regclass AND objsubid = 1;
+SELECT objsubid, description FROM pg_description
+ WHERE objoid = 'tc_t'::regclass ORDER BY 1;
+RESET allow_system_table_mods;
+
+-- Plans made before the session kept temporary objects in memory see them
+-- as well: that of a statement that creates the session's first temporary
+-- object does not see what it creates itself, and one kept for the rest of
+-- such a statement sees what it created.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET optimizer = off;
+CREATE TEMP TABLE tc_cols AS
+  SELECT attname FROM pg_attribute WHERE attrelid = 'pg_class'::regclass AND attnum = 1
+  DISTRIBUTED RANDOMLY;
+SELECT * FROM tc_cols;
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET optimizer = off;
+SET enable_seqscan = off;
+CREATE FUNCTION tc_count_rel(n name) RETURNS bigint LANGUAGE sql VOLATILE AS
+  $$ SELECT count(*) FROM pg_class WHERE relname = n $$;
+CREATE FUNCTION tc_kind_rel(n name) RETURNS "char" LANGUAGE sql VOLATILE AS
+  $$ SELECT relkind FROM pg_class WHERE relname = n $$;
+CREATE FUNCTION tc_make(i int) RETURNS int LANGUAGE plpgsql AS $$
+BEGIN
+  IF i = 1 THEN
+    CREATE TEMP TABLE tc_early (a int) DISTRIBUTED BY (a);
+  END IF;
+  RETURN i;
+END $$;
+SELECT i, tc_count_rel('tc_early'), tc_kind_rel('tc_early'), tc_make(i)
+  FROM generate_series(1, 2) i;
+DROP FUNCTION tc_count_rel(name);
+DROP FUNCTION tc_kind_rel(name);
+DROP FUNCTION tc_make(int);
+
+-- The setting has no effect on a session whose temporary schema is on disk
+-- (SET says so, and leaves it off); before that, it decides.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SHOW gp_enable_temp_memory_catalog;
+SET gp_enable_temp_memory_catalog = off;
+SHOW gp_enable_temp_memory_catalog;
+CREATE TEMP TABLE tc_disk (a int) DISTRIBUTED BY (a);
+SELECT tc_in_memory('tc_disk') AS in_memory;
+SET gp_enable_temp_memory_catalog = on;
+SHOW gp_enable_temp_memory_catalog;
+SELECT setting, reset_val FROM pg_settings WHERE name = 'gp_enable_temp_memory_catalog';
+CREATE TEMP TABLE tc_disk2 (a int) DISTRIBUTED BY (a);
+SELECT tc_in_memory('tc_disk2') AS in_memory;
+
+-- The area grows, segment by segment, up to gp_temp_memory_catalog_max_size;
+-- beyond, the session runs out of room.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '8MB';
+DO $$
+BEGIN
+  FOR i IN 1..200 LOOP
+    EXECUTE format('CREATE TEMP TABLE tc_many%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i);
+  END LOOP;
+END $$;
+SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_many%';
+INSERT INTO tc_many200 VALUES (1, 'x');
+SELECT * FROM tc_many200;
+SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname LIKE 'tc_many%';
+DO $$
+BEGIN
+  FOR i IN 201..2000 LOOP
+    EXECUTE format('CREATE TEMP TABLE tc_many%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i);
+  END LOOP;
+END $$;
+SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_many%';
+
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '4MB';
+DO $$
+BEGIN
+  FOR i IN 1..1000 LOOP
+    EXECUTE format('CREATE TEMP TABLE tc_full%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i);
+  END LOOP;
+END $$;
+-- Creating and dropping in one transaction frees the dead rows on the way.
+DO $$
+BEGIN
+  FOR i IN 1..500 LOOP
+    EXECUTE format('CREATE TEMP TABLE tc_cycle (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)');
+    EXECUTE 'DROP TABLE tc_cycle';
+  END LOOP;
+END $$;
+SELECT count(*) FROM pg_class
+ WHERE relpersistence = 't' AND relnamespace IN
+  (pg_my_temp_schema(),
+   (SELECT oid FROM pg_namespace
+     WHERE nspname = 'pg_toast_temp_' || substr(pg_my_temp_schema()::regnamespace::text, 9)));
+
+-- Room that dropped objects left serves rows of any size: fill the area
+-- with wide tables and append-optimized ones in turn, drop the wide ones,
+-- and many more append-optimized tables fit than there were.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '4MB';
+DO $$
+BEGIN
+  FOR i IN 1..1000 LOOP
+    BEGIN
+      EXECUTE format('CREATE TEMP TABLE tc_wide%s (%s) DISTRIBUTED BY (c0)', i,
+                     (SELECT string_agg('c' || g || ' int', ', ')
+                        FROM generate_series(0, 199) g));
+      EXECUTE format('CREATE TEMP TABLE tc_ao%s (a int, b text, c numeric) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (a)', i);
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+  END LOOP;
+END $$;
+SELECT count(*) AS tc_ao_kept FROM pg_class
+ WHERE relname ~ '^tc_ao[0-9]+$' AND relnamespace = pg_my_temp_schema() \gset
+SELECT :tc_ao_kept > 10 AS filled;
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN SELECT relname FROM pg_class
+            WHERE relname ~ '^tc_wide[0-9]+$'
+              AND relnamespace = pg_my_temp_schema() LOOP
+    EXECUTE 'DROP TABLE ' || r.relname;
+  END LOOP;
+END $$;
+DO $$
+BEGIN
+  FOR i IN 1..1000 LOOP
+    BEGIN
+      EXECUTE format('CREATE TEMP TABLE tc_more%s (a int, b text, c numeric) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (a)', i);
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+  END LOOP;
+END $$;
+SELECT count(*) > 2 * :tc_ao_kept AS room_reused FROM pg_class
+ WHERE relname ~ '^tc_more[0-9]+$' AND relnamespace = pg_my_temp_schema();
+-- The hash tables of a catalog that had many rows once give their buckets
+-- back: as many tables fit after a peak of enum labels as before it.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '1MB';
+CREATE FUNCTION pg_temp.tc_fill(kind text) RETURNS int LANGUAGE plpgsql AS $$
+DECLARE n int := 0;
+BEGIN
+  WHILE n < 1000 LOOP
+    BEGIN
+      IF kind = 'table' THEN
+        EXECUTE format('CREATE TEMP TABLE tc_peak%s (a int) DISTRIBUTED BY (a)', n);
+      ELSE
+        EXECUTE format('CREATE TYPE pg_temp.tc_peak%s AS ENUM (%s)', n,
+                       (SELECT string_agg(quote_literal('l' || g), ',')
+                          FROM generate_series(1, 50) g));
+      END IF;
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+    n := n + 1;
+  END LOOP;
+  FOR i IN 0 .. n - 1 LOOP
+    EXECUTE format('DROP %s pg_temp.tc_peak%s',
+                   CASE kind WHEN 'table' THEN 'TABLE' ELSE 'TYPE' END, i);
+  END LOOP;
+  RETURN n;
+END $$;
+SELECT pg_temp.tc_fill('table') AS tc_tables_fresh \gset
+SELECT pg_temp.tc_fill('enum') > 10 AS enums;
+SELECT pg_temp.tc_fill('table') >= :tc_tables_fresh - 2 AS tables_after_peak;
+
+-- Rows of new objects leave room to the new versions of rows that dropping
+-- objects writes (of pg_attribute, for each default of a table dropped): a
+-- session whose area is full can still drop its objects.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '1MB';
+DO $$
+BEGIN
+  EXECUTE format('CREATE TEMP TABLE tc_defs (%s) DISTRIBUTED RANDOMLY',
+                 (SELECT string_agg(format('c%s int DEFAULT %s', g, g), ', ')
+                    FROM generate_series(1, 300) g));
+END $$;
+DO $$
+BEGIN
+  FOR i IN 1..1000 LOOP
+    BEGIN
+      EXECUTE format('CREATE TEMP TABLE tc_room%s (a int) DISTRIBUTED BY (a)', i);
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+  END LOOP;
+END $$;
+CREATE TEMP TABLE tc_room_more (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_defs;
+DISCARD TEMP;
+-- Dropping objects may go beyond the limit, up to twice that, for the new
+-- versions of rows it writes, which defaults of columns added later make
+-- big (here more than the room kept): such a table can be dropped, also at
+-- commit, which would roll back the transaction otherwise.
+CREATE TEMP TABLE tc_keep (a int) DISTRIBUTED BY (a);
+BEGIN;
+INSERT INTO tc_keep SELECT generate_series(1, 10);
+CREATE TEMP TABLE tc_fast (a int) ON COMMIT DROP DISTRIBUTED BY (a);
+DO $$
+BEGIN
+  FOR i IN 1..1000 LOOP
+    BEGIN
+      EXECUTE format('ALTER TABLE tc_fast ADD COLUMN c%s text DEFAULT repeat(md5(%L), 56)', i, i);
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+  END LOOP;
+END $$;
+COMMIT;
+SELECT count(*) FROM tc_keep;
+SELECT to_regclass('tc_fast') IS NULL AS dropped;
+-- The versions of a row that commands in released savepoints write, one
+-- after another (here of the default of a column set again and again, as
+-- with psql's ON_ERROR_ROLLBACK), are freed when the area is full, as those
+-- of commands outside savepoints.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '1MB';
+CREATE TEMP TABLE tc_sp (a int, b text) DISTRIBUTED BY (a);
+DO $$
+BEGIN
+  FOR i IN 1..1000 LOOP
+    BEGIN
+      EXECUTE format('ALTER TABLE tc_sp ALTER COLUMN b SET DEFAULT %L',
+                     (SELECT string_agg(md5(i || '.' || g), '')
+                        FROM generate_series(1, 60) g));
+    EXCEPTION WHEN division_by_zero THEN
+      NULL;
+    END;
+  END LOOP;
+END $$;
+SELECT md5(pg_get_expr(adbin, adrelid)) = md5(quote_literal(
+         (SELECT string_agg(md5('1000.' || g), '') FROM generate_series(1, 60) g))
+         || '::text') AS last_default
+  FROM pg_attrdef WHERE adrelid = 'tc_sp'::regclass;
+
+-- Segments of the area that empty go back to the OS when the session goes
+-- idle: its memory falls by most of the area (bodies that do not compress).
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '8MB';
+CREATE FUNCTION pg_temp.tc_vmem() RETURNS int LANGUAGE sql AS $$
+  SELECT vmem_mb FROM gp_toolkit.resgroup_session_level_memory_consumption
+   WHERE sess_id = current_setting('gp_session_id')::int AND segid = -1 $$;
+DO $$
+BEGIN
+  FOR i IN 1..1000 LOOP
+    BEGIN
+      EXECUTE format('CREATE FUNCTION pg_temp.tc_seg%s() RETURNS text LANGUAGE sql AS %L',
+                     i, 'SELECT ' || quote_literal((SELECT string_agg(md5(i || '.' || g), '')
+                                                     FROM generate_series(1, 600) g)));
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+  END LOOP;
+END $$;
+SELECT pg_temp.tc_vmem() AS tc_vmem_full \gset
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid FROM pg_proc WHERE proname ~ '^tc_seg[0-9]+$' LOOP
+    EXECUTE 'DROP FUNCTION ' || r.oid::regprocedure;
+  END LOOP;
+END $$;
+SELECT :tc_vmem_full - pg_temp.tc_vmem() >= 4 AS segments_given_back;
+
+-- More of what temporary objects kept in memory do as those on disk do.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET optimizer = off;
+CREATE TEMP TABLE tc_basic (a int, b text) DISTRIBUTED BY (a);
+INSERT INTO tc_basic SELECT i, 'v' || i FROM generate_series(1, 100) i;
+-- A transaction that ran multi-slice queries over its own temporary table
+-- (with reader gangs) can drop it.
+BEGIN;
+CREATE TEMP TABLE tc_ms (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO tc_ms SELECT i, i + 1 FROM generate_series(1, 100) i;
+SELECT count(*) FROM tc_ms x JOIN tc_ms y ON x.b = y.a;
+SELECT count(*) FROM tc_ms x JOIN tc_basic y ON x.b = y.a;
+DROP TABLE tc_ms;
+COMMIT;
+SELECT to_regclass('tc_ms') IS NULL AS dropped;
+-- Cursors and loops over queries run on reader gangs as well.
+BEGIN;
+DECLARE c CURSOR FOR SELECT a, b FROM tc_basic ORDER BY a;
+FETCH 2 FROM c;
+CLOSE c;
+COMMIT;
+DO $$ DECLARE r record; n int := 0; BEGIN FOR r IN SELECT * FROM tc_basic LOOP n := n + 1; END LOOP; RAISE NOTICE 'rows seen by FOR loop: %', n; END $$;
+-- Catalog queries planned on the segments (in functions run there), with
+-- any kind of scan, and in a separate slice on the coordinator (entry-db)
+-- see the rows in memory.
+CREATE FUNCTION pg_temp.tc_att_count(r oid) RETURNS bigint LANGUAGE plpgsql VOLATILE AS
+$$ BEGIN RETURN (SELECT count(*) FROM pg_attribute WHERE attrelid = r AND attnum > 0); END $$;
+SELECT DISTINCT pg_temp.tc_att_count('tc_basic'::regclass) FROM gp_dist_random('gp_id');
+SET enable_seqscan = off;
+SELECT DISTINCT pg_temp.tc_att_count('tc_basic'::regclass) FROM gp_dist_random('gp_id');
+SET enable_indexonlyscan = off;
+SELECT DISTINCT pg_temp.tc_att_count('tc_basic'::regclass) FROM gp_dist_random('gp_id');
+SET enable_indexscan = off;
+SELECT DISTINCT pg_temp.tc_att_count('tc_basic'::regclass) FROM gp_dist_random('gp_id');
+RESET enable_indexscan;
+RESET enable_indexonlyscan;
+RESET enable_seqscan;
+CREATE FUNCTION tc_count_basic() RETURNS bigint LANGUAGE sql AS 'SELECT count(*) FROM tc_basic';
+CREATE TEMP TABLE tc_entrydb (a int, n bigint) DISTRIBUTED BY (a);
+INSERT INTO tc_entrydb SELECT g, s.n FROM generate_series(1, 3) g, (SELECT tc_count_basic() AS n) s;
+SELECT a, n FROM tc_entrydb ORDER BY a;
+DROP FUNCTION tc_count_basic();
+
+-- A temporary table hides an ordinary table of the same name.
+CREATE TABLE tc_same (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_same VALUES (1);
+CREATE TEMP TABLE tc_same (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_same VALUES (2), (3);
+SELECT count(*) AS temp_rows FROM tc_same;
+SELECT count(*) AS ordinary_rows FROM public.tc_same;
+DROP TABLE tc_same;
+SELECT count(*) AS ordinary_rows FROM tc_same;
+DROP TABLE tc_same;
+
+-- Out-of-line (TOASTed) values of a temporary table.
+CREATE TEMP TABLE tc_toast (a int, t text) DISTRIBUTED BY (a);
+INSERT INTO tc_toast SELECT i, repeat(md5(i::text), 10000) FROM generate_series(1, 3) i;
+UPDATE tc_toast SET t = t || 'x' WHERE a = 2;
+SELECT a, length(t) FROM tc_toast ORDER BY a;
+
+-- TRUNCATE of a column-oriented table followed by ADD COLUMN with a default
+-- (needs the attribute encoding rows of the truncated table).
+CREATE TEMP TABLE tc_aoco2 (a int, b int)
+  WITH (appendonly = true, orientation = column) DISTRIBUTED BY (a);
+INSERT INTO tc_aoco2 SELECT i, i FROM generate_series(1, 100) i;
+TRUNCATE tc_aoco2;
+INSERT INTO tc_aoco2 SELECT i, i FROM generate_series(1, 10) i;
+ALTER TABLE tc_aoco2 ADD COLUMN c int DEFAULT 7;
+SELECT count(*), sum(c) FROM tc_aoco2;
+-- The AO functions that query the aux relations of an AO table.
+SELECT get_ao_compression_ratio('tc_aoco2') > 0 AS ratio;
+SELECT count(*) > 0 AS segfiles FROM gp_toolkit.__gp_aocsseg('tc_aoco2');
+SELECT sum(tupcount) FROM get_ao_distribution('tc_aoco2');
+
+-- An insert into an append-only table created in the same transaction uses
+-- the reserved segment file 0 (needs the real xmin of the pg_class row).
+BEGIN;
+CREATE TEMP TABLE tc_ao_segno (a int) WITH (appendonly = true) DISTRIBUTED BY (a);
+INSERT INTO tc_ao_segno SELECT generate_series(1, 30);
+COMMIT;
+SELECT DISTINCT segno FROM gp_toolkit.__gp_aoseg('tc_ao_segno');
+SELECT sum(tupcount) FROM gp_toolkit.__gp_aoseg('tc_ao_segno');
+
+-- gp_fastsequence stays non-transactional for rows in memory: rolled back
+-- inserts do not let later inserts reuse their row numbers, which would make
+-- index scans return wrong rows.  Both for the segment file used in the
+-- creating transaction (whose gp_fastsequence row is created in memory) and
+-- for later ones.
+SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+BEGIN;
+CREATE TEMP TABLE tc_ao_seq (a int, b int) WITH (appendonly = true) DISTRIBUTED BY (b);
+CREATE INDEX tc_ao_seq_a ON tc_ao_seq (a);
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(1, 10) i;
+SAVEPOINT s;
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(100, 199) i;
+ROLLBACK TO SAVEPOINT s;
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(1000, 1099) i;
+COMMIT;
+BEGIN;
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(200, 299) i;
+ROLLBACK;
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(2000, 2099) i;
+BEGIN;
+SAVEPOINT s;
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(300, 399) i;
+ROLLBACK TO SAVEPOINT s;
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(3000, 3099) i;
+COMMIT;
+SELECT count(*) AS rolled_back_rows FROM tc_ao_seq WHERE a BETWEEN 100 AND 399;
+SELECT count(*) AS committed_rows FROM tc_ao_seq WHERE a BETWEEN 1000 AND 3099;
+RESET enable_seqscan;
+RESET enable_bitmapscan;
+SET enable_indexscan = off;
+SELECT count(*) AS all_rows FROM tc_ao_seq;
+RESET enable_indexscan;
+
+-- Utility commands that scan the catalogs directly
+-- (table_beginscan_catalog()) see the rows in memory too.
+CREATE TYPE pg_temp.tc_ct AS (a int);
+CREATE TEMP TABLE tc_typed_of OF pg_temp.tc_ct DISTRIBUTED RANDOMLY;
+ALTER TYPE pg_temp.tc_ct ADD ATTRIBUTE b int;
+ALTER TYPE pg_temp.tc_ct ADD ATTRIBUTE b int CASCADE;
+SELECT attname FROM pg_attribute WHERE attrelid = 'tc_typed_of'::regclass AND attnum > 0 ORDER BY attnum;
+DROP TABLE tc_typed_of;
+DROP TYPE pg_temp.tc_ct;
+CREATE TEMP TABLE tc_grant (a int) DISTRIBUTED BY (a);
+CREATE FUNCTION pg_temp.tc_grant_func() RETURNS int LANGUAGE sql AS 'SELECT 1';
+GRANT SELECT ON ALL TABLES IN SCHEMA pg_temp TO PUBLIC;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA pg_temp FROM PUBLIC;
+SELECT relacl IS NOT NULL AS table_acl FROM pg_class WHERE oid = 'tc_grant'::regclass;
+SELECT proacl IS NOT NULL AS function_acl FROM pg_proc WHERE proname = 'tc_grant_func';
+DROP TABLE tc_grant;
+DROP FUNCTION pg_temp.tc_grant_func();
+
+-- Catalog views and functions, and COPY TO of a catalog.
+CREATE TEMP VIEW tc_view AS SELECT a FROM tc_basic WHERE a > 50;
+COMMENT ON TABLE tc_basic IS 'basic';
+SELECT pg_get_viewdef('tc_view');
+SELECT obj_description('tc_basic'::regclass);
+SELECT table_name, table_type FROM information_schema.tables
+ WHERE table_name IN ('tc_basic', 'tc_view') ORDER BY 1;
+SELECT column_name, data_type FROM information_schema.columns
+ WHERE table_name = 'tc_view' ORDER BY ordinal_position;
+\copy pg_class (relname) TO PROGRAM 'grep -c ^tc_basic$'
+
+-- Transactions
+BEGIN;
+DROP TABLE tc_basic CASCADE;
+ROLLBACK;
+SELECT count(*) FROM tc_basic;
+SELECT count(*) FROM tc_view;
+BEGIN;
+CREATE TEMP TABLE tc_sp1 (a int) DISTRIBUTED BY (a);
+SAVEPOINT s1;
+CREATE TEMP TABLE tc_sp2 (a int) DISTRIBUTED BY (a);
+ALTER TABLE tc_sp1 ADD COLUMN b int;
+ROLLBACK TO SAVEPOINT s1;
+SAVEPOINT s2;
+CREATE TEMP TABLE tc_sp3 (a int) DISTRIBUTED BY (a);
+RELEASE SAVEPOINT s2;
+COMMIT;
+SELECT to_regclass('tc_sp1') IS NOT NULL AS sp1, to_regclass('tc_sp2') IS NOT NULL AS sp2,
+       to_regclass('tc_sp3') IS NOT NULL AS sp3;
+SELECT * FROM tc_sp1;
+-- A failing CREATE TABLE AS leaves nothing behind.
+CREATE TEMP TABLE tc_ctas_fail AS SELECT 1 / (i - 5) AS x FROM generate_series(1, 10) i DISTRIBUTED BY (x);
+SELECT to_regclass('tc_ctas_fail') IS NULL AS not_created;
+CREATE TEMP TABLE tc_ctas_fail AS SELECT i AS x FROM generate_series(1, 10) i DISTRIBUTED BY (x);
+SELECT count(*) FROM tc_ctas_fail;
+-- Changes of rows in memory on the segments are committed in two phases
+-- even though they write no WAL: a deferred unique check that fails at
+-- commit on one segment must not leave the new table on the others.
+CREATE TEMP TABLE tc_defer (i int UNIQUE DEFERRABLE INITIALLY DEFERRED) DISTRIBUTED BY (i);
+INSERT INTO tc_defer VALUES (1);
+BEGIN;
+CREATE TEMP TABLE tc_defer_new (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_defer VALUES (1);
+COMMIT;
+SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname = 'tc_defer_new';
+CREATE TEMP TABLE tc_defer_new (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_defer_new, tc_defer;
+BEGIN;
+CREATE TEMP TABLE tc_oc_drop (a int) ON COMMIT DROP DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_oc_delete (a int) ON COMMIT DELETE ROWS DISTRIBUTED BY (a);
+INSERT INTO tc_oc_delete VALUES (1);
+COMMIT;
+SELECT to_regclass('tc_oc_drop') IS NULL AS dropped, (SELECT count(*) FROM tc_oc_delete) AS rows;
+INSERT INTO tc_sp1 VALUES (1);
+PREPARE tc_prep AS SELECT count(*) FROM tc_sp1;
+EXECUTE tc_prep;
+ALTER TABLE tc_sp1 SET DISTRIBUTED RANDOMLY;
+EXECUTE tc_prep;
+DEALLOCATE tc_prep;
+
+-- Functions, aggregates and operators run on the segments too.
+CREATE FUNCTION pg_temp.tc_func(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 * 10';
+CREATE TEMP TABLE tc_fn_data (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO tc_fn_data SELECT i, i % 5 FROM generate_series(1, 100) i;
+SELECT sum(pg_temp.tc_func(a)) FROM tc_fn_data;
+SELECT count(*) FROM tc_fn_data x JOIN tc_fn_data y ON pg_temp.tc_func(x.b) = y.a;
+CREATE AGGREGATE pg_temp.tc_sum(int) (sfunc = int4pl, stype = int, initcond = '0');
+SELECT pg_temp.tc_sum(a) FROM tc_fn_data;
+CREATE OPERATOR pg_temp.=== (PROCEDURE = int4eq, LEFTARG = int, RIGHTARG = int);
+SELECT count(*) FROM tc_fn_data WHERE a OPERATOR(pg_temp.===) 5;
+-- Commutators and negators among them are fine, but not with ordinary
+-- operators: their rows would point at each other without a dependency.
+CREATE OPERATOR pg_temp.<<< (PROCEDURE = int4lt, LEFTARG = int, RIGHTARG = int,
+                             COMMUTATOR = OPERATOR(pg_temp.>>>),
+                             NEGATOR = OPERATOR(pg_temp.>>=));
+SELECT o.oprname, c.oprname AS commutator, n.oprname AS negator
+  FROM pg_operator o LEFT JOIN pg_operator c ON c.oid = o.oprcom
+       LEFT JOIN pg_operator n ON n.oid = o.oprnegate
+ WHERE o.oprnamespace = pg_my_temp_schema() AND o.oprname LIKE '%>%' ORDER BY 1;
+CREATE OPERATOR public.<<<< (PROCEDURE = int4lt, LEFTARG = int, RIGHTARG = int);
+CREATE OPERATOR pg_temp.>>>> (PROCEDURE = int4gt, LEFTARG = int, RIGHTARG = int,
+                              COMMUTATOR = OPERATOR(public.<<<<));
+DROP OPERATOR public.<<<< (int, int);
+-- Enum labels are read by ordered catalog scans, forward and backward;
+-- they are kept in memory too, with the same OIDs on the segments.
+CREATE TYPE pg_temp.tc_mood AS ENUM ('sad', 'ok', 'happy');
+ALTER TYPE pg_temp.tc_mood ADD VALUE 'meh' AFTER 'sad';
+CREATE TEMP TABLE tc_moods (m pg_temp.tc_mood) DISTRIBUTED RANDOMLY;
+INSERT INTO tc_moods VALUES ('happy'), ('sad'), ('meh'), ('ok');
+SELECT m FROM tc_moods ORDER BY m;
+SELECT enum_first(NULL::pg_temp.tc_mood), enum_last(NULL::pg_temp.tc_mood),
+       enum_range(NULL::pg_temp.tc_mood);
+SELECT count(*) AS labels, bool_and((ctid::text::point)[1] >= 32768) AS in_memory
+  FROM pg_enum WHERE enumtypid = 'pg_temp.tc_mood'::regtype;
+SELECT count(*) AS seg_labels_differing FROM gp_dist_random('pg_enum') s
+ WHERE s.enumtypid = 'pg_temp.tc_mood'::regtype
+   AND s.oid NOT IN (SELECT oid FROM pg_enum WHERE enumtypid = 'pg_temp.tc_mood'::regtype);
+CREATE TYPE pg_temp.tc_range AS RANGE (subtype = int4);
+SELECT pg_temp.tc_range(1, 5) @> 3 AS contains;
+CREATE STATISTICS pg_temp.tc_stx (dependencies, ndistinct) ON a, b FROM tc_fn_data;
+ANALYZE tc_fn_data;
+SELECT stxname, stxkind FROM pg_statistic_ext WHERE stxrelid = 'tc_fn_data'::regclass;
+SELECT d.stxdndistinct IS NOT NULL AS has_ndistinct
+  FROM pg_statistic_ext_data d JOIN pg_statistic_ext s ON s.oid = d.stxoid
+ WHERE s.stxname = 'tc_stx';
+-- A constraint trigger cannot take the name of a constraint of its table,
+-- which the catalog's unique index refuses on disk; rows in memory are not
+-- in it.
+-- start_matchsubs
+-- m/^DETAIL:  Key \(conrelid, contypid, conname\)=\(\d+, /
+-- s/\(\d+, /(###, /
+-- end_matchsubs
+CREATE TEMP TABLE tc_dupc (a int CONSTRAINT tc_c CHECK (a > 0)) DISTRIBUTED BY (a);
+CREATE FUNCTION pg_temp.tc_trf() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';
+CREATE CONSTRAINT TRIGGER tc_c AFTER INSERT ON tc_dupc FOR EACH ROW EXECUTE FUNCTION pg_temp.tc_trf();
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'tc_dupc'::regclass;
+DROP TABLE tc_dupc;
+DROP FUNCTION pg_temp.tc_trf();
+
+-- Row-level security policies, external tables and type encodings.
+CREATE TEMP TABLE tc_rls (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO tc_rls SELECT i, i FROM generate_series(1, 10) i;
+CREATE POLICY tc_rls_pol ON tc_rls USING (a > 5);
+ALTER TABLE tc_rls ENABLE ROW LEVEL SECURITY;
+CREATE ROLE tc_rls_user;
+GRANT SELECT ON tc_rls TO tc_rls_user;
+-- (the grantee's pg_shdepend row is in memory too)
+SELECT count(*) AS shdepend_rows FROM pg_shdepend
+ WHERE objid = 'tc_rls'::regclass AND refobjid = 'tc_rls_user'::regrole;
+SELECT tc_disk_rows();
+SET ROLE tc_rls_user;
+SELECT count(*) AS visible_rows FROM tc_rls;
+RESET ROLE;
+SELECT oid AS tc_rls_pol_oid FROM pg_policy WHERE polname = 'tc_rls_pol' \gset
+SELECT count(*) FROM pg_stat_last_operation
+ WHERE classid = 'pg_policy'::regclass AND objid = :tc_rls_pol_oid;
+DROP POLICY tc_rls_pol ON tc_rls;
+-- (its row of pg_stat_last_operation, in memory, goes with it)
+SELECT count(*) FROM pg_stat_last_operation
+ WHERE classid = 'pg_policy'::regclass AND objid = :tc_rls_pol_oid;
+SET ROLE tc_rls_user;
+SELECT count(*) AS visible_rows FROM tc_rls;
+RESET ROLE;
+DROP TABLE tc_rls;
+DROP ROLE tc_rls_user;
+CREATE DOMAIN pg_temp.tc_enc_dom AS int;
+ALTER TYPE pg_temp.tc_enc_dom SET DEFAULT ENCODING (compresstype = zlib);
+SELECT count(*) AS encodings FROM pg_type_encoding WHERE typid = 'pg_temp.tc_enc_dom'::regtype;
+CREATE EXTERNAL WEB TEMP TABLE tc_ext (a int) EXECUTE 'echo 1' FORMAT 'text';
+SELECT count(*) AS ext_rows FROM tc_ext;
+DROP EXTERNAL TABLE tc_ext;
+DROP DOMAIN pg_temp.tc_enc_dom;
+-- SQL DML on catalog rows kept in memory (allow_system_table_mods): they
+-- have no place in the heap, so updates, deletes and row locks must not
+-- touch it (the gangsize test changes numsegments this way).
+SET allow_system_table_mods = on;
+CREATE TEMP TABLE tc_dml (a int, b int) DISTRIBUTED BY (a);
+UPDATE gp_distribution_policy SET numsegments = 2 WHERE localoid = 'tc_dml'::regclass;
+UPDATE gp_distribution_policy SET numsegments = 3 WHERE localoid = 'tc_dml'::regclass;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+INSERT INTO tc_dml SELECT i, i FROM generate_series(1, 10) i;
+SELECT count(*) FROM tc_dml;
+BEGIN;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass FOR UPDATE;
+DELETE FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+SELECT count(*) FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ROLLBACK;
+-- A command that meets a row twice changes it once, as on disk.
+BEGIN;
+DELETE FROM gp_distribution_policy p USING generate_series(1, 2) g WHERE p.localoid = 'tc_dml'::regclass;
+SELECT count(*) FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ROLLBACK;
+BEGIN;
+UPDATE gp_distribution_policy p SET numsegments = 2 FROM generate_series(1, 2) g WHERE p.localoid = 'tc_dml'::regclass;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ROLLBACK;
+-- Also when the command counter moves on in between (here as a function
+-- runs a query): the row was changed by the command itself.
+CREATE FUNCTION pg_temp.tc_bump() RETURNS int LANGUAGE plpgsql VOLATILE
+  AS $$ BEGIN PERFORM 1 FROM pg_class LIMIT 1; RETURN 2; END $$;
+BEGIN;
+UPDATE gp_distribution_policy p SET numsegments = pg_temp.tc_bump() FROM generate_series(1, 2) g WHERE p.localoid = 'tc_dml'::regclass;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ROLLBACK;
+DROP FUNCTION pg_temp.tc_bump();
+-- DELETE ... RETURNING fetches the old row by its TID
+BEGIN;
+DELETE FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass RETURNING numsegments;
+ROLLBACK;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+RESET allow_system_table_mods;
+
+-- The statistics of dropped temporary tables and functions are purged
+-- while the session lives: pgstat_vacuum_stat() keeps those of live
+-- sessions' OIDs, as it cannot see which of their objects still exist.
+-- (Checked on the coordinator, where the purge goes with the next
+-- statistics report, at most every 500ms.)
+CREATE FUNCTION pg_temp.tc_wait_analyze_count(r oid, n bigint) RETURNS bigint LANGUAGE plpgsql AS $$ BEGIN FOR i IN 1..100 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN pg_stat_get_analyze_count(r) = n; PERFORM pg_sleep(0.1); END LOOP; RETURN pg_stat_get_analyze_count(r); END $$;
+CREATE FUNCTION pg_temp.tc_wait_function_calls(f oid, n bigint) RETURNS bigint LANGUAGE plpgsql AS $$ BEGIN FOR i IN 1..100 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN pg_stat_get_function_calls(f) IS NOT DISTINCT FROM n; PERFORM pg_sleep(0.1); END LOOP; RETURN pg_stat_get_function_calls(f); END $$;
+CREATE TEMP TABLE tc_stat_purge (a int) DISTRIBUTED BY (a);
+ANALYZE tc_stat_purge;
+SELECT 'tc_stat_purge'::regclass::oid AS tc_stat_purge_oid \gset
+SELECT pg_temp.tc_wait_analyze_count(:tc_stat_purge_oid, 1) AS analyze_count;
+DROP TABLE tc_stat_purge;
+SELECT pg_sleep(0.6);
+SELECT pg_temp.tc_wait_analyze_count(:tc_stat_purge_oid, 0) AS analyze_count;
+SET track_functions = 'pl';
+CREATE FUNCTION pg_temp.tc_stat_fn() RETURNS int LANGUAGE plpgsql AS 'BEGIN RETURN 1; END';
+SELECT pg_temp.tc_stat_fn();
+SELECT pg_sleep(0.6);
+SELECT 'pg_temp.tc_stat_fn'::regproc::oid AS tc_stat_fn_oid \gset
+SELECT pg_temp.tc_wait_function_calls(:tc_stat_fn_oid, 1) AS calls;
+DROP FUNCTION pg_temp.tc_stat_fn();
+SELECT pg_sleep(0.6);
+SELECT pg_temp.tc_wait_function_calls(:tc_stat_fn_oid, NULL) AS calls;
+RESET track_functions;
+-- Also of those dropped ON COMMIT.
+BEGIN;
+CREATE TEMP TABLE tc_stat_oncommit (a int) ON COMMIT DROP DISTRIBUTED BY (a);
+ANALYZE tc_stat_oncommit;
+SELECT 'tc_stat_oncommit'::regclass::oid AS tc_stat_oncommit_oid \gset
+SELECT pg_temp.tc_wait_analyze_count(:tc_stat_oncommit_oid, 1) AS analyze_count;
+COMMIT;
+SELECT pg_sleep(0.6);
+SELECT pg_temp.tc_wait_analyze_count(:tc_stat_oncommit_oid, 0) AS analyze_count;
+
+-- Nested subtransactions (after the tests of PR #451): ROLLBACK TO an outer
+-- savepoint discards what every inner level created, at once; repeated
+-- ROLLBACK TO the same savepoint; RELEASE of an inner savepoint merges into
+-- the outer one, which ROLLBACK TO discards too; an exception block inside
+-- a savepoint.
+CREATE FUNCTION tc_exist(VARIADIC names text[]) RETURNS text LANGUAGE sql AS
+$$ SELECT string_agg(n || '=' || (to_regclass(n) IS NOT NULL)::text, ' ' ORDER BY n) FROM unnest(names) n $$;
+BEGIN;
+CREATE TEMP TABLE tcn_base (x int) DISTRIBUTED BY (x);
+SAVEPOINT s1;
+CREATE TEMP TABLE tcn_l1 (x int) DISTRIBUTED BY (x);
+SAVEPOINT s2;
+CREATE TEMP TABLE tcn_l2 (x int) DISTRIBUTED BY (x);
+SAVEPOINT s3;
+CREATE TEMP TABLE tcn_l3 (x int) DISTRIBUTED BY (x);
+ROLLBACK TO s1;
+SELECT tc_exist('tcn_base', 'tcn_l1', 'tcn_l2', 'tcn_l3');
+CREATE TEMP TABLE tcn_after (x int) DISTRIBUTED BY (x);
+COMMIT;
+SELECT tc_exist('tcn_base', 'tcn_l1', 'tcn_l2', 'tcn_l3', 'tcn_after');
+DROP TABLE tcn_base, tcn_after;
+BEGIN;
+CREATE TEMP TABLE tcr_base (x int) DISTRIBUTED BY (x);
+SAVEPOINT sp;
+CREATE TEMP TABLE tcr_a (x int) DISTRIBUTED BY (x);
+ROLLBACK TO sp;
+CREATE TEMP TABLE tcr_b (x int) DISTRIBUTED BY (x);
+ROLLBACK TO sp;
+CREATE TEMP TABLE tcr_c (x int) DISTRIBUTED BY (x);
+ROLLBACK TO sp;
+CREATE TEMP TABLE tcr_final (x int) DISTRIBUTED BY (x);
+COMMIT;
+SELECT tc_exist('tcr_base', 'tcr_a', 'tcr_b', 'tcr_c', 'tcr_final');
+DROP TABLE tcr_base, tcr_final;
+BEGIN;
+CREATE TEMP TABLE tcm_base (x int) DISTRIBUTED BY (x);
+SAVEPOINT a;
+CREATE TEMP TABLE tcm_a (x int) DISTRIBUTED BY (x);
+SAVEPOINT b;
+CREATE TEMP TABLE tcm_b (x int) DISTRIBUTED BY (x);
+RELEASE SAVEPOINT b;
+SELECT tc_exist('tcm_a', 'tcm_b');
+ROLLBACK TO a;
+CREATE TEMP TABLE tcm_after (x int) DISTRIBUTED BY (x);
+COMMIT;
+SELECT tc_exist('tcm_base', 'tcm_a', 'tcm_b', 'tcm_after');
+DROP TABLE tcm_base, tcm_after;
+BEGIN;
+CREATE TEMP TABLE tcp_base (x int) DISTRIBUTED BY (x);
+SAVEPOINT outer_sp;
+CREATE TEMP TABLE tcp_s1 (x int) DISTRIBUTED BY (x);
+DO $$ BEGIN CREATE TEMP TABLE tcp_pl (y int) DISTRIBUTED BY (y); RAISE EXCEPTION 'boom'; EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'caught: %', SQLERRM; END $$;
+SELECT tc_exist('tcp_s1', 'tcp_pl');
+ROLLBACK TO outer_sp;
+COMMIT;
+SELECT tc_exist('tcp_base', 'tcp_s1', 'tcp_pl');
+DROP TABLE tcp_base;
+DROP FUNCTION tc_exist(text[]);
+
+-- An index on an append-optimized temporary table: its block directory
+-- rows go to the block directory, not to the catalog in memory.
+CREATE TEMP TABLE tc_ao_idx (a int, b text) WITH (appendonly = true) DISTRIBUTED BY (a);
+INSERT INTO tc_ao_idx SELECT i, 'v' || i FROM generate_series(1, 10) i;
+CREATE INDEX tc_ao_idx_a ON tc_ao_idx (a);
+SET enable_seqscan = off;
+SELECT count(*) FROM tc_ao_idx WHERE a = 5;
+RESET enable_seqscan;
+ALTER TABLE tc_ao_idx ADD COLUMN c int;
+SELECT count(*), sum(a) FROM tc_ao_idx;
+TRUNCATE tc_ao_idx;
+SELECT count(*) FROM tc_ao_idx;
+DROP TABLE tc_ao_idx;
+
+-- Cursors of one transaction see what the transaction did in between: a
+-- new temporary table, and a changed one.
+CREATE TEMP TABLE tc_cur_src (id int) DISTRIBUTED BY (id);
+INSERT INTO tc_cur_src SELECT generate_series(1, 5);
+BEGIN;
+DECLARE tc_cur1 CURSOR FOR SELECT id FROM tc_cur_src ORDER BY id;
+FETCH 1 FROM tc_cur1;
+CLOSE tc_cur1;
+CREATE TEMP TABLE tc_cur_mid (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_cur_mid VALUES (2), (4);
+DECLARE tc_cur2 CURSOR FOR SELECT s.id, m.a FROM tc_cur_src s JOIN tc_cur_mid m ON s.id = m.a ORDER BY s.id;
+FETCH ALL FROM tc_cur2;
+CLOSE tc_cur2;
+ALTER TABLE tc_cur_src ADD COLUMN b text DEFAULT 'z';
+DECLARE tc_cur3 CURSOR FOR SELECT * FROM tc_cur_src ORDER BY id;
+FETCH ALL FROM tc_cur3;
+CLOSE tc_cur3;
+END;
+DROP TABLE tc_cur_src, tc_cur_mid;
+
+-- A row in memory that the transaction deleted after a cursor's snapshot
+-- shows its xmax to the cursor, as on disk.
+CREATE TEMP TABLE tc_xmax (a int) DISTRIBUTED BY (a);
+BEGIN;
+DECLARE tc_xc CURSOR FOR SELECT xmax::text::bigint <> 0 AS deleted FROM pg_class WHERE relname = 'tc_xmax';
+DROP TABLE tc_xmax;
+FETCH ALL FROM tc_xc;
+COMMIT;
+
+-- Turning the setting off does not affect the session's temporary objects:
+-- they stay in memory, and new ones join them (SET says so, and leaves it
+-- on).  DISCARD TEMP drops them.
+SET gp_enable_temp_memory_catalog = off;
+SHOW gp_enable_temp_memory_catalog;
+SELECT current_setting('gp_enable_temp_memory_catalog');
+SELECT count(*) FROM tc_basic x JOIN tc_basic y ON x.a = y.a + 1;
+CREATE TEMP TABLE tc_after_off (a int) DISTRIBUTED BY (a);
+SELECT tc_in_memory('tc_after_off') AS in_memory;
+SET gp_enable_temp_memory_catalog = on;
+SELECT tc_disk_rows();
+DISCARD TEMP;
+SELECT to_regclass('tc_basic') IS NULL AS discarded;
+CREATE TEMP TABLE tc_after_discard (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_after_discard VALUES (1);
+SELECT count(*) FROM tc_after_discard;
+SELECT tc_disk_rows();
+
+-- A session that kept its temporary schema in memory keeps it there, also
+-- when it makes it again after a rollback with the setting reset to off
+-- (RESET does not warn; SHOW shows where the objects go).
+\c
+SET gp_enable_temp_memory_catalog = on;
+BEGIN;
+CREATE TEMP TABLE tc_sticky0 (a int) DISTRIBUTED BY (a);
+ROLLBACK;
+RESET gp_enable_temp_memory_catalog;
+SHOW gp_enable_temp_memory_catalog;
+SELECT reset_val FROM pg_settings WHERE name = 'gp_enable_temp_memory_catalog';
+CREATE TEMP TABLE tc_sticky (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_sticky VALUES (1);
+SELECT count(*), tc_in_memory('tc_sticky') AS in_memory FROM tc_sticky;
+SELECT tc_disk_rows();
+-- Such a session cannot import a snapshot: the rows in memory would not
+-- follow it.
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+SET TRANSACTION SNAPSHOT '00000003-0000001B-1';
+ROLLBACK;
+
+-- Failures, made by faults on the coordinator.
+\c
+SET client_min_messages = warning;
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+RESET client_min_messages;
+SET gp_enable_temp_memory_catalog = on;
+\set VERBOSITY terse
+-- Allocations failing for a row (here from the tenth row of the statement
+-- on), after the hash tables made room for it, fail the statement, and
+-- leave nothing behind; so do those failing for a new version of a row.
+CREATE TEMP TABLE tc_f0 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_row_alloc', 'skip', '', '', '', 10, -1, 0, dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_oom (a int, b text) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_row_alloc', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT count(*) FROM pg_class WHERE relname = 'tc_oom';
+SELECT gp_inject_fault_infinite('tempcat_row_alloc', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ALTER TABLE tc_f0 ALTER COLUMN a SET STATISTICS 5;
+SELECT gp_inject_fault('tempcat_row_alloc', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT attname, attstattarget FROM pg_attribute WHERE attrelid = 'tc_f0'::regclass AND attnum > 0;
+CREATE TEMP TABLE tc_oom (a int, b text) DISTRIBUTED BY (a);
+INSERT INTO tc_oom SELECT i, 'x' FROM generate_series(1, 10) i;
+SELECT count(*) FROM tc_oom;
+DROP TABLE tc_oom, tc_f0;
+
+-- An error while the outcome of earlier transactions is applied to the rows
+-- (here as the first row of the dropped table is freed, when the session
+-- goes idle after the drop) is only logged, and leaves the rows still to be
+-- done consistent: the next transaction finishes them.  (At the start of a
+-- transaction, it would fail the transaction.)
+CREATE TEMP TABLE tc_pend (a int, b text) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'error', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+DROP TABLE tc_pend;
+SELECT gp_wait_until_triggered_fault('tempcat_forget_if_gone', 1, dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT to_regclass('tc_pend') IS NULL AS dropped;
+CREATE TEMP TABLE tc_pend (a int, b text) DISTRIBUTED BY (a);
+INSERT INTO tc_pend VALUES (1, 'x');
+SELECT * FROM tc_pend;
+DROP TABLE tc_pend;
+
+-- A subtransaction abort applies outcomes only if the subtransaction, or
+-- one committed into it (here s1), changed rows: exception blocks that
+-- change none do not walk the pending rows of the whole transaction.  It
+-- does so before the next change of rows in memory, not in the middle of
+-- the abort.
+BEGIN;
+CREATE TEMP TABLE tc_sx1 (a int) DISTRIBUTED BY (a);
+SAVEPOINT s1;
+CREATE TEMP TABLE tc_sx2 (a int) DISTRIBUTED BY (a);
+RELEASE SAVEPOINT s1;
+SELECT gp_inject_fault_infinite('tempcat_resolve_pending', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+DO $$ BEGIN FOR i IN 1..3 LOOP BEGIN PERFORM 1 / 0; EXCEPTION WHEN division_by_zero THEN NULL; END; END LOOP; END $$;
+SELECT substring(gp_inject_fault('tempcat_resolve_pending', 'status', dbid) from 'num times hit:''(\d+)''') AS walks
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SAVEPOINT s2;
+CREATE TEMP TABLE tc_sx3 (a int) DISTRIBUTED BY (a);
+ROLLBACK TO SAVEPOINT s2;
+SELECT substring(gp_inject_fault('tempcat_resolve_pending', 'status', dbid) from 'num times hit:''(\d+)''') AS walks
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_sx4 (a int) DISTRIBUTED BY (a);
+SELECT substring(gp_inject_fault('tempcat_resolve_pending', 'status', dbid) from 'num times hit:''(\d+)''') AS walks
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_resolve_pending', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT relname FROM pg_class WHERE relname LIKE 'tc\_sx_' ORDER BY 1;
+COMMIT;
+DROP TABLE tc_sx1, tc_sx2, tc_sx4;
+-- An error while the outcome of a subtransaction is applied (here the fault
+-- fails it) is one of the statement that changes rows next, and rolls its
+-- transaction back as usual.
+BEGIN;
+CREATE TEMP TABLE tc_sy1 (a int) DISTRIBUTED BY (a);
+SAVEPOINT s;
+CREATE TEMP TABLE tc_sy2 (a int) DISTRIBUTED BY (a);
+ROLLBACK TO SAVEPOINT s;
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'error', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_sy3 (a int) DISTRIBUTED BY (a);
+ROLLBACK;
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT relname FROM pg_class WHERE relname LIKE 'tc\_sy_' ORDER BY 1;
+CREATE TEMP TABLE tc_sy1 (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_sy1 VALUES (1);
+SELECT * FROM tc_sy1;
+DROP TABLE tc_sy1;
+-- An error while dropping objects lets the area grow beyond its limit
+-- (here the fault fails a new segment of the area, with the area's lock
+-- held) fails the statement, and the limit is back after the rollback: as
+-- many columns fit again.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '1MB';
+CREATE TEMP TABLE tc_od (a int) DISTRIBUTED BY (a);
+CREATE FUNCTION pg_temp.tc_widen() RETURNS int LANGUAGE plpgsql AS $$
+DECLARE n int := 0;
+BEGIN
+  FOR i IN 1..1600 LOOP
+    BEGIN
+      EXECUTE format('ALTER TABLE tc_od ADD COLUMN c%s text DEFAULT repeat(md5(%L), 56)', i, i);
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+    n := n + 1;
+  END LOOP;
+  RETURN n;
+END $$;
+SELECT pg_temp.tc_widen() AS tc_ncols \gset
+SELECT gp_inject_fault('dsm_slots_low', 'error', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+DROP TABLE tc_od;
+SELECT gp_inject_fault('dsm_slots_low', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+DROP TABLE tc_od;
+CREATE TEMP TABLE tc_od (a int) DISTRIBUTED BY (a);
+SELECT pg_temp.tc_widen() = :tc_ncols AS same_room;
+DROP TABLE tc_od;
+
+-- A session takes the OIDs of its temporary objects from the OID counter
+-- in runs (of 16 OIDs first, twice as many each time after, within blocks
+-- of 4096), so that each is given once: at the end of a run (the fault puts
+-- the session near it) it takes another one.  Ordinary objects get the OIDs
+-- after the run.
+\c
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tc_wrap0 (a int) DISTRIBUTED BY (a);
+CREATE TABLE tc_wrap_ord0 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_run_near_end', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_wrap1 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_run_near_end', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_wrap2 (a int) DISTRIBUTED BY (a);
+CREATE TABLE tc_wrap_ord2 (a int) DISTRIBUTED BY (a);
+SELECT 'tc_wrap0'::regclass::oid < 'tc_wrap_ord0'::regclass::oid AS ordinary_after_run,
+       'tc_wrap1'::regclass::oid < 'tc_wrap_ord0'::regclass::oid AS end_of_first_run,
+       'tc_wrap_ord0'::regclass::oid < 'tc_wrap2'::regclass::oid AS next_run,
+       'tc_wrap2'::regclass::oid < 'tc_wrap_ord2'::regclass::oid AS ordinary_after_next_run,
+       tc_in_memory('tc_wrap2') AS in_memory;
+INSERT INTO tc_wrap0 SELECT generate_series(1, 10);
+INSERT INTO tc_wrap1 SELECT generate_series(1, 10);
+INSERT INTO tc_wrap2 SELECT generate_series(1, 10);
+SELECT count(*) FROM tc_wrap0 JOIN tc_wrap1 USING (a) JOIN tc_wrap2 USING (a);
+DROP TABLE tc_wrap_ord0, tc_wrap_ord2;
+-- The labels of an enum get OIDs of their own (on the segments too): here
+-- of the next run, while the type has one of the last.
+SELECT gp_inject_fault('tempcat_run_near_end', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TYPE pg_temp.tc_wrap_enum AS ENUM ('a', 'b', 'c', 'd');
+SELECT gp_inject_fault('tempcat_run_near_end', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT count(*) AS labels,
+       bool_and(e.oid > 'pg_temp.tc_wrap_enum'::regtype::oid) AS after_type,
+       bool_and((e.ctid::text::point)[1] >= 32768) AS in_memory
+  FROM pg_enum e WHERE e.enumtypid = 'pg_temp.tc_wrap_enum'::regtype;
+SELECT count(*) AS seg_labels_differing FROM gp_dist_random('pg_enum') s
+ WHERE s.enumtypid = 'pg_temp.tc_wrap_enum'::regtype
+   AND s.oid NOT IN (SELECT oid FROM pg_enum WHERE enumtypid = 'pg_temp.tc_wrap_enum'::regtype);
+CREATE TEMP TABLE tc_wrap_e (a int, e pg_temp.tc_wrap_enum) DISTRIBUTED BY (a);
+INSERT INTO tc_wrap_e SELECT i, (ARRAY['a', 'b', 'c', 'd'])[i % 4 + 1]::pg_temp.tc_wrap_enum
+  FROM generate_series(1, 20) i;
+ALTER TYPE pg_temp.tc_wrap_enum ADD VALUE 'e';
+INSERT INTO tc_wrap_e VALUES (21, 'e');
+SELECT e, count(*) FROM tc_wrap_e GROUP BY e ORDER BY e;
+DROP TABLE tc_wrap_e;
+DROP TYPE pg_temp.tc_wrap_enum;
+-- When the sessions keeping their temporary objects in memory hold all
+-- blocks of OIDs (the fault makes the counter take them all for held),
+-- getting an OID fails, and leaves nothing behind.
+SELECT gp_inject_fault('tempcat_all_blocks_held', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TABLE tc_no_oids (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_all_blocks_held', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT to_regclass('tc_no_oids') IS NULL AS not_created;
+CREATE TABLE tc_no_oids (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_no_oids;
+
+-- The OIDs of objects whose creation rolled back are not given again, also
+-- after a rollback of the transaction that created the temporary schema.
+\c
+SET gp_enable_temp_memory_catalog = on;
+BEGIN;
+CREATE TEMP TABLE tc_rb1 (a int) DISTRIBUTED BY (a);
+SELECT 'tc_rb1'::regclass::oid AS rb1 \gset
+ROLLBACK;
+BEGIN;
+CREATE TEMP TABLE tc_rb2 (a int) DISTRIBUTED BY (a);
+SELECT 'tc_rb2'::regclass::oid AS rb2 \gset
+ROLLBACK;
+CREATE TEMP TABLE tc_rb3 (a int) DISTRIBUTED BY (a);
+SELECT :rb1 < :rb2 AND :rb2 < 'tc_rb3'::regclass::oid AS ascending,
+       tc_in_memory('tc_rb3') AS in_memory;
+
+-- Big values of rows kept in memory are compressed, as on disk: a function
+-- body of 6 MB fits a session that keeps up to 4 MB.
+\c
+SET gp_temp_memory_catalog_max_size = '4MB';
+SET gp_enable_temp_memory_catalog = on;
+DO $$
+BEGIN
+  EXECUTE format('CREATE FUNCTION pg_temp.tc_big() RETURNS int LANGUAGE sql AS %L',
+                 'SELECT length(' || quote_literal(repeat('abc', 2000000)) || ')');
+END $$;
+SELECT (ctid::text::point)[1] >= 32768 AS in_memory FROM pg_proc
+ WHERE oid = 'pg_temp.tc_big()'::regprocedure;
+SELECT pg_temp.tc_big();
+SELECT length(prosrc) FROM pg_proc WHERE oid = 'pg_temp.tc_big()'::regprocedure;
+SELECT count(*) FROM gp_dist_random('pg_proc') WHERE proname = 'tc_big';
+DROP FUNCTION pg_temp.tc_big();
+
+-- When dynamic shared memory runs short for others (the fault pretends
+-- so), a new session keeps its temporary objects on disk.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_low (a int) DISTRIBUTED BY (a);
+SELECT tc_in_memory('tc_low') AS in_memory;
+SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+
+\c
+DROP FUNCTION tc_disk_rows();
+DROP FUNCTION tc_in_memory(regclass);
+DROP FUNCTION tc_mem_oids();
+DROP TYPE tc_ord_comp;
+DROP TABLE tc_ord_parent;

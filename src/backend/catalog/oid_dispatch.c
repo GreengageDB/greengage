@@ -123,6 +123,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/pg_user_mapping.h"
 #include "catalog/oid_dispatch.h"
+#include "catalog/tempcat.h"
 #include "cdb/cdbvars.h"
 #include "executor/execdesc.h"
 #include "lib/rbtree.h"
@@ -396,6 +397,7 @@ GetPreassignedOid(OidAssignment *searchkey)
 #endif
 
 			oid = p->oid;
+			searchkey->tempcat = p->tempcat;
 			preassigned_oids = list_delete_cell(preassigned_oids, cur_item, prev_item);
 			pfree(p);
 			return oid;
@@ -416,9 +418,27 @@ GetPreassignedOid(OidAssignment *searchkey)
  * to see what the unique key columns for the table are.
  * ----------------------------------------------------------------
  */
+static Oid GetNewOrPreassignedOidExt(Relation relation, Oid indexId,
+									 AttrNumber oidcolumn,
+									 OidAssignment *searchkey, bool temp);
+
 static Oid
 GetNewOrPreassignedOid(Relation relation, Oid indexId, AttrNumber oidcolumn,
 					   OidAssignment *searchkey)
+{
+	return GetNewOrPreassignedOidExt(relation, indexId, oidcolumn, searchkey,
+									 false);
+}
+
+/*
+ * 'temp' says that the object is known to be a temporary object kept in the
+ * in-memory catalog even if the key does not tell (see tempcat.c).  The
+ * coordinator tells the segments which OIDs it gave such objects
+ * (OidAssignment.tempcat).
+ */
+static Oid
+GetNewOrPreassignedOidExt(Relation relation, Oid indexId, AttrNumber oidcolumn,
+						  OidAssignment *searchkey, bool temp)
 {
 	Oid			oid;
 
@@ -426,7 +446,14 @@ GetNewOrPreassignedOid(Relation relation, Oid indexId, AttrNumber oidcolumn,
 
 	if (Gp_role == GP_ROLE_EXECUTE || IsBinaryUpgrade)
 	{
+		searchkey->tempcat = false;
 		oid = GetPreassignedOid(searchkey);
+
+		/* A temporary object of this session in the in-memory catalog? */
+		if (!IsBinaryUpgrade && searchkey->tempcat)
+			tempcat_note_preassigned_oid(relation, indexId, oidcolumn, oid);
+		else if (!IsBinaryUpgrade)
+			tempcat_check_ordinary_oid(relation, oid);
 
 		/*
 		 * During normal operation, all OIDs are preassigned unless the object
@@ -460,7 +487,15 @@ GetNewOrPreassignedOid(Relation relation, Oid indexId, AttrNumber oidcolumn,
 		MemoryContext oldcontext;
 
 		/* Assign a new oid, and memorize it in the list of OIDs to dispatch */
-		oid = GetNewOidWithIndex(relation, indexId, oidcolumn);
+		tempcat_check_namespace_object(searchkey->catalog, searchkey->namespaceOid);
+		searchkey->tempcat =
+			temp || tempcat_want_temp_oid(searchkey->catalog, searchkey->objname,
+										  searchkey->namespaceOid,
+										  searchkey->keyOid1, searchkey->keyOid2);
+		if (searchkey->tempcat)
+			oid = tempcat_allocate_oid(relation, indexId, oidcolumn);
+		else
+			oid = GetNewOidWithIndex(relation, indexId, oidcolumn);
 
 		oldcontext = MemoryContextSwitchTo(get_oids_context());
 		searchkey->oid = oid;
@@ -477,7 +512,13 @@ GetNewOrPreassignedOid(Relation relation, Oid indexId, AttrNumber oidcolumn,
 	}
 	else
 	{
-		oid = GetNewOidWithIndex(relation, indexId, oidcolumn);
+		tempcat_check_namespace_object(searchkey->catalog, searchkey->namespaceOid);
+		if (temp || tempcat_want_temp_oid(searchkey->catalog, searchkey->objname,
+								  searchkey->namespaceOid,
+								  searchkey->keyOid1, searchkey->keyOid2))
+			oid = tempcat_allocate_oid(relation, indexId, oidcolumn);
+		else
+			oid = GetNewOidWithIndex(relation, indexId, oidcolumn);
 	}
 
 	return oid;
@@ -611,6 +652,20 @@ Oid
 GetNewOidForConstraint(Relation relation, Oid indexId, AttrNumber oidcolumn,
 					   Oid conrelid, Oid contypid, char *conname)
 {
+	return GetNewOidForDomainConstraint(relation, indexId, oidcolumn,
+										conrelid, contypid, conname,
+										InvalidOid);
+}
+
+/*
+ * Like GetNewOidForConstraint(), also given the domain of a domain
+ * constraint (the key carries the constraint type, not the domain).
+ */
+Oid
+GetNewOidForDomainConstraint(Relation relation, Oid indexId, AttrNumber oidcolumn,
+							 Oid conrelid, Oid contypid, char *conname,
+							 Oid domainId)
+{
 	OidAssignment key;
 
 	Assert(RelationGetRelid(relation) == ConstraintRelationId);
@@ -622,7 +677,13 @@ GetNewOidForConstraint(Relation relation, Oid indexId, AttrNumber oidcolumn,
 	key.objname = conname;
 	key.keyOid1 = conrelid;
 	key.keyOid2 = contypid;
-	return GetNewOrPreassignedOid(relation, indexId, oidcolumn, &key);
+	/*
+	 * The key carries the constraint type, not the domain, so tell whether
+	 * a domain constraint belongs to a temporary domain kept in memory.
+	 */
+	return GetNewOrPreassignedOidExt(relation, indexId, oidcolumn, &key,
+									 !OidIsValid(conrelid) &&
+									 tempcat_owns_oid(TypeRelationId, domainId));
 }
 
 Oid

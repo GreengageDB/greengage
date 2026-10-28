@@ -81,6 +81,7 @@
 #include "catalog/pg_user_mapping.h"
 #include "catalog/pg_resgroup.h"
 #include "catalog/pg_extprotocol.h"
+#include "catalog/tempcat.h"
 #include "storage/lmgr.h"
 #include "utils/inval.h"
 #include "utils/rel.h"
@@ -1316,6 +1317,10 @@ SearchSysCacheLocked1(int cacheId,
 			LockRelease(&tag, lockmode, false);
 		}
 		else if (!HeapTupleIsValid(tuple))
+			return tuple;
+
+		/* GPDB: a row kept in memory needs no tuple lock, see LockTuple() */
+		if (IsTempcatTid(&tuple->t_self))
 			return tuple;
 
 		tid = tuple->t_self;

@@ -22,6 +22,7 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_enum.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "cdb/cdbvars.h"
 #include "storage/lmgr.h"
 #include "miscadmin.h"
@@ -52,6 +53,55 @@ static void RenumberEnumType(Relation pg_enum, HeapTuple *existing, int nelems);
 static int	sort_order_cmp(const void *p1, const void *p2);
 
 
+static int
+enum_label_cmp(const void *p1, const void *p2)
+{
+	return strcmp(*(char *const *) p1, *(char *const *) p2);
+}
+
+/*
+ * GPDB: fail if the labels of a new enum type repeat; see EnumValuesCreate().
+ * (Labels longer than a name are refused there anyway.)
+ */
+static void
+CheckEnumLabelsUnique(List *vals)
+{
+	int			n = list_length(vals);
+	char	  **labels;
+	ListCell   *lc;
+	int			i = 0;
+
+	if (n < 2)
+		return;
+	labels = palloc(sizeof(char *) * n);
+	foreach(lc, vals)
+		labels[i++] = strVal(lfirst(lc));
+	qsort(labels, n, sizeof(char *), enum_label_cmp);
+	for (i = 1; i < n; i++)
+	{
+		if (strcmp(labels[i - 1], labels[i]) == 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_DUPLICATE_OBJECT),
+					 errmsg("enum label \"%s\" already exists", labels[i])));
+	}
+	pfree(labels);
+}
+
+/*
+ * GPDB: a new OID for a label of enum type 'enumTypeOid'.  The labels of a
+ * temporary enum type kept in memory get one from the session's blocks of
+ * OIDs, like the type (see tempcat.c): their rows are visible to their
+ * session only, so once the OID counter wrapped around, other sessions
+ * could not avoid the ordinary OIDs they took.
+ */
+static Oid
+GetNewEnumOid(Relation pg_enum, Oid enumTypeOid)
+{
+	if (tempcat_owns_oid(TypeRelationId, enumTypeOid))
+		return tempcat_allocate_oid(pg_enum, EnumOidIndexId, Anum_pg_enum_oid);
+	return GetNewOidWithIndex(pg_enum, EnumOidIndexId, Anum_pg_enum_oid);
+}
+
 /*
  * EnumValuesCreate
  *		Create an entry in pg_enum for each of the supplied enum values.
@@ -77,7 +127,12 @@ EnumValuesCreate(Oid enumTypeOid, List *vals)
 	 * We do not bother to check the list of values for duplicates --- if you
 	 * have any, you'll get a less-than-friendly unique-index violation. It is
 	 * probably not worth trying harder.
+	 *
+	 * GPDB: but the rows of a temporary enum type kept in memory do not go
+	 * through that index (see tempcat.c), so check them here.
 	 */
+	if (tempcat_owns_oid(TypeRelationId, enumTypeOid))
+		CheckEnumLabelsUnique(vals);
 
 	pg_enum = table_open(EnumRelationId, RowExclusiveLock);
 
@@ -111,11 +166,12 @@ EnumValuesCreate(Oid enumTypeOid, List *vals)
 			if (Gp_role == GP_ROLE_EXECUTE)
 			{
 				new_oid = GetPreassignedOidForEnum(enumTypeOid, lab);
+				/* GPDB: a label of a temporary enum kept in memory? */
+				tempcat_note_enum_label_oid(pg_enum, enumTypeOid, new_oid);
 				break;
 			}
 
-			new_oid = GetNewOidWithIndex(pg_enum, EnumOidIndexId,
-										 Anum_pg_enum_oid);
+			new_oid = GetNewEnumOid(pg_enum, enumTypeOid);
 		} while (new_oid & 1);
 		oids[elemno] = new_oid;
 
@@ -397,6 +453,8 @@ restart:
 		 * In QE, the dispatcher has already allocated the OID for us.
 		 */
 		newOid = GetPreassignedOidForEnum(enumTypeOid, newVal);
+		/* GPDB: a label of a temporary enum kept in memory? */
+		tempcat_note_enum_label_oid(pg_enum, enumTypeOid, newOid);
 	}
 	else
 	{
@@ -412,8 +470,7 @@ restart:
 			bool		sorts_ok;
 
 			/* Get a new OID (different from all existing pg_enum tuples) */
-			newOid = GetNewOidWithIndex(pg_enum, EnumOidIndexId,
-										Anum_pg_enum_oid);
+			newOid = GetNewEnumOid(pg_enum, enumTypeOid);
 
 			/*
 			 * Detect whether it sorts correctly relative to existing

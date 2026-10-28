@@ -39,6 +39,7 @@ test: frozen_insert_crash
 test: prevent_ao_wal
 
 test: ao_temp
+test: temp_memory_catalog
 
 # Tests for packcore, will use the coredumps generated in crash_recovery_dtm,
 # so must be scheduled after that one.
@@ -300,6 +301,7 @@ test: segwalrep/mirror_promotion
 test: segwalrep/cancel_commit_pending_replication
 test: segwalrep/twophase_tolerance_with_mirror_promotion
 test: segwalrep/failover_with_many_records
+test: temp_memory_catalog_failover
 test: segwalrep/dtm_recovery_on_standby
 test: segwalrep/commit_blocking_on_standby
 test: segwalrep/max_slot_wal_keep_size

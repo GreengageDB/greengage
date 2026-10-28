@@ -26,6 +26,7 @@
 #include "access/subtrans.h"
 #include "access/transam.h"
 #include "access/twophase.h"
+#include "catalog/tempcat.h"
 #include "access/xact.h"
 #include "access/xlog.h"
 #include "access/xloginsert.h"
@@ -1250,6 +1251,56 @@ TransactionIdIsCurrentTransactionId(TransactionId xid)
 	Assert(DistributedTransactionContext != DTX_CONTEXT_QE_ENTRY_DB_SINGLETON);
 
 	return TransactionIdIsCurrentTransactionIdInternal(xid);
+}
+
+/*
+ * GPDB: the nesting level of the open (sub)transaction that 'xid' belongs
+ * to now: its own, or that of the one it was committed into as a
+ * subtransaction; or 0 if it is not a current transaction ID.  Not for
+ * readers and parallel workers, which have no transaction state stack of
+ * their own.  (See tempcat_reclaim_dead().)
+ */
+int
+GetCurrentTransactionIdNestLevel(TransactionId xid)
+{
+	TransactionState s;
+
+	Assert(nParallelCurrentXids == 0);
+	Assert(DistributedTransactionContext != DTX_CONTEXT_QE_READER &&
+		   DistributedTransactionContext != DTX_CONTEXT_QE_ENTRY_DB_SINGLETON);
+
+	if (!TransactionIdIsNormal(xid))
+		return 0;
+
+	for (s = CurrentTransactionState; s != NULL; s = s->parent)
+	{
+		int			low,
+					high;
+
+		if (s->state == TRANS_ABORT ||
+			!FullTransactionIdIsValid(s->fullTransactionId))
+			continue;
+		if (TransactionIdEquals(xid, XidFromFullTransactionId(s->fullTransactionId)))
+			return s->nestingLevel;
+
+		/* As the childXids array is ordered, we can use binary search */
+		low = 0;
+		high = s->nChildXids - 1;
+		while (low <= high)
+		{
+			int			middle = low + (high - low) / 2;
+			TransactionId probe = s->childXids[middle];
+
+			if (TransactionIdEquals(probe, xid))
+				return s->nestingLevel;
+			else if (TransactionIdPrecedes(probe, xid))
+				low = middle + 1;
+			else
+				high = middle - 1;
+		}
+	}
+
+	return 0;
 }
 
 /*
@@ -2744,6 +2795,9 @@ StartTransaction(void)
 		AssignResGroupOnCoordinator();
 
 	initialize_wal_bytes_written();
+	/* Apply the outcome of earlier transactions to in-memory temp catalog rows */
+	tempcat_start_transaction();
+
 	ShowTransactionState("StartTransaction");
 
 	ereportif(Debug_print_full_dtm, LOG,
@@ -3203,6 +3257,9 @@ PrepareTransaction(void)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot PREPARE a transaction that has operated on temporary objects")));
 #endif
+	/* GPDB: but not with in-memory temporary catalog rows, see tempcat.c */
+	tempcat_check_prepare();
+
 	SIMPLE_FAULT_INJECTOR("start_prepare");
 
 	/*
@@ -6269,6 +6326,9 @@ AbortSubTransaction(void)
 		/* Post-abort cleanup */
 		if (FullTransactionIdIsValid(s->fullTransactionId))
 			AtSubAbort_childXids();
+
+		/* Free in-memory temp catalog rows of the aborted subtransaction */
+		tempcat_abort_subtransaction();
 
 		CallSubXactCallbacks(SUBXACT_EVENT_ABORT_SUB, s->subTransactionId,
 							 s->parent->subTransactionId);
