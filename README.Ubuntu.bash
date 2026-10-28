@@ -61,7 +61,7 @@ apt-get install -y \
 
 curl -fsSL --proto '=https' --proto-redir '=https' \
 	https://greengagedb.org/repositories/gpg | \
-	gpg --dearmor -o /etc/apt/keyrings/greengagedb.gpg
+	gpg --batch --yes --dearmor -o /etc/apt/keyrings/greengagedb.gpg
 echo "deb [signed-by=/etc/apt/keyrings/greengagedb.gpg] \
 	https://greengagedb.org/repositories/ubuntu/$(lsb_release -sr)/x86_64 \
 	greengagedb main" \
