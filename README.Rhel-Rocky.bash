@@ -69,6 +69,7 @@ dnf -y install --nobest \
     procps-ng \
     readline-devel \
     rpm-build \
+    rpmlint \
     rsync \
     snappy-devel \
     sudo \
