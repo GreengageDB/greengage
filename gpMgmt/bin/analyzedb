@@ -235,7 +235,6 @@ def get_partition_state_tuples(pg_port, dbname, catalog_schema, partition_info):
     """
     partition_list = list()
     dburl = dbconn.DbURL(port=pg_port, dbname=dbname)
-    num_sqls = 0
     with dbconn.connect(dburl) as conn:
         for (oid, schemaname, partition_name, tupletable) in partition_info:
             try:
@@ -249,11 +248,7 @@ def get_partition_state_tuples(pg_port, dbname, catalog_schema, partition_info):
                 # If there's an exception, the transaction is aborted so we need to rollback it
                 conn.rollback()
             else:
-                num_sqls += 1
-                if num_sqls == 1000: # The choice of batch size was chosen arbitrarily
-                    logger.debug('Completed executing batch of 1000 tuple count SQLs')
-                    conn.commit()
-                    num_sqls = 0
+                conn.commit()
                 if modcount:
                     modcount = modcount.strip()
                 validate_modcount(schemaname, partition_name, modcount)
