@@ -14,6 +14,7 @@ Name:    greengage6
 Version: %{gpdb_version}
 Release: %{gpdb_release}%{?dist}
 Summary: Greengage MPP database engine
+Group:   Applications/Databases
 License: ASL 2.0
 URL:     https://greengagedb.org
 
@@ -76,3 +77,5 @@ find %{buildroot}%{prefix} -type f -name "*.so" -exec strip --strip-debug {} \;
 %{prefix}
 
 %changelog
+* %(LC_ALL=C date "+%%a %%b %%d %%Y") Greengage Team - %{version}-%{release}
+- Build the package from the source tree

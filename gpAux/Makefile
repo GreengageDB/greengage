@@ -416,9 +416,9 @@ pkg-rpm : version-vars
 		--define "gpdir $(GPDIR)" \
 		--define "sourcedir $(CURDIR)/.." \
 		rpm/greengage6.spec
+	@rpmlint -f rpm/greengage6.rpmlintrc $(RPM_TOPDIR)/RPMS/$(RPM_ARCH)/*.rpm
 	@mkdir -p $(ARTIFACTS_DIR)
-	@find $(RPM_TOPDIR)/RPMS -name "*.rpm" \
-		-exec mv -f {} $(ARTIFACTS_DIR)/ \;
+	@mv -f $(RPM_TOPDIR)/RPMS/$(RPM_ARCH)/*.rpm $(ARTIFACTS_DIR)/
 
 .PHONY: pkg pkg-deb pkg-rpm changelog version-vars version-info
 
