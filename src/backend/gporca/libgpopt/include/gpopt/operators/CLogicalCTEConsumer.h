@@ -162,11 +162,7 @@ public:
 	}
 
 	// stat promise
-	EStatPromise
-	Esp(CExpressionHandle &) const override
-	{
-		return CLogical::EspHigh;
-	}
+	EStatPromise Esp(CExpressionHandle &exprhdl) const override;
 
 	// derive statistics
 	IStatistics *PstatsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl,
