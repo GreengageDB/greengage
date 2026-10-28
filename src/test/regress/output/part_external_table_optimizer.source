@@ -493,8 +493,8 @@ select * from part_mixed pm join filter_table ft on pm.b = ft.a;
 
 -- With the select pushed below the union all of the heap and foreign branches,
 -- ORCA generates a dynamic index scan on the heap branch of a table with mixed
--- partitions. The index scan still lists all partitions, including the foreign
--- one, which the executor does not support yet; this test pins the plan.
+-- partitions. The index scan must cover the heap partitions only; the foreign
+-- partition has no index and is scanned by the foreign branch.
 create index on part_mixed(a);
 explain (costs off) select * from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
                                    QUERY PLAN                                    
@@ -508,12 +508,18 @@ explain (costs off) select * from part_mixed pm join filter_table ft on pm.b = f
                ->  Append
                      ->  Dynamic Index Scan on part_mixed_a_idx on part_mixed pm
                            Index Cond: (a = 15)
-                           Number of partitions to scan: 3 (out of 3)
+                           Number of partitions to scan: 2 (out of 3)
                      ->  Dynamic Foreign Scan on part_mixed pm
                            Filter: (a = 15)
                            Number of partitions to scan: 1 (out of 3)
  Optimizer: GPORCA
 (14 rows)
+
+select * from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
+ a  | b  | a  
+----+----+----
+ 15 | 15 | 15
+(1 row)
 
 drop table part_mixed cascade;
 -- Find a value in the last external partition
