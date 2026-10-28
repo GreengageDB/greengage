@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/\(cost=.*\)/
+-- s/\(cost=.*\)//
+-- end_matchsubs
 --
 -- Test queries mixes window functions with aggregate functions or grouping.
 --
@@ -799,4 +803,173 @@ explain select * from a_table join cte_view on a_table.a = (select a from cte_vi
  Optimizer: GPORCA
 (42 rows)
 
+--
+-- Test that the row estimate of a shared CTE accounts for the filters inside
+-- the CTE body. The consumers used to see the statistics of the unfiltered
+-- producer scan, so the estimate of a query using the CTE more than once was
+-- orders of magnitude lower than that of the same query with the CTE inlined.
+--
+create table bfv_cte_left(id1 int, val1 int);
+create table bfv_cte_right(id2 int, val2 int);
+create table bfv_cte_t1(a int);
+insert into bfv_cte_left select i, 10000 + i from generate_series(1, 10000) i;
+insert into bfv_cte_right select i, 100000 + i from generate_series(1, 10000) i;
+insert into bfv_cte_t1 select generate_series(1, 10000);
+analyze bfv_cte_left;
+analyze bfv_cte_right;
+analyze bfv_cte_t1;
+-- Returns the row estimate of the top plan node
+create function bfv_cte_est_rows(query text) returns bigint as $$
+declare
+	line text;
+begin
+	for line in execute 'explain ' || query loop
+		return substring(line from 'rows=([0-9]+)')::bigint;
+	end loop;
+end;
+$$ language plpgsql;
+-- Actual number of rows is 5000
+explain analyze with cte as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000)) select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null;
+                                                                    QUERY PLAN                                                                     
+---------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1296.22 rows=5001 width=12) (actual time=5.938..9.406 rows=5000 loops=1)
+   ->  Result  (cost=0.00..1296.00 rows=1667 width=12) (actual time=5.607..8.672 rows=1686 loops=1)
+         Filter: (bfv_cte_left.id1 IS NULL)
+         ->  Hash Left Join  (cost=0.00..1295.89 rows=3334 width=12) (actual time=5.604..8.242 rows=3385 loops=1)
+               Hash Cond: (bfv_cte_t1.a = bfv_cte_left.id1)
+               Extra Text: (seg1)   Hash chain length 1.0 avg, 2 max, using 1696 of 262144 buckets.
+               ->  Seq Scan on bfv_cte_t1  (cost=0.00..431.06 rows=3334 width=4) (actual time=0.042..0.419 rows=3385 loops=1)
+               ->  Hash  (cost=863.44..863.44 rows=1667 width=8) (actual time=4.258..4.260 rows=1714 loops=1)
+                     Buckets: 262144  Batches: 1  Memory Usage: 2115kB
+                     ->  Hash Semi Join  (cost=0.00..863.44 rows=1667 width=8) (actual time=2.120..3.725 rows=1714 loops=1)
+                           Hash Cond: (bfv_cte_left.id1 = bfv_cte_right.id2)
+                           Extra Text: (seg0)   Hash chain length 1.0 avg, 2 max, using 1704 of 262144 buckets.
+                           ->  Seq Scan on bfv_cte_left  (cost=0.00..431.07 rows=3334 width=8) (actual time=0.032..0.462 rows=3385 loops=1)
+                           ->  Hash  (cost=431.19..431.19 rows=1667 width=4) (actual time=1.035..1.037 rows=1714 loops=1)
+                                 Buckets: 262144  Batches: 1  Memory Usage: 2109kB
+                                 ->  Seq Scan on bfv_cte_right  (cost=0.00..431.19 rows=1667 width=4) (actual time=0.249..0.634 rows=1714 loops=1)
+                                       Filter: (id2 > 5000)
+                                       Rows Removed by Filter: 1654
+ Optimizer: GPORCA
+ Planning Time: 53.231 ms
+   (slice0)    Executor memory: 64K bytes.
+   (slice1)    Executor memory: 4308K bytes avg x 3 workers, 4329K bytes max (seg0).  Work_mem: 2115K bytes max.
+ Memory used:  128000kB
+ Execution Time: 10.099 ms
+(24 rows)
+
+select bfv_cte_est_rows($$
+with cte as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000))
+select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null
+$$) between 4000 and 6000 as single_consumer_ok;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
+ single_consumer_ok 
+--------------------
+ t
+(1 row)
+
+-- Actual number of rows is 10000
+explain analyze with cte as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000)) select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null union all select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null;
+                                                                        QUERY PLAN                                                                        
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2591.15 rows=10002 width=12) (actual time=4.390..10.585 rows=10000 loops=1)
+   ->  Sequence  (cost=0.00..2590.70 rows=3334 width=12) (actual time=3.923..9.435 rows=3372 loops=1)
+         ->  Shared Scan (share slice:id 1:0)  (cost=0.00..863.44 rows=1667 width=1) (actual time=3.135..3.225 rows=1714 loops=1)
+               ->  Hash Semi Join  (cost=0.00..863.44 rows=1667 width=8) (actual time=1.734..2.867 rows=1714 loops=1)
+                     Hash Cond: (bfv_cte_left.id1 = bfv_cte_right.id2)
+                     Extra Text: (seg0)   Hash chain length 1.0 avg, 3 max, using 1698 of 131072 buckets.
+                     ->  Seq Scan on bfv_cte_left  (cost=0.00..431.07 rows=3334 width=8) (actual time=0.021..0.421 rows=3385 loops=1)
+                     ->  Hash  (cost=431.19..431.19 rows=1667 width=4) (actual time=0.980..0.980 rows=1714 loops=1)
+                           Buckets: 131072  Batches: 1  Memory Usage: 1085kB
+                           ->  Seq Scan on bfv_cte_right  (cost=0.00..431.19 rows=1667 width=4) (actual time=0.241..0.599 rows=1714 loops=1)
+                                 Filter: (id2 > 5000)
+                                 Rows Removed by Filter: 1654
+         ->  Append  (cost=0.00..1727.22 rows=3334 width=12) (actual time=0.396..5.641 rows=3372 loops=1)
+               ->  Result  (cost=0.00..863.59 rows=1667 width=12) (actual time=0.395..2.555 rows=1686 loops=1)
+                     Filter: (share0_ref2.id1 IS NULL)
+                     ->  Hash Left Join  (cost=0.00..863.48 rows=3334 width=12) (actual time=0.394..2.125 rows=3385 loops=1)
+                           Hash Cond: (bfv_cte_t1.a = share0_ref2.id1)
+                           Extra Text: (seg1)   Hash chain length 1.0 avg, 2 max, using 1691 of 131072 buckets.
+                           ->  Seq Scan on bfv_cte_t1  (cost=0.00..431.06 rows=3334 width=4) (actual time=0.027..0.388 rows=3385 loops=1)
+                           ->  Hash  (cost=431.03..431.03 rows=1667 width=8) (actual time=0.343..0.343 rows=1714 loops=1)
+                                 Buckets: 131072  Batches: 1  Memory Usage: 1091kB
+                                 ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.03 rows=1667 width=8) (actual time=0.000..0.099 rows=1714 loops=1)
+               ->  Result  (cost=0.00..863.59 rows=1667 width=12) (actual time=0.382..2.802 rows=1686 loops=1)
+                     Filter: (share0_ref3.id1 IS NULL)
+                     ->  Hash Left Join  (cost=0.00..863.48 rows=3334 width=12) (actual time=0.381..2.342 rows=3385 loops=1)
+                           Hash Cond: (bfv_cte_t1_1.a = share0_ref3.id1)
+                           Extra Text: (seg1)   Hash chain length 1.0 avg, 2 max, using 1691 of 131072 buckets.
+                           ->  Seq Scan on bfv_cte_t1 bfv_cte_t1_1  (cost=0.00..431.06 rows=3334 width=4) (actual time=0.014..0.422 rows=3385 loops=1)
+                           ->  Hash  (cost=431.03..431.03 rows=1667 width=8) (actual time=0.341..0.342 rows=1714 loops=1)
+                                 Buckets: 131072  Batches: 1  Memory Usage: 1091kB
+                                 ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.03 rows=1667 width=8) (actual time=0.000..0.098 rows=1714 loops=1)
+ Optimizer: GPORCA
+ Planning Time: 66.203 ms
+   (slice0)    Executor memory: 96K bytes.
+   (slice1)    Executor memory: 1257K bytes avg x 3 workers, 1269K bytes max (seg0).  Work_mem: 1091K bytes max.
+ Memory used:  128000kB
+ Execution Time: 11.612 ms
+(37 rows)
+
+select bfv_cte_est_rows($$
+with cte as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000))
+select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null
+union all
+select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null
+$$) between 8000 and 12000 as two_consumers_ok;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
+ two_consumers_ok 
+------------------
+ t
+(1 row)
+
+-- Actual number of rows is 5000: the second CTE reads the first one
+explain analyze with c1 as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000)), c2 as (select * from c1 where val1 > 0) select * from c1 join c2 using (id1);
+                                                                  QUERY PLAN                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1727.10 rows=4999 width=12) (actual time=4.643..6.354 rows=5000 loops=1)
+   ->  Sequence  (cost=0.00..1726.88 rows=1667 width=12) (actual time=4.120..5.670 rows=1714 loops=1)
+         ->  Shared Scan (share slice:id 1:0)  (cost=0.00..863.44 rows=1667 width=1) (actual time=3.607..3.700 rows=1714 loops=1)
+               ->  Hash Semi Join  (cost=0.00..863.44 rows=1667 width=8) (actual time=2.027..3.348 rows=1714 loops=1)
+                     Hash Cond: (bfv_cte_left.id1 = bfv_cte_right.id2)
+                     Extra Text: (seg0)   Hash chain length 1.0 avg, 3 max, using 1698 of 131072 buckets.
+                     ->  Seq Scan on bfv_cte_left  (cost=0.00..431.07 rows=3334 width=8) (actual time=0.026..0.389 rows=3385 loops=1)
+                     ->  Hash  (cost=431.19..431.19 rows=1667 width=4) (actual time=1.253..1.254 rows=1714 loops=1)
+                           Buckets: 131072  Batches: 1  Memory Usage: 1085kB
+                           ->  Seq Scan on bfv_cte_right  (cost=0.00..431.19 rows=1667 width=4) (actual time=0.273..0.735 rows=1714 loops=1)
+                                 Filter: (id2 > 5000)
+                                 Rows Removed by Filter: 1654
+         ->  Hash Join  (cost=0.00..863.42 rows=1667 width=12) (actual time=0.376..1.803 rows=1714 loops=1)
+               Hash Cond: (share0_ref3.id1 = share0_ref2.id1)
+               Extra Text: (seg0)   Hash chain length 1.0 avg, 3 max, using 1698 of 131072 buckets.
+               ->  Result  (cost=0.00..431.09 rows=3334 width=8) (actual time=0.002..0.464 rows=1714 loops=1)
+                     Filter: (share0_ref3.val1 > 0)
+                     ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.03 rows=1667 width=8) (actual time=0.000..0.112 rows=1714 loops=1)
+               ->  Hash  (cost=431.03..431.03 rows=1667 width=8) (actual time=0.344..0.344 rows=1714 loops=1)
+                     Buckets: 131072  Batches: 1  Memory Usage: 1091kB
+                     ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.03 rows=1667 width=8) (actual time=0.000..0.098 rows=1714 loops=1)
+ Optimizer: GPORCA
+ Planning Time: 55.562 ms
+   (slice0)    Executor memory: 68K bytes.
+   (slice1)    Executor memory: 1231K bytes avg x 3 workers, 1244K bytes max (seg0).  Work_mem: 1091K bytes max.
+ Memory used:  128000kB
+ Execution Time: 7.102 ms
+(27 rows)
+
+select bfv_cte_est_rows($$
+with c1 as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000)),
+     c2 as (select * from c1 where val1 > 0)
+select * from c1 join c2 using (id1)
+$$) between 4000 and 6000 as nested_consumers_ok;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
+ nested_consumers_ok 
+---------------------
+ t
+(1 row)
+
+drop function bfv_cte_est_rows(text);
+drop table bfv_cte_left, bfv_cte_right, bfv_cte_t1;
 reset optimizer_trace_fallback;

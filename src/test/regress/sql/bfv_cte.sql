@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/\(cost=.*\)/
+-- s/\(cost=.*\)//
+-- end_matchsubs
 --
 -- Test queries mixes window functions with aggregate functions or grouping.
 --
@@ -444,5 +448,62 @@ update pg_class set relpages = 1::int, reltuples = 12.0::real where relname = 'a
 reset allow_system_table_mods;
 
 explain select * from a_table join cte_view on a_table.a = (select a from cte_view) where cte_view.a = 2024;
+
+--
+-- Test that the row estimate of a shared CTE accounts for the filters inside
+-- the CTE body. The consumers used to see the statistics of the unfiltered
+-- producer scan, so the estimate of a query using the CTE more than once was
+-- orders of magnitude lower than that of the same query with the CTE inlined.
+--
+create table bfv_cte_left(id1 int, val1 int);
+create table bfv_cte_right(id2 int, val2 int);
+create table bfv_cte_t1(a int);
+insert into bfv_cte_left select i, 10000 + i from generate_series(1, 10000) i;
+insert into bfv_cte_right select i, 100000 + i from generate_series(1, 10000) i;
+insert into bfv_cte_t1 select generate_series(1, 10000);
+analyze bfv_cte_left;
+analyze bfv_cte_right;
+analyze bfv_cte_t1;
+
+-- Returns the row estimate of the top plan node
+create function bfv_cte_est_rows(query text) returns bigint as $$
+declare
+	line text;
+begin
+	for line in execute 'explain ' || query loop
+		return substring(line from 'rows=([0-9]+)')::bigint;
+	end loop;
+end;
+$$ language plpgsql;
+
+-- Actual number of rows is 5000
+explain analyze with cte as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000)) select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null;
+
+select bfv_cte_est_rows($$
+with cte as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000))
+select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null
+$$) between 4000 and 6000 as single_consumer_ok;
+
+-- Actual number of rows is 10000
+explain analyze with cte as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000)) select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null union all select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null;
+
+select bfv_cte_est_rows($$
+with cte as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000))
+select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null
+union all
+select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null
+$$) between 8000 and 12000 as two_consumers_ok;
+
+-- Actual number of rows is 5000: the second CTE reads the first one
+explain analyze with c1 as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000)), c2 as (select * from c1 where val1 > 0) select * from c1 join c2 using (id1);
+
+select bfv_cte_est_rows($$
+with c1 as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000)),
+     c2 as (select * from c1 where val1 > 0)
+select * from c1 join c2 using (id1)
+$$) between 4000 and 6000 as nested_consumers_ok;
+
+drop function bfv_cte_est_rows(text);
+drop table bfv_cte_left, bfv_cte_right, bfv_cte_t1;
 
 reset optimizer_trace_fallback;
