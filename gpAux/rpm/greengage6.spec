@@ -70,8 +70,9 @@ find %{buildroot}%{prefix} -type f \
 find %{buildroot}%{prefix} -name "*.md" -executable \
     -exec chmod -x {} +
 
-# Remove debug info from *.so
-find %{buildroot}%{prefix} -type f -name "*.so" -exec strip --strip-debug {} \;
+# Remove symbols and debug info from ELF files
+find %{buildroot}%{prefix} -type f \( -perm -u+x -o -name "*.so*" \) \
+    -exec strip --strip-unneeded {} \; 2>/dev/null
 
 %files
 %{prefix}
