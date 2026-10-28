@@ -71,6 +71,7 @@ test: misc
 test: drop_rename
 test: starve_case pg_views_concurrent_drop alter_blocks_for_update_and_viceversa reader_waits_for_lock resource_queue
 test: vacuum_drop_phase_ao
+test: analyzedb_aoseg_locks
 
 # Test simple cancellation for resource queues and cancellation/deadlocks for
 # sessions with multiple portals.
