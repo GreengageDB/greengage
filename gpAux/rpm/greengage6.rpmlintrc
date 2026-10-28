@@ -2,7 +2,9 @@
 addFilter(r"dir-or-file-in-opt")
 
 # Scripts use /usr/bin/env on purpose. See `__brp_mangle_shebangs_exclude_from` in the spec
-addFilter(r"env-script-interpreter")
+# Rocky Linux 8: wrong-script-interpreter
+# Rocky Linux 9: env-script-interpreter
+addFilter(r"(env-script-interpreter|wrong-script-interpreter .*/usr/bin/env)")
 
 # Python modules in lib/python are imported, not executed
 addFilter(r"non-executable-script")
