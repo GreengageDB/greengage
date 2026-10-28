@@ -1,4 +1,7 @@
 set optimizer_print_missing_stats = off;
+-- GPDB: an ordinary domain below is over the row type of a temporary table,
+-- which is refused while its catalog rows are kept in memory.
+SET gp_enable_temp_memory_catalog = off;
 --
 -- ALTER_TABLE
 --
@@ -3252,3 +3255,4 @@ DROP TABLE dist_replicated;
 DROP TABLE dist_by_key;
 DROP FUNCTION fn_vol;
 DROP FUNCTION fn_val;
+RESET gp_enable_temp_memory_catalog;

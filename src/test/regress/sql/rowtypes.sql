@@ -12,6 +12,10 @@
 -- plans as in upstream.
 -- end_ignore
 
+-- GPDB: some ordinary functions below use the row types of temporary tables,
+-- which is refused while their catalog rows are kept in memory.
+SET gp_enable_temp_memory_catalog = off;
+
 -- Make both a standalone composite type and a table rowtype
 
 create type complex_t as (r float8, i float8);
@@ -568,3 +572,5 @@ SELECT (NULL::compositetable).a;
 SELECT (NULL::compositetable).oid;
 
 DROP TABLE compositetable;
+
+RESET gp_enable_temp_memory_catalog;

@@ -7,6 +7,11 @@
 
 -- session 1 is going to panic on primary segment 0, creating orphaned temp table on all QEs;
 -- session 2 will remain, so the temp table on non-PANIC segment will remain too (until the session resets or exits)
+-- (the temporary tables must keep their catalog rows on disk to be orphaned)
+1: SET gp_enable_temp_memory_catalog = off;
+2: SET gp_enable_temp_memory_catalog = off;
+0U: SET gp_enable_temp_memory_catalog = off;
+1U: SET gp_enable_temp_memory_catalog = off;
 1: create temp table tt_av1(a int);
 2: create temp table tt_av2(a int);
 
@@ -23,6 +28,7 @@
 
 -- make sure the segment restarted,
 -- also served as a third test case.
+1: SET gp_enable_temp_memory_catalog = off;
 1: create temp table tt_av3(a int);
 
 -- clear the fault

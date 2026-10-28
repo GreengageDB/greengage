@@ -2,6 +2,8 @@
 
 -- case 1: Before the fix, when backend process panic on the segment, the temp table will be left on the coordinator.
 -- create a temp table
+-- (the temporary tables must keep their catalog rows on disk to be orphaned)
+1: SET gp_enable_temp_memory_catalog = off;
 1: CREATE TEMP TABLE test_temp_table_cleanup(a int);
 
 -- panic on segment 0
@@ -26,6 +28,7 @@
 1q:
 
 -- case 2: Test if temp table will be left on the coordinator, when session exits in coordinator within a transaction block.
+2: SET gp_enable_temp_memory_catalog = off;
 2: CREATE TEMP TABLE test_temp_table_cleanup(a int);
 2: begin;
 2: select * from test_temp_table_cleanup;
@@ -36,6 +39,7 @@
 
 -- case 3: Test if temp namespace will be left if session exits during a long insert operation
 
+4: SET gp_enable_temp_memory_catalog = off;
 4: CREATE TEMP TABLE test_temp_table_cleanup(a int);
 4: BEGIN;
 -- simulate a long insert query

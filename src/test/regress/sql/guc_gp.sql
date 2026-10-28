@@ -168,6 +168,9 @@ set allow_segment_DML to off;
 -- There's a test like this in upstream 'guc' test, but this expanded version
 -- verifies that temp tables are dropped on segments, too.
 --
+-- GPDB: DISCARD ALL below drops temporary objects kept in memory on the
+-- segments too; keep them on disk to check that it does not.
+SET gp_enable_temp_memory_catalog = off;
 CREATE TEMP TABLE reset_test ( data text ) ON COMMIT DELETE ROWS;
 DISCARD TEMP;
 -- Try to create a new temp table with same. Should work.
@@ -460,3 +463,4 @@ explain insert into t2_dist_rand select * from t_dist_hash;
 reset gp_force_random_redistribution;
 reset optimizer;
 
+RESET gp_enable_temp_memory_catalog;
