@@ -2280,6 +2280,7 @@ preprocess_range_spec(partValidationState *vstate)
 	List	   *plusop = list_make2(makeString("pg_catalog"), makeString("+"));
 	List	   *ltop = list_make2(makeString("pg_catalog"), makeString("<"));
 	List	   *coltypes = NIL;
+	List	   *colcollations = NIL;
 	List	   *stenc;
 	List	   *newelts = NIL;
 
@@ -2289,6 +2290,7 @@ preprocess_range_spec(partValidationState *vstate)
 		bool		found = false;
 		ListCell   *lc2;
 		TypeName   *typname = NULL;
+		Oid			colcollation = InvalidOid;
 
 		foreach(lc2, vstate->cxt->columns)
 		{
@@ -2304,11 +2306,13 @@ preprocess_range_spec(partValidationState *vstate)
 										 &column->typeName->typemod);
 				}
 				typname = column->typeName;
+				colcollation = GetColumnDefCollation(NULL, column, column->typeName->typeOid);
 				break;
 			}
 		}
 		Assert(found);
 		coltypes = lappend(coltypes, typname);
+		colcollations = lappend_oid(colcollations, colcollation);
 	}
 
 	partition_range_every(pstate, vstate->pBy, coltypes, vstate->at_depth,
@@ -2397,7 +2401,8 @@ preprocess_range_spec(partValidationState *vstate)
 						   *lcend,
 						   *lcevery,
 						   *lccol,
-						   *lclastend;
+						   *lclastend,
+						   *lccollation;
 				List	   *lastend = NIL;
 
 				/*
@@ -2412,28 +2417,31 @@ preprocess_range_spec(partValidationState *vstate)
 
 					lcend = list_head(end);
 					/* coerce to target type */
-					forboth(lcstart, start, lccol, coltypes)
+					forthree(lcstart, start, lccol, coltypes, lccollation, colcollations)
 					{
 						TypeName   *typ = lfirst(lccol);
+						Oid			collation = lfirst_oid(lccollation);
 						Node	   *newnode;
 						int32		typmod;
 						Oid			typid;
 
 						typenameTypeIdAndMod(pstate, typ, &typid, &typmod);
 
-						newnode = coerce_partition_value_to_const(pstate,
-																  lfirst(lcstart),
-																  typid, typmod,
-																  PARTTYP_RANGE);
+						newnode = coerce_partition_value_to_collated_const(pstate,
+																		   lfirst(lcstart),
+																		   typid, typmod,
+																		   PARTTYP_RANGE,
+																		   collation);
 
 						lfirst(lcstart) = newnode;
 
 						/* be sure we coerce the end value */
-						newnode = coerce_partition_value_to_const(pstate,
-																  lfirst(lcend),
-																  typid,
-																  typmod,
-																  PARTTYP_RANGE);
+						newnode = coerce_partition_value_to_collated_const(pstate,
+																		   lfirst(lcend),
+																		   typid,
+																		   typmod,
+																		   PARTTYP_RANGE,
+																		   collation);
 
 						assign_expr_collations(pstate, newnode);
 
@@ -2442,9 +2450,10 @@ preprocess_range_spec(partValidationState *vstate)
 					}
 
 					curstart = copyObject(start);
-					forboth(lccol, coltypes, lcevery, every)
+					forthree(lccol, coltypes, lcevery, every, lccollation, colcollations)
 					{
 						TypeName   *typ = lfirst(lccol);
+						Oid			collation = lfirst_oid(lccollation);
 						HeapTuple	optup;
 						List	   *opname = list_make2(makeString("pg_catalog"),
 														makeString("+"));
@@ -2474,11 +2483,12 @@ preprocess_range_spec(partValidationState *vstate)
 						ReleaseSysCache(newetyp);
 
 						/* we need to coerce */
-						e = coerce_partition_value_to_const(pstate,
-															e,
-															newrtypeId,
-															typmod,
-															PARTTYP_RANGE);
+						e = coerce_partition_value_to_collated_const(pstate,
+																	 e,
+																	 newrtypeId,
+																	 typmod,
+																	 PARTTYP_RANGE,
+																	 collation);
 
 						lfirst(lcevery) = e;
 						rtypeId = newrtypeId;
@@ -2694,24 +2704,27 @@ preprocess_range_spec(partValidationState *vstate)
 			{
 				ListCell   *lccol;
 				ListCell   *lcstart;
+				ListCell   *lccollation;
 				List	   *start =
 				((PartitionRangeItem *) pbs->partStart)->partRangeVal;
 
 				/* coerce to target type */
-				forboth(lcstart, start, lccol, coltypes)
+				forthree(lcstart, start, lccol, coltypes, lccollation, colcollations)
 				{
 					Node	   *mystart = lfirst(lcstart);
 					TypeName   *typ = lfirst(lccol);
+					Oid			collation = lfirst_oid(lccollation);
 					Node	   *newnode;
 					Oid			typid;
 					int32		typmod;
 
 					typenameTypeIdAndMod(pstate, typ, &typid, &typmod);
 
-					newnode = coerce_partition_value_to_const(pstate,
-															  mystart,
-															  typid, typmod,
-															  PARTTYP_RANGE);
+					newnode = coerce_partition_value_to_collated_const(pstate,
+																	   mystart,
+																	   typid, typmod,
+																	   PARTTYP_RANGE,
+																	   collation);
 
 					assign_expr_collations(pstate, newnode);
 
@@ -2724,22 +2737,25 @@ preprocess_range_spec(partValidationState *vstate)
 				List	   *end = ((PartitionRangeItem *) pbs->partEnd)->partRangeVal;
 				ListCell   *lccol;
 				ListCell   *lcend;
+				ListCell   *lccollation;
 
 				/* coerce to target type */
-				forboth(lcend, end, lccol, coltypes)
+				forthree(lcend, end, lccol, coltypes, lccollation, colcollations)
 				{
 					Node	   *myend = lfirst(lcend);
 					TypeName   *typ = lfirst(lccol);
+					Oid			collation = lfirst_oid(lccollation);
 					Node	   *newnode;
 					Oid			typid;
 					int32		typmod;
 
 					typenameTypeIdAndMod(pstate, typ, &typid, &typmod);
 
-					newnode = coerce_partition_value_to_const(pstate,
-															  myend,
-															  typid, typmod,
-															  PARTTYP_RANGE);
+					newnode = coerce_partition_value_to_collated_const(pstate,
+																	   myend,
+																	   typid, typmod,
+																	   PARTTYP_RANGE,
+																	   collation);
 
 					assign_expr_collations(pstate, newnode);
 
@@ -3974,6 +3990,7 @@ validate_list_partition(partValidationState *vstate)
 	Node	   *n = vstate->spec;
 	ListCell   *lc;
 	List	   *coltypes = NIL;
+	List	   *colcollations = NIL;
 
 	/* just recreate attnum references */
 	foreach(lc, vstate->pBy->keys)
@@ -3982,6 +3999,7 @@ validate_list_partition(partValidationState *vstate)
 		char	   *colname = strVal(lfirst(lc));
 		bool		found = false;
 		TypeName   *typname = NULL;
+		Oid			colcollation = InvalidOid;
 
 		foreach(llc2, vstate->cxt->columns)
 		{
@@ -3997,11 +4015,13 @@ validate_list_partition(partValidationState *vstate)
 										 &column->typeName->typemod);
 				}
 				typname = column->typeName;
+				colcollation = GetColumnDefCollation(NULL, column, column->typeName->typeOid);
 				break;
 			}
 		}
 		Assert(found);
 		coltypes = lappend(coltypes, typname);
+		colcollations = lappend_oid(colcollations, colcollation);
 	}
 
 	if (!PointerIsValid(n))
@@ -4040,6 +4060,7 @@ validate_list_partition(partValidationState *vstate)
 			int			nvals;
 			int			nparts = list_length(vstate->pBy->keys);
 			ListCell   *llc2;
+			ListCell   *llccoll;
 
 			nvals = list_length(vals);
 
@@ -4061,26 +4082,35 @@ validate_list_partition(partValidationState *vstate)
 			 * Transform expressions
 			 */
 			llc2 = list_head(coltypes);
+			llccoll = list_head(colcollations);
 			foreach(lc_val, vals)
 			{
 				Node	   *node = transformExpr(pstate,
 												 (Node *) lfirst(lc_val),
 												 EXPR_KIND_PARTITION_EXPRESSION);
 				TypeName   *type = lfirst(llc2);
+				Oid			collation = lfirst_oid(llccoll);
 				int32		typmod;
 				Oid			typid;
 
 				typenameTypeIdAndMod(pstate, type, &typid, &typmod);
-				node = coerce_partition_value_to_const(pstate,
-													   node, typid, typmod,
-													   PARTTYP_LIST);
+				node = coerce_partition_value_to_collated_const(pstate,
+																node, typid, typmod,
+																PARTTYP_LIST,
+																collation);
 
 				tvals = lappend(tvals, node);
 
 				if (lnext(llc2))
+				{
 					llc2 = lnext(llc2);
+					llccoll = lnext(llccoll);
+				}
 				else
+				{
 					llc2 = list_head(coltypes); /* circular */
+					llccoll = list_head(colcollations);
+				}
 			}
 			Assert(list_length(tvals) == nvals);
 
@@ -4351,15 +4381,36 @@ range_partition_walker(Node *node, void *context)
 
 /*
  * coerce_partition_value_to_const
- *		Coerce a partition value to the given type and evaluate it as Const.
+ *		Coerce a partition value to the given type and evaluate it as Const,
+ *		using the default collation of the type.
  *
- * Returns a Node of type Const.
+ * Kept with its original signature for ABI compatibility with extensions
+ * built against earlier minor releases. New code should call
+ * coerce_partition_value_to_collated_const() and pass the collation of the
+ * partitioning key column.
  */
 Node *
 coerce_partition_value_to_const(ParseState *pstate, Node *node, Oid typid, int32 typmod,
 								PartitionByType partype)
 {
-	Oid			typcollation;
+	return coerce_partition_value_to_collated_const(pstate, node, typid, typmod,
+													partype, InvalidOid);
+}
+
+/*
+ * coerce_partition_value_to_collated_const
+ *		Coerce a partition value to the given type and evaluate it as Const
+ *		with the given collation.
+ *
+ * collation should be the collation of the partitioning key column. If it is
+ * InvalidOid, the default collation of the type is used.
+ *
+ * Returns a Node of type Const.
+ */
+Node *
+coerce_partition_value_to_collated_const(ParseState *pstate, Node *node, Oid typid, int32 typmod,
+										 PartitionByType partype, Oid collation)
+{
 	Node	   *out;
 
 	/* Create a coercion expression to the target type */
@@ -4377,11 +4428,8 @@ coerce_partition_value_to_const(ParseState *pstate, Node *node, Oid typid, int32
 						format_type_be(typid)),
 				 parser_errposition(pstate, exprLocation(node))));
 
-	/*
-	 * GPDB_91_MERGE_FIXME: For now, partition specifications always use
-	 * default collation. We're not very consistent about that though, I think.
-	 */
-	typcollation = get_typcollation(typid);
+	if (!OidIsValid(collation))
+		collation = get_typcollation(typid);
 
 	/*
 	 * And then evaluate it. evaluate_expr calls possible cast function, and
@@ -4390,7 +4438,7 @@ coerce_partition_value_to_const(ParseState *pstate, Node *node, Oid typid, int32
 	out = (Node *) evaluate_expr((Expr *) out,
 								 typid,
 								 typmod,
-								 typcollation);
+								 collation);
 	if (!IsA(out, Const))
 		elog(ERROR, "partition parameter is not constant");
 
