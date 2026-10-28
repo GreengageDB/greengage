@@ -661,6 +661,7 @@ optimizer_analyze_root_partition = on # stats collection on root partitions
 #xmlbinary = 'base64'
 #xmloption = 'content'
 #gin_fuzzy_search_limit = 0
+#output_plugin_libraries = 'pgoutput, test_decoding'  # approved plugins for logical decoding
 #gin_pending_list_limit = 4MB
 
 # - Locale and Formatting -
