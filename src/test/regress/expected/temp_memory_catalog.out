@@ -752,7 +752,7 @@ SHOW gp_enable_temp_memory_catalog;
 SELECT setting, reset_val FROM pg_settings WHERE name = 'gp_enable_temp_memory_catalog';
  setting | reset_val 
 ---------+-----------
- off     | off
+ off     | on
 (1 row)
 
 CREATE TEMP TABLE tc_disk2 (a int) DISTRIBUTED BY (a);
@@ -2075,7 +2075,7 @@ SHOW gp_enable_temp_memory_catalog;
 SELECT reset_val FROM pg_settings WHERE name = 'gp_enable_temp_memory_catalog';
  reset_val 
 -----------
- off
+ on
 (1 row)
 
 CREATE TEMP TABLE tc_sticky (a int) DISTRIBUTED BY (a);

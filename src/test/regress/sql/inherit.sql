@@ -5,6 +5,9 @@
 -- m/\(cost=.*\)/
 -- s/\(cost=.*\)//
 -- end_matchsubs
+-- GPDB: some temporary tables below inherit from ordinary ones, which is
+-- refused while their catalog rows are kept in memory.
+SET gp_enable_temp_memory_catalog = off;
 CREATE TABLE a (aa TEXT);
 CREATE TABLE b (bb TEXT) INHERITS (a);
 CREATE TABLE c (cc TEXT) INHERITS (a);
@@ -1074,3 +1077,4 @@ UPDATE errtst_parent SET partid = 0, data = data + 10 WHERE partid = 20;
 UPDATE errtst_parent SET partid = 30, data = data + 10 WHERE partid = 20;
 
 DROP TABLE errtst_parent;
+RESET gp_enable_temp_memory_catalog;

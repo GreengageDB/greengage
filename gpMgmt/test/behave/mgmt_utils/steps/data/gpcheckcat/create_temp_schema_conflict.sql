@@ -1,4 +1,6 @@
 \t
+-- the temporary schema must be on disk to leak when the session is killed
+set gp_enable_temp_memory_catalog = off;
 create temp table temp_table(i int);
 create schema good_schema;
 create table good_schema.good_table(i int);

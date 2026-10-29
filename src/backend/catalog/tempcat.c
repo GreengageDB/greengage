@@ -172,7 +172,7 @@
 #include "utils/vmem_tracker.h"
 
 /* GUCs */
-bool		gp_enable_temp_memory_catalog = false;
+bool		gp_enable_temp_memory_catalog = true;
 int			gp_temp_memory_catalog_max_size = 16384;	/* kB, per writer */
 
 /* ----------------------------------------------------------------

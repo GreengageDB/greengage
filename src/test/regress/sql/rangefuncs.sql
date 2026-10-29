@@ -1,3 +1,6 @@
+-- GPDB: some ordinary functions below use the row type of a temporary table,
+-- which is refused while its catalog rows are kept in memory.
+SET gp_enable_temp_memory_catalog = off;
 CREATE TABLE rngfunc2(rngfuncid int, f2 int);
 INSERT INTO rngfunc2 VALUES(1, 11);
 INSERT INTO rngfunc2 VALUES(2, 22);
@@ -713,3 +716,4 @@ select * from a, coalesce(b) as c(d int, e int, f int, g int);  -- fail
 with a(b) as (values (row(1,2,3)))
 select * from a, coalesce(b) as c(d int, e int, f float);  -- fail
 select * from int8_tbl, coalesce(row(1)) as (a int, b int);  -- fail
+RESET gp_enable_temp_memory_catalog;
