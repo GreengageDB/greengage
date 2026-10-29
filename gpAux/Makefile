@@ -395,7 +395,7 @@ pkg:
 	esac
 
 # Build Debian package
-pkg-deb : GPDIR = $(PACKAGE_NAME)
+pkg-deb : GPDIR := $(PACKAGE_NAME)
 pkg-deb : debian/changelog debian/install
 	@echo "Building with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
 	@GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" PACKAGE_NAME="$(PACKAGE_NAME)" debuild --preserve-env -us -uc -b
