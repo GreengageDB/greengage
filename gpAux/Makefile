@@ -380,8 +380,19 @@ debian/install:
 	@echo "$(PACKAGE_NAME)/* /" > $@
 
 
-# Default packaging target
-pkg : pkg-deb
+# Default packaging target: detect the platform
+pkg:
+	@case "$(BLD_ARCH)" in \
+		rhel*|rocky*|ol*|fedora*|redos*|alt*) \
+			echo "Detected RPM-based platform ($(BLD_ARCH))"; \
+			$(MAKE) pkg-rpm ;; \
+		ubuntu*|debian*|astra*) \
+			echo "Detected DEB-based platform ($(BLD_ARCH))"; \
+			$(MAKE) pkg-deb ;; \
+		*) \
+			echo "Error: Unsupported platform '$(BLD_ARCH)' for packaging." >&2; \
+			exit 1 ;; \
+	esac
 
 # Build Debian package
 pkg-deb : GPROOT = /opt/greengagedb

@@ -31,6 +31,14 @@ The packaging system is located in [gpAux/](../gpAux/):
 
 Run the commands from the project root directory.
 
+### Building the Package
+
+The default target detects the platform and builds the correct format:
+
+```bash
+make -C ./gpAux pkg
+```
+
 ### Building the Debian Package
 
 ```bash
@@ -71,7 +79,10 @@ make -C ./gpAux pkg-rpm GPROOT=/custom/path GPDIR=custom_dir
 
 ### Makefile Targets
 
-- `pkg`: Default target (aliases to `pkg-deb`)
+- `pkg`: Default target.
+  Runs `pkg-deb` on DEB-based platforms (Ubuntu, Astra. etc)
+  and `pkg-rpm` on RPM-based platforms (RHEL, Rocky, etc.).
+  The selection uses the variable `BLD_ARCH`.
 - `pkg-deb`: Builds the Debian package
 - `pkg-rpm`: Builds the RPM package
 - `changelog`: Generates `debian/changelog` (not stored in repo)
