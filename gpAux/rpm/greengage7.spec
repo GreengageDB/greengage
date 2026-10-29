@@ -19,6 +19,13 @@ Group:   Applications/Databases
 License: ASL 2.0
 URL:     https://greengagedb.org
 
+# Explicitly declare the public library needed by external connectors
+# The prefix is excluded from auto-generated Provides
+
+Provides: libgppc.so.1
+Provides: libgppc.so.1()(64bit)
+
+# System utilities required by database management scripts
 Requires: findutils
 Requires: glibc-langpack-en
 Requires: iproute
@@ -32,6 +39,7 @@ Requires: procps-ng
 Requires: rsync
 Requires: zip
 
+# Python libraries required by management utilities
 Requires: python3
 Requires: python3-psutil
 Requires: python3-pyyaml
