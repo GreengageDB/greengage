@@ -4,6 +4,10 @@
 %{!?gpdir:  %global gpdir  greengage7}
 %global     prefix %{gproot}/%{gpdir}
 
+# Do not export the bundled PostgreSQL libraries to avoid conflicts
+%global __provides_exclude_from ^%{prefix}/.*$
+%global __requires_exclude ^(libpq|libecpg|libecpg_compat|libpgtypes|libpqwalreceiver)\.so
+
 # Scripts use `#!/usr/bin/env <interpreter>' for portability
 %global __brp_mangle_shebangs_exclude_from ^%{prefix}/.*$
 
