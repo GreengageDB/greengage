@@ -29,7 +29,6 @@ Requires: rsync
 Requires: zip
 
 Requires: python3
-Requires: python3-pip
 Requires: python3-psutil
 Requires: python3-pyyaml
 Requires: python3-psycopg2
