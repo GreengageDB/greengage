@@ -351,7 +351,7 @@ CMCVCardinalityTest:
 BpCharMCVCardinalityEquals BpCharMCVCardinalityGreaterThan
 TextMCVCardinalityEquals TextMCVCardinalityGreaterThan
 VarcharMCVCardinalityEquals VarcharMCVCardinalityGreaterThan Citext-Cardinality
-Name-Cardinality Char-Cardinality;
+Name-Cardinality Char-Cardinality ByteaMCVCardinalityEquals ByteaLOJCardinality;
 
 COpfamiliesTest:
 JoinCitextVarchar JoinDefaultOpfamiliesUsingNonDefaultOpfamilyOp
