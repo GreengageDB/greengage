@@ -54,6 +54,9 @@ using OID = ULONG;
 #define GPDB_CIDR OID(650)
 #define GPDB_MACADDR OID(829)
 
+// binary types
+#define GPDB_BYTEA OID(17)
+
 #define GPDB_UNKNOWN OID(705)
 
 #define GPDB_DATE_TIMESTAMP_EQUALITY OID(2347)
