@@ -169,7 +169,6 @@ CLogicalCTEProducer::PstatsDerive(CMemoryPool *, CExpressionHandle &exprhdl,
 	return stats;
 }
 
-
 //---------------------------------------------------------------------------
 //	@function:
 //		CLogicalCTEProducer::Esp
