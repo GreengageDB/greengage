@@ -341,12 +341,13 @@ endif
 # Packaging targets with changelog options
 #---------------------------------------------------------------------
 
-# Metadata vars
-PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print $$2}')
-MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
-DATE_RFC := $(shell date -R)
+# Common metadata vars
 ARTIFACTS_DIR := $(CURDIR)/../Package
-RPM_TEMPDIR := $(CURDIR)/../RPM
+DATE_RFC := $(shell date -R)
+GPROOT := /opt/greengagedb
+
+# Debian package name (used by debian/changelog, debian/install, pkg-deb)
+PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print $$2}')
 
 ../VERSION :
 	@echo "Update $@"
@@ -368,7 +369,7 @@ version-info : version-vars
 	@echo "BUILD_TYPE: $(BUILD_TYPE)"
 
 # Generate package control files
-changelog : debian/changelog
+debian/changelog : MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
 debian/changelog : version-vars
 	@echo "$(PACKAGE_NAME) ($(PACKAGE_VERSION)) $(VERSION_CODENAME); urgency=low" > $@
 	@echo "" >> $@
@@ -378,7 +379,6 @@ debian/changelog : version-vars
 
 debian/install:
 	@echo "$(PACKAGE_NAME)/* /" > $@
-
 
 # Default packaging target: detect the platform
 pkg:
@@ -395,8 +395,7 @@ pkg:
 	esac
 
 # Build Debian package
-pkg-deb : GPROOT = /opt/greengagedb
-pkg-deb : GPDIR  = $(PACKAGE_NAME)
+pkg-deb : GPDIR = $(PACKAGE_NAME)
 pkg-deb : debian/changelog debian/install
 	@echo "Building with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
 	@GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" PACKAGE_NAME="$(PACKAGE_NAME)" debuild --preserve-env -us -uc -b
@@ -409,11 +408,11 @@ pkg-deb : debian/changelog debian/install
 											-exec mv -f {} $(ARTIFACTS_DIR)/ \;
 
 # Build RPM package
-pkg-rpm : GPROOT   = /opt/greengagedb
-pkg-rpm : GPDIR    = $(PACKAGE_NAME)
-pkg-rpm : RPM_ARCH = $(shell rpm --eval '%{_arch}')
+pkg-rpm : GPDIR := $(shell grep '^Name:' rpm/greengage7.spec | head -1 | awk '{print $$2}')
+pkg-rpm : RPM_ARCH := $(shell rpm --eval '%{_arch}')
+pkg-rpm : RPM_TEMPDIR := $(CURDIR)/../RPM
 pkg-rpm : version-vars
-	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME), ARCH=$(RPM_ARCH)"
+	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), ARCH=$(RPM_ARCH)"
 	@rm -rf $(RPM_TEMPDIR)
 	@mkdir -p $(addprefix $(RPM_TEMPDIR)/,BUILD BUILDROOT RPMS SOURCES SPECS SRPMS)
 	@rpmbuild -bb \
