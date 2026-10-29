@@ -94,7 +94,8 @@ Both package formats reuse `version-vars`:
 `pkg-deb` does the following:
 
 - Executes `debuild` with preserved environment variables (`GPROOT`, `GPDIR`,
-  `DESTDIR` as `PACKAGE_NAME`)
+  `PACKAGE_NAME`). The `DESTDIR` is set in `debian/rules` using the
+  `PACKAGE_NAME` value.
 - Skips signing with `-us -uc` flags and skips tests
   (`DEB_BUILD_OPTIONS=nocheck`) for faster builds
 - Collects only the build artifacts (`.deb`, `.ddeb`, `.build`, `.buildinfo`,
@@ -108,8 +109,8 @@ The `debian/rules` file uses debhelper (dh) with custom overrides:
 - Unsets standard compiler flags to avoid conflicts with the project's build
   system
 - Enables parallel builds using all available CPU cores
-- Removes the executable bit from Python/Perl/Bash files without shebang and
-  from `*.md` files (custom `dh_fixperms`)
+- Removes the executable bit from Python/Perl/Bash files without shebang files
+  (custom `dh_fixperms`)
 - Uses the standard `dh_gencontrol` invocation (no dynamic dependency
   injection)
 
@@ -147,12 +148,13 @@ The `rpm/greengage7.spec` file defines the RPM build:
 
 Both `pkg-deb` and `pkg-rpm` package an already configured and built source
 tree. They assume that the build dependencies are installed and that
-`make dist` works on the host; neither target builds GPDB from scratch.
+`make dist` works on the host; neither target installs dependencies or
+prepares the environment.
 
 To get a complete environment, use the Docker images instead of installing
 the dependencies manually:
 
-- [ci/Dockerfile.ubuntu](../ci/Dockerfile.ubuntu) - Ubuntu 22.04
+- [ci/Dockerfile.ubuntu](../ci/Dockerfile.ubuntu) - Ubuntu 22.04 (default)
 - [ci/Dockerfile.rockylinux](../ci/Dockerfile.rockylinux) - Rocky Linux 9
 
 See [ci/readme.md](../ci/readme.md) for instructions on building and
