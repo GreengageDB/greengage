@@ -1,11 +1,19 @@
 #!/bin/bash
+# Some packages, for example KRB5, not installing properly without this option
+export DEBIAN_FRONTEND=noninteractive
+
+set -eo pipefail
 
 apt-get update
 apt-get install -y \
 	bison \
+	build-essential \
 	ccache \
 	cmake \
 	curl \
+	debhelper \
+	devscripts \
+	fakeroot \
 	flex \
 	git-core \
 	gcc \
@@ -44,6 +52,16 @@ apt-get install -y \
 	python3-psutil \
 	python3-yaml \
 	zlib1g-dev
+
+curl -fsSL --proto '=https' --proto-redir '=https' \
+	https://greengagedb.org/repositories/gpg | \
+	gpg --dearmor -o /etc/apt/keyrings/greengagedb.gpg
+echo "deb [signed-by=/etc/apt/keyrings/greengagedb.gpg] \
+	https://greengagedb.org/repositories/ubuntu/$(lsb_release -sr)/x86_64 \
+	greengagedb main" \
+	| tee /etc/apt/sources.list.d/greengagedb.list
+
+set +e
 
 tee -a /etc/sysctl.conf << EOF
 kernel.shmmax = 5000000000000
