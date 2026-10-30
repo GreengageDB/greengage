@@ -11253,13 +11253,12 @@ fi
 fi
 
 if test "$with_zstd" = yes; then
-        { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ZSTD_compressCCtx in -l:libzstd.a" >&5
-$as_echo_n "checking for ZSTD_compressCCtx in -l:libzstd.a... " >&6; }
-if ${ac_cv_lib__libzstd_a_ZSTD_compressCCtx+:} false; then :
+        { $as_echo "$as_me:${as_lineno-$LINENO}: checking for library containing ZSTD_compressCCtx" >&5
+$as_echo_n "checking for library containing ZSTD_compressCCtx... " >&6; }
+if ${ac_cv_search_ZSTD_compressCCtx+:} false; then :
   $as_echo_n "(cached) " >&6
 else
-  ac_check_lib_save_LIBS=$LIBS
-LIBS="-l:libzstd.a  $LIBS"
+  ac_func_search_save_LIBS=$LIBS
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -11278,22 +11277,38 @@ return ZSTD_compressCCtx ();
   return 0;
 }
 _ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  ac_cv_lib__libzstd_a_ZSTD_compressCCtx=yes
-else
-  ac_cv_lib__libzstd_a_ZSTD_compressCCtx=no
+for ac_lib in '' :libzstd.a; do
+  if test -z "$ac_lib"; then
+    ac_res="none required"
+  else
+    ac_res=-l$ac_lib
+    LIBS="-l$ac_lib  $ac_func_search_save_LIBS"
+  fi
+  if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_search_ZSTD_compressCCtx=$ac_res
 fi
 rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-LIBS=$ac_check_lib_save_LIBS
+    conftest$ac_exeext
+  if ${ac_cv_search_ZSTD_compressCCtx+:} false; then :
+  break
 fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib__libzstd_a_ZSTD_compressCCtx" >&5
-$as_echo "$ac_cv_lib__libzstd_a_ZSTD_compressCCtx" >&6; }
-if test "x$ac_cv_lib__libzstd_a_ZSTD_compressCCtx" = xyes; then :
+done
+if ${ac_cv_search_ZSTD_compressCCtx+:} false; then :
+
+else
+  ac_cv_search_ZSTD_compressCCtx=no
+fi
+rm conftest.$ac_ext
+LIBS=$ac_func_search_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_search_ZSTD_compressCCtx" >&5
+$as_echo "$ac_cv_search_ZSTD_compressCCtx" >&6; }
+ac_res=$ac_cv_search_ZSTD_compressCCtx
+if test "$ac_res" != no; then :
+  test "$ac_res" = "none required" || LIBS="$ac_res $LIBS"
 
 $as_echo "#define HAVE_LIBZSTD 1" >>confdefs.h
 
-                LIBS="-l:libzstd.a $LIBS"
 else
   as_fn_error $? "zstd library not found
 If you have libzstd already installed, see config.log for details on the
@@ -19720,8 +19735,10 @@ _ACEOF
 # literally, so that it's possible to override it at build time using
 # a command like "make ... PG_SYSROOT=path".  This has to be done after
 # we've finished all configure checks that depend on CPPFLAGS.
+# The same for LDFLAGS, too.
 if test x"$PG_SYSROOT" != x; then
   CPPFLAGS=`echo "$CPPFLAGS" | sed -e "s| $PG_SYSROOT | \\\$(PG_SYSROOT) |"`
+  LDFLAGS=`echo "$LDFLAGS" | sed -e "s| $PG_SYSROOT | \\\$(PG_SYSROOT) |"`
 fi
 
 
