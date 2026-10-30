@@ -80,7 +80,7 @@ make -C ./gpAux pkg-rpm GPROOT=/custom/path GPDIR=custom_dir
 ### Makefile Targets
 
 - `pkg`: Default target.
-  Runs `pkg-deb` on DEB-based platforms (Ubuntu, Astra. etc)
+  Runs `pkg-deb` on DEB-based platforms (Ubuntu, Astra, etc.)
   and `pkg-rpm` on RPM-based platforms (RHEL, Rocky, etc.).
   The selection uses the variable `BLD_ARCH`.
 - `pkg-deb`: Builds the Debian package
@@ -178,11 +178,69 @@ the dependencies manually:
 - [ci/Dockerfile.ubuntu](../ci/Dockerfile.ubuntu) - Ubuntu 22.04 (default)
 - [ci/Dockerfile.rockylinux](../ci/Dockerfile.rockylinux) - Rocky Linux 9
 
-See [ci/readme.md](../ci/readme.md) for instructions on building and
-using these images. To install the dependencies directly on a host without
-Docker, see [README.Linux.md](../README.Linux.md) together with
-[README.Ubuntu.bash](../README.Ubuntu.bash) (Ubuntu) or
-[README.Rhel-Rocky.bash](../README.Rhel-Rocky.bash) (RHEL/Rocky Linux).
+### Building Packages in Docker
+
+You can use the provided Dockerfiles to get a complete build environment and
+build the package inside a container.
+
+The example below builds the RPM package on Rocky Linux 9:
+
+```bash
+TARGET_OS='rockylinux'
+TARGET_OS_VERSION='9'
+
+# 1. Build the Docker image
+docker build -t ggdb7_${TARGET_OS}${TARGET_OS_VERSION}:pkg \
+  --build-arg OS_VERSION=${TARGET_OS_VERSION} \
+  --build-arg SKIP_UNITTESTS=1 \
+  -f ci/Dockerfile.${TARGET_OS} .
+
+# 2. Check the version variables
+docker run --rm -it ggdb7_${TARGET_OS}${TARGET_OS_VERSION}:pkg make -C gpdb_src/gpAux version-info
+
+# 3. Build the package (the 'pkg' target auto-detects DEB or RPM)
+docker run --rm -it -v ./Package:/home/gpadmin/gpdb_src/Package \
+  ggdb7_${TARGET_OS}${TARGET_OS_VERSION}:pkg \
+  make -C gpdb_src/gpAux pkg
+```
+
+The `-v ./Package:/home/gpadmin/gpdb_src/Package` flag mounts the local
+directory to collect the built artifacts. The resulting package files
+(e.g., `.rpm`, `.deb`, `.ddeb`, `.changes`) will appear in the `Package/`
+directory on your host.
+
+If you want to build the package from a local mount of the source code,
+replace the volume flag in the last command with `-v ./:/home/gpadmin/gpdb_src`.
+
+> **⚠️ WARNING:** New files created during the build will be owned by `root`.
+
+To change the ownership of the built artifacts to your current user, run the
+following command after the build:
+
+```bash
+sudo chown -R $(id -u):$(id -g) ./Package
+```
+
+If you mounted the entire source directory (`-v ./:/home/gpadmin/gpdb_src`),
+apply the command to the root directory:
+
+```bash
+sudo chown -R $(id -u):$(id -g) ./
+```
+
+### Building Packages on a Host
+
+If you want to build the package directly on your host machine without Docker,
+you must install the build dependencies manually.
+
+Refer to the main installation guides for your operating system:
+
+- [README.Linux.md](../README.Linux.md)
+- [README.Ubuntu.bash](../README.Ubuntu.bash) (Ubuntu)
+- [README.Rhel-Rocky.bash](../README.Rhel-Rocky.bash) (RHEL/Rocky Linux)
+
+Once the dependencies are installed, run the packaging targets from the
+project root as described in the "Usage" section.
 
 ### Package Dependencies
 
