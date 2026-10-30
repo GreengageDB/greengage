@@ -393,6 +393,29 @@ CLogicalCTEConsumer::DerivePropertyConstraint(CMemoryPool *mp,
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CLogicalCTEConsumer::Esp
+//
+//	@doc:
+//		Promise level for stat derivation. Consumer statistics are copied from
+//		the producer, so they are as reliable as the statistics of the
+//		producer's root operator (e.g. low if it has a subquery predicate).
+//
+//---------------------------------------------------------------------------
+CLogical::EStatPromise
+CLogicalCTEConsumer::Esp(CExpressionHandle &) const
+{
+	COptCtxt *poctxt = COptCtxt::PoctxtFromTLS();
+	CExpression *pexprProducer = poctxt->Pcteinfo()->PexprCTEProducer(m_id);
+	GPOS_ASSERT(nullptr != pexprProducer);
+
+	CExpressionHandle exprhdlProducer(poctxt->Pmp());
+	exprhdlProducer.Attach(pexprProducer);
+
+	return CLogical::PopConvert(pexprProducer->Pop())->Esp(exprhdlProducer);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CLogicalCTEConsumer::PstatsDerive
 //
 //	@doc:
@@ -405,10 +428,15 @@ CLogicalCTEConsumer::PstatsDerive(CMemoryPool *mp,
 								  IStatisticsArray *	// statistics_array
 ) const
 {
-	CExpression *pexprProducer =
-		COptCtxt::PoctxtFromTLS()->Pcteinfo()->PexprCTEProducer(m_id);
-	GPOS_ASSERT(nullptr != pexprProducer);
-	const IStatistics *stats = pexprProducer->Pstats();
+	CCTEInfo *pcteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();
+
+	// prefer the statistics the memo derived for the producer, they reflect
+	// the transformed producer body
+	const IStatistics *stats = pcteinfo->PstatsProducerMemo(m_id);
+	if (nullptr == stats)
+	{
+		stats = pcteinfo->PexprCTEProducer(m_id)->Pstats();
+	}
 	GPOS_ASSERT(nullptr != stats);
 
 	// copy the stats with the remaped colids

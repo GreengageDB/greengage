@@ -656,18 +656,20 @@ CMemo::OsPrint(IOstream &os) const
 //		CMemo::DeriveStatsIfAbsent
 //
 //	@doc:
-//		Derive stats when no stats not present for the group
+//		Derive stats when no stats not present for the group. With
+//		fProducersOnly, only the CTE producer groups are considered
 //
 //---------------------------------------------------------------------------
 void
-CMemo::DeriveStatsIfAbsent(CMemoryPool *pmpLocal)
+CMemo::DeriveStatsIfAbsent(CMemoryPool *pmpLocal, BOOL fProducersOnly)
 {
 	CGroup *pgroup = m_listGroups.PtFirst();
 
 	while (nullptr != pgroup)
 	{
 		GPOS_ASSERT(!pgroup->FImplemented());
-		if (nullptr == pgroup->Pstats())
+		if (nullptr == pgroup->Pstats() &&
+			(!fProducersOnly || pgroup->FHasCTEProducer()))
 		{
 			CGroupExpression *pgexprFirst = CEngine::PgexprFirst(pgroup);
 
