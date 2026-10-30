@@ -99,11 +99,15 @@ Both package formats reuse `version-vars`:
 - Debian: `IS_RELEASE` and `BUILD_TYPE` are used for the changelog generation
 - RPM: `PACKAGE_VERSION` is normalized (`+`/`-` replaced with `.`) and passed
   to `rpmbuild` via `--define gpdb_version`
+- Both formats: If `IS_RELEASE` is `yes`, the `Makefile` unsets
+  `CONFIGURE_FLAGS` before packaging to guarantee a clean production build.
 
 ### Debian Package
 
 `pkg-deb` does the following:
 
+- Unsets `CONFIGURE_FLAGS` if `IS_RELEASE` is `yes` to build a production
+  package without debug assertions.
 - Executes `debuild` with preserved environment variables (`GPROOT`, `GPDIR`,
   `PACKAGE_NAME`). The `DESTDIR` is set in `debian/rules` using the
   `PACKAGE_NAME` value.
@@ -130,6 +134,8 @@ The `debian/rules` file uses debhelper (dh) with custom overrides:
 `pkg-rpm` does the following:
 
 - Removes `RPM_TEMPDIR` and sets up the `rpmbuild` tree under it
+- Unsets `CONFIGURE_FLAGS` if `IS_RELEASE` is `yes` to build a production
+  package without debug assertions.
 - Runs `rpmbuild -bb rpm/greengage7.spec` without signing, with `gpdb_version`,
   `gpdb_release`, `gproot`, `gpdir` and `sourcedir` passed via `--define`
 - Runs `rpmlint` with `rpm/greengage7.rpmlintrc` on the `.rpm` files in

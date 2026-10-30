@@ -398,7 +398,8 @@ pkg:
 pkg-deb : GPDIR := $(PACKAGE_NAME)
 pkg-deb : debian/changelog debian/install
 	@echo "Building with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
-	@GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" PACKAGE_NAME="$(PACKAGE_NAME)" debuild --preserve-env -us -uc -b
+	@if [ "$(IS_RELEASE)" = "yes" ]; then unset CONFIGURE_FLAGS; fi; \
+	GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" PACKAGE_NAME="$(PACKAGE_NAME)" debuild --preserve-env -us -uc -b
 	@mkdir -p $(ARTIFACTS_DIR)
 	@find $(CURDIR)/../ -maxdepth 1 -type f \( -name "*.deb" \
 											-o -name "*.ddeb" \
@@ -415,7 +416,8 @@ pkg-rpm : version-vars
 	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), ARCH=$(RPM_ARCH)"
 	@rm -rf $(RPM_TEMPDIR)
 	@mkdir -p $(addprefix $(RPM_TEMPDIR)/,BUILD BUILDROOT RPMS SOURCES SPECS SRPMS)
-	@rpmbuild -bb \
+	@if [ "$(IS_RELEASE)" = "yes" ]; then unset CONFIGURE_FLAGS; fi; \
+	rpmbuild -bb \
 		--define "_topdir $(RPM_TEMPDIR)" \
 		--define "gpdb_version $(subst +,.,$(subst -,.,$(PACKAGE_VERSION)))" \
 		--define "gpdb_release 1" \
