@@ -429,7 +429,7 @@ pkg-rpm : version-vars
 	@mkdir -p $(ARTIFACTS_DIR)
 	@mv -f $(RPM_TEMPDIR)/RPMS/$(RPM_ARCH)/*.rpm $(ARTIFACTS_DIR)/
 
-.PHONY: pkg pkg-deb pkg-rpm changelog version-vars version-info
+.PHONY: pkg pkg-deb pkg-rpm version-vars version-info
 
 #---------------------------------------------------------------------
 # clientTools
