@@ -6,7 +6,7 @@
   sudo ./README.Rhel-Rocky.bash
   ```
 
-## For Ubuntu 22.04:
+## For Ubuntu 22.04 and 24.04:
 
 - Install Dependencies
   When you run the README.Ubuntu.bash script for dependencies, you will be asked to configure realm for kerberos.
@@ -22,10 +22,7 @@
 
   ```bash
   sudo tee /etc/sysctl.d/90-greengage.conf << EOF
-  kernel.shmmax = 5000000000000
   kernel.shmmni = 32768
-  kernel.shmall = 40000000000
-  kernel.sem = 1000 32768000 1000 32768
   kernel.msgmnb = 1048576
   kernel.msgmax = 1048576
   kernel.msgmni = 32768
