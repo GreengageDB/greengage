@@ -1,10 +1,8 @@
 # FILE:    ci/Dockerfile.rockylinux
-# CONTEXT: Build Greengage on Rocky Linux <OS_VERSION>
+# CONTEXT: Build Greengage on Rocky Linux 9
 # PURPOSE: Multi-stage Docker build for Greengage database
 
-ARG OS_VERSION=9
-
-FROM rockylinux:${OS_VERSION} AS base
+FROM rockylinux:9 AS base
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /home/gpadmin
 
