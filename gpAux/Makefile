@@ -344,7 +344,6 @@ endif
 # Common metadata vars
 ARTIFACTS_DIR := $(CURDIR)/../Package
 DATE_RFC := $(shell date -R)
-GPROOT := /opt/greengagedb
 
 # Debian package name (used by debian/changelog, debian/install, pkg-deb)
 PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print $$2}')
@@ -395,7 +394,8 @@ pkg:
 	esac
 
 # Build Debian package
-pkg-deb : GPDIR := $(PACKAGE_NAME)
+pkg-deb : GPROOT = /opt/greengagedb
+pkg-deb : GPDIR  = $(PACKAGE_NAME)
 pkg-deb : debian/changelog debian/install
 	@echo "Building with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
 	@if [ "$(IS_RELEASE)" = "yes" ]; then unset CONFIGURE_FLAGS; fi; \
@@ -409,11 +409,11 @@ pkg-deb : debian/changelog debian/install
 											-exec mv -f {} $(ARTIFACTS_DIR)/ \;
 
 # Build RPM package
-pkg-rpm : GPDIR := $(shell grep '^Name:' rpm/greengage7.spec | head -1 | awk '{print $$2}')
+pkg-rpm : GPROOT = /opt/greengagedb
 pkg-rpm : RPM_ARCH = $(shell rpm --eval '%{_arch}')
 pkg-rpm : RPM_TEMPDIR := $(CURDIR)/../RPM
 pkg-rpm : version-vars
-	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), ARCH=$(RPM_ARCH)"
+	@echo "Building RPM with GPROOT=$(GPROOT), ARCH=$(RPM_ARCH)"
 	@rm -rf $(RPM_TEMPDIR)
 	@mkdir -p $(addprefix $(RPM_TEMPDIR)/,BUILD BUILDROOT RPMS SOURCES SPECS SRPMS)
 	@if [ "$(IS_RELEASE)" = "yes" ]; then unset CONFIGURE_FLAGS; fi; \
@@ -422,7 +422,6 @@ pkg-rpm : version-vars
 		--define "gpdb_version $(subst +,^,$(subst -,.,$(PACKAGE_VERSION)))" \
 		--define "gpdb_release 1" \
 		--define "gproot $(GPROOT)" \
-		--define "gpdir $(GPDIR)" \
 		--define "sourcedir $(CURDIR)/.." \
 		rpm/greengage7.spec
 	@rpmlint -f rpm/greengage7.rpmlintrc $(RPM_TEMPDIR)/RPMS/$(RPM_ARCH)/*.rpm
