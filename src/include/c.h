@@ -272,6 +272,13 @@ extern "C" {
 
 #ifndef __cplusplus
 
+#ifdef __darwin__
+#include <stdbool.h>
+#undef bool
+#undef true
+#undef false
+#endif
+
 #ifndef bool
 typedef char bool;
 #endif
