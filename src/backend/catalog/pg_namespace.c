@@ -16,6 +16,7 @@
 
 #include "access/htup_details.h"
 #include "access/table.h"
+#include "access/tempcat.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
@@ -74,6 +75,9 @@ NamespaceCreate(const char *nspName, Oid ownerId, bool isTemp)
 	nspdesc = table_open(NamespaceRelationId, RowExclusiveLock);
 	tupDesc = nspdesc->rd_att;
 
+	/* covers the OID allocation: GetNewOidWithIndex() reserves virtual rows */
+	BEGIN_TEMP_TABLE_SCOPE(isTemp);
+
 	/* initialize nulls and values */
 	for (i = 0; i < Natts_pg_namespace; i++)
 	{
@@ -98,6 +102,8 @@ NamespaceCreate(const char *nspName, Oid ownerId, bool isTemp)
 
 	CatalogTupleInsert(nspdesc, tup);
 	Assert(OidIsValid(nspoid));
+
+	END_TEMP_TABLE_SCOPE();
 
 	table_close(nspdesc, RowExclusiveLock);
 

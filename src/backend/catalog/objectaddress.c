@@ -3724,6 +3724,48 @@ getObjectDescriptionOids(Oid classid, Oid objid)
 }
 
 /*
+ * getTempObjectDescription
+ *
+ * Describe a temporary object of another session for a drop/alter refusal.
+ * The object's rows live only in the owning backend's temp memory catalog,
+ * so its name cannot be resolved here; the address comes from the shared
+ * memory dependency registry, which knows only classid/objid.  Catalog
+ * lookups must not be attempted: they would fail, and a missing row does
+ * not prove anything about the owning session.
+ */
+char *
+getTempObjectDescription(const ObjectAddress *object)
+{
+	switch (object->classId)
+	{
+		case RelationRelationId:
+			if (object->objectSubId != 0)
+				return psprintf(_("column %d of temporary relation %u in another session"),
+								object->objectSubId, object->objectId);
+			return psprintf(_("temporary relation %u in another session"),
+							object->objectId);
+		case NamespaceRelationId:
+			return psprintf(_("temporary schema %u in another session"),
+							object->objectId);
+		case AttrDefaultRelationId:
+			return psprintf(_("temporary default %u in another session"),
+							object->objectId);
+		case ConstraintRelationId:
+			return psprintf(_("temporary constraint %u in another session"),
+							object->objectId);
+		case TriggerRelationId:
+			return psprintf(_("temporary trigger %u in another session"),
+							object->objectId);
+		case RewriteRelationId:
+			return psprintf(_("temporary rule %u in another session"),
+							object->objectId);
+		default:
+			return psprintf(_("temporary object %u in another session"),
+							object->objectId);
+	}
+}
+
+/*
  * subroutine for getObjectDescription: describe a relation
  *
  * The result is appended to "buffer".

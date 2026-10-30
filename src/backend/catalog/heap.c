@@ -38,6 +38,7 @@
 #include "access/sysattr.h"
 #include "access/table.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/reloptions.h"
 #include "access/xact.h"
@@ -1558,6 +1559,14 @@ heap_create_with_catalog(const char *relname,
 		elog(ERROR, "shared relations must be placed in pg_global tablespace");
 
 	/*
+	 * Route catalog writes to the in-memory virtual catalog for temp tables.
+	 * The scope must cover the OID allocation above everything else: the
+	 * collision check in GetNewOidWithIndex() relies on it to reserve the
+	 * OID of the virtual pg_class row in the shared registry.
+	 */
+	BEGIN_TEMP_TABLE_SCOPE(relpersistence == RELPERSISTENCE_TEMP);
+
+	/*
 	 * Allocate an OID for the relation, unless we were told what to use.
 	 *
 	 * In PostgreSQL, the OID will be the relfilenode as well, but in GPDB
@@ -1945,6 +1954,8 @@ heap_create_with_catalog(const char *relname,
 	 */
 	table_close(new_rel_desc, NoLock);	/* do not unlock till end of xact */
 	table_close(pg_class_desc, RowExclusiveLock);
+
+	END_TEMP_TABLE_SCOPE();
 
 	return relid;
 }
@@ -4006,6 +4017,8 @@ heap_truncate_one_rel(Relation rel)
 	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 		return;
 
+	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
+
 	/* Truncate the underlying relation */
 	table_relation_nontransactional_truncate(rel);
 
@@ -4023,6 +4036,8 @@ heap_truncate_one_rel(Relation rel)
 		/* keep the lock... */
 		table_close(toastrel, NoLock);
 	}
+
+	END_TEMP_TABLE_SCOPE();
 }
 
 /*

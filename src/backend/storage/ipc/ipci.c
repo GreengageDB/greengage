@@ -23,6 +23,7 @@
 #include "access/nbtree.h"
 #include "access/subtrans.h"
 #include "access/twophase.h"
+#include "access/tempcat.h"
 #include "access/distributedlog.h"
 #include "cdb/cdblocaldistribxact.h"
 #include "cdb/cdbvars.h"
@@ -159,6 +160,7 @@ CreateSharedMemoryAndSemaphores(int port)
 		else if (IsResGroupEnabled())
 			size = add_size(size, ResGroupShmemSize());
 		size = add_size(size, SharedSnapshotShmemSize());
+		size = add_size(size, tempcat_registry_shmem_size());
 		if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_UTILITY)
 			size = add_size(size, FtsShmemSize());
 
@@ -342,6 +344,7 @@ CreateSharedMemoryAndSemaphores(int port)
 	 *		 know who we are.  
 	 */
 	CreateSharedSnapshotArray();
+	tempcat_registry_init();
 	TwoPhaseShmemInit();
 	BackgroundWorkerShmemInit();
 

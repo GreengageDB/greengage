@@ -72,6 +72,7 @@
 #include "access/sysattr.h"
 #include "access/table.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/tupconvert.h"
 #include "access/tuptoaster.h"
@@ -1761,9 +1762,22 @@ acquire_inherited_sample_rows(Relation onerel, int elevel,
 	 */
 	if (list_length(tableOIDs) < 2)
 	{
-		/* CCI because we already updated the pg_class row in this command */
-		CommandCounterIncrement();
-		SetRelationHasSubclass(RelationGetRelid(onerel), false);
+		/*
+		 * A temporary child of another live session is invisible here (its
+		 * rows are in the temp memory catalog), but the parent's
+		 * relhassubclass must survive it, or that session's planner
+		 * silently stops expanding the parent into the child.
+		 */
+		ObjectAddress parentaddr;
+
+		ObjectAddressSet(parentaddr, RelationRelationId,
+						 RelationGetRelid(onerel));
+		if (!tempcat_registry_has_dependents(&parentaddr, 0, NULL))
+		{
+			/* CCI because we already updated the pg_class row in this command */
+			CommandCounterIncrement();
+			SetRelationHasSubclass(RelationGetRelid(onerel), false);
+		}
 		*totalrows = 0;
 		*totaldeadrows = 0;
 		ereport(elevel,
@@ -2751,6 +2765,8 @@ update_attstats(Oid relid, bool inh, int natts, VacAttrStats **vacattrstats)
 	if (natts <= 0)
 		return;					/* nothing to do */
 
+	BEGIN_TEMP_TABLE_SCOPE(get_rel_persistence(relid) == RELPERSISTENCE_TEMP);
+
 	sd = table_open(StatisticRelationId, RowExclusiveLock);
 
 	for (attno = 0; attno < natts; attno++)
@@ -2873,6 +2889,7 @@ update_attstats(Oid relid, bool inh, int natts, VacAttrStats **vacattrstats)
 	}
 
 	table_close(sd, RowExclusiveLock);
+	END_TEMP_TABLE_SCOPE();
 }
 
 /*
