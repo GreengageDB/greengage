@@ -8,11 +8,14 @@
  * pg_catalog tables.  Virtual tuples are mixed with regular on-disk tuples
  * during system catalog scans so the rest of the system sees a unified view.
  *
- * Because temporary tables are visible only within a single session, there
- * is no need for shared memory, locks, or MVCC bookkeeping (xmin/xmax).
- * Transaction support uses a simple snapshot stack: each transaction or
- * subtransaction pushes a copy of the current state, and commit/abort pops or
- * discards it.
+ * The rows themselves need no MVCC bookkeeping (xmin/xmax): transaction
+ * support uses a simple snapshot stack, where each transaction or
+ * subtransaction pushes a copy of the current state, and commit/abort pops
+ * or discards it.  The only shared state is the small fixed-size registry
+ * of dependency edges and OID reservations (tempcat_registry.c): cluster
+ * decisions such as drops of shared objects, the OID allocator's collision
+ * loop and vacuum's frozenxid horizon must account for live temporary
+ * objects of other sessions.
  *
  * This solves the pg_catalog bloating problem caused by applications that
  * create and drop many temporary tables.  Without this, every temp table
