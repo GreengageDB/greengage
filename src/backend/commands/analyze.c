@@ -1762,9 +1762,22 @@ acquire_inherited_sample_rows(Relation onerel, int elevel,
 	 */
 	if (list_length(tableOIDs) < 2)
 	{
-		/* CCI because we already updated the pg_class row in this command */
-		CommandCounterIncrement();
-		SetRelationHasSubclass(RelationGetRelid(onerel), false);
+		/*
+		 * A temporary child of another live session is invisible here (its
+		 * rows are in the temp memory catalog), but the parent's
+		 * relhassubclass must survive it, or that session's planner
+		 * silently stops expanding the parent into the child.
+		 */
+		ObjectAddress parentaddr;
+
+		ObjectAddressSet(parentaddr, RelationRelationId,
+						 RelationGetRelid(onerel));
+		if (!tempcat_registry_has_dependents(&parentaddr, 0, NULL))
+		{
+			/* CCI because we already updated the pg_class row in this command */
+			CommandCounterIncrement();
+			SetRelationHasSubclass(RelationGetRelid(onerel), false);
+		}
 		*totalrows = 0;
 		*totaldeadrows = 0;
 		ereport(elevel,

@@ -541,6 +541,96 @@ SELECT tempcat_dep_session_exec('REVOKE SELECT ON dep_aclt FROM dep_acl');
 (1 row)
 
 DROP ROLE dep_acl;
+-- Another session's ANALYZE of a parent must not clear relhassubclass
+-- while a temporary child of it lives, or the owning session's planner
+-- silently stops expanding the parent into the child.
+CREATE TABLE dep_anlz (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO dep_anlz VALUES (1, 1);
+SELECT tempcat_dep_session_exec($q$
+	CREATE TEMP TABLE dep_anlz_ch () INHERITS (dep_anlz);
+	INSERT INTO dep_anlz_ch SELECT i, i FROM generate_series(1, 10) i;
+$q$);
+ tempcat_dep_session_exec 
+--------------------------
+ INSERT 0 10
+(1 row)
+
+SELECT tempcat_dep_session_exec($q$
+	DO $d$ DECLARE n bigint; BEGIN
+		SELECT count(*) INTO n FROM dep_anlz;
+		IF n <> 11 THEN RAISE EXCEPTION 'parent count is %, expected 11', n; END IF;
+	END $d$ $q$);
+ tempcat_dep_session_exec 
+--------------------------
+ DO
+(1 row)
+
+ANALYZE dep_anlz;
+SELECT relhassubclass FROM pg_class WHERE relname = 'dep_anlz';
+ relhassubclass 
+----------------
+ t
+(1 row)
+
+SELECT tempcat_dep_session_exec($q$
+	DO $d$ DECLARE n bigint; BEGIN
+		SELECT count(*) INTO n FROM dep_anlz;
+		IF n <> 11 THEN RAISE EXCEPTION 'parent count after ANALYZE is %, expected 11', n; END IF;
+	END $d$ $q$);
+ tempcat_dep_session_exec 
+--------------------------
+ DO
+(1 row)
+
+-- ALTER COLUMN ... TYPE recurses to children and rewrites dependents on
+-- its own; it must refuse while A's temporary child or view depends on
+-- the table.
+SELECT tempcat_assert_blocked('ALTER TABLE dep_anlz ALTER COLUMN b TYPE text',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE dep_altv (a int) DISTRIBUTED BY (a);
+SELECT tempcat_dep_session_exec('CREATE TEMP VIEW dep_altv_v AS SELECT a FROM dep_altv');
+ tempcat_dep_session_exec 
+--------------------------
+ CREATE VIEW
+(1 row)
+
+SELECT tempcat_assert_blocked('ALTER TABLE dep_altv ALTER COLUMN a TYPE text',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+-- Virtual catalog changes do not show up in pg_stat heap counters, so
+-- autovacuum does not chase them.
+CREATE FUNCTION tempcat_assert_stat_unchanged() RETURNS int
+AS $$
+DECLARE
+	before_ins bigint;
+	after_ins bigint;
+BEGIN
+	SELECT pg_stat_get_tuples_inserted('pg_attribute'::regclass) INTO before_ins;
+	PERFORM tempcat_dep_session_exec('CREATE TEMP TABLE dep_stat (a int PRIMARY KEY) DISTRIBUTED BY (a)');
+	PERFORM tempcat_dep_session_exec('DROP TABLE dep_stat');
+	SELECT pg_stat_get_tuples_inserted('pg_attribute'::regclass) INTO after_ins;
+	IF before_ins <> after_ins THEN
+		RAISE EXCEPTION 'pg_attribute insert counter moved: % to %', before_ins, after_ins;
+	END IF;
+	RETURN after_ins - before_ins;
+END;
+$$ LANGUAGE plpgsql;
+SELECT tempcat_assert_stat_unchanged() AS stat_delta;
+ stat_delta 
+------------
+          0
+(1 row)
+
+DROP FUNCTION tempcat_assert_stat_unchanged();
 -- Disconnect session A: its backend exit drops the temporary tables and
 -- with them the dependency rows (the exit cleanup is asynchronous, so wait
 -- for it).
@@ -581,6 +671,8 @@ BEGIN
 			EXECUTE 'DROP TABLE dep_seqt';
 			EXECUTE 'DROP TABLE dep_parent';
 			EXECUTE 'DROP TYPE dep_type CASCADE';
+			EXECUTE 'DROP TABLE dep_anlz';
+			EXECUTE 'DROP TABLE dep_altv';
 			EXIT;
 		EXCEPTION WHEN dependent_objects_still_exist THEN
 			tries := tries + 1;

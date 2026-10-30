@@ -300,6 +300,7 @@ tempcat_registry_has_dependents(const ObjectAddress *referenced,
 			depender->objectSubId = entry->objsubid;
 		}
 		result = true;
+		hash_seq_term(&status);
 		break;
 	}
 

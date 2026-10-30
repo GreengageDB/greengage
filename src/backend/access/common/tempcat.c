@@ -680,16 +680,47 @@ tempcat_begin_transaction(void)
  * Discard every snapshot above the root one, leaving no transaction in
  * progress.  Tolerates an already unwound stack.
  */
+static bool TempcatSnapshotHasEntries(TempcatSnapshot snapshot);
+
 static void
 TempcatSnapshotUnwind(void)
 {
 	TempcatSnapshot tempcat_snapshot;
+	bool		any_entries = false;
 
 	while ((tempcat_snapshot = TempcatSnapshotPopBack()) != NULL)
+	{
+		any_entries = any_entries ||
+			TempcatSnapshotHasEntries(tempcat_snapshot);
 		TempcatSnapshotFree(tempcat_snapshot);
+	}
 
 	Assert(!TempcatTransactionInProgress());
-	TempcatDirtyFlag = true;
+
+	/*
+	 * Mark for re-serialization only when some snapshot held rows: a
+	 * session that never used the temp catalog would otherwise have its
+	 * empty state serialized into a new DSM segment on every statement.
+	 */
+	if (any_entries || TempcatSnapshotHasEntries(TempcatSnapshotGetCurrent()))
+		TempcatDirtyFlag = true;
+}
+
+static bool
+TempcatSnapshotHasEntries(TempcatSnapshot snapshot)
+{
+	dlist_iter	iter;
+
+	dlist_foreach(iter, &snapshot->relationData)
+	{
+		TempcatSnapshotRelationData *entry =
+			dlist_container(TempcatSnapshotRelationData, node, iter.cur);
+
+		if (entry->tuples_num > 0)
+			return true;
+	}
+
+	return false;
 }
 
 /*
@@ -875,6 +906,8 @@ tempcat_commit_subtransaction(void)
 void
 tempcat_abort_subtransaction(void)
 {
+	TempcatSnapshot snapshot;
+
 	if (!TempcatTransactionInProgress())
 		return;
 
@@ -882,8 +915,11 @@ tempcat_abort_subtransaction(void)
 	elog(NOTICE, "TEMPCAT: tempcat_abort_subtransaction");
 #endif
 
-	TempcatSnapshotFree(TempcatSnapshotPopBack());
-	TempcatDirtyFlag = true;
+	snapshot = TempcatSnapshotPopBack();
+	if (TempcatSnapshotHasEntries(snapshot) ||
+		TempcatSnapshotHasEntries(TempcatSnapshotGetCurrent()))
+		TempcatDirtyFlag = true;
+	TempcatSnapshotFree(snapshot);
 }
 
 static TempcatSnapshotRelationData *
@@ -977,7 +1013,6 @@ tempcat_insert(Relation relation, HeapTuple htup)
 	/* Invalidate syscache */
 	CacheInvalidateHeapTuple(relation, dlist_tup->tup, NULL);
 	tempcat_mark_command_id_used();
-	pgstat_count_heap_insert(relation, 1);
 	TempcatDirtyFlag = true;
 
 	TempcatDescCacheInsert(relation);
@@ -1017,7 +1052,6 @@ tempcat_delete(Relation relation, ItemPointer tid)
 
 		if (ItemPointerEquals(&dlist_tup->tup->t_self, tid))
 		{
-			pgstat_count_heap_delete(relation);
 
 			/* Invalidate syscache */
 			CacheInvalidateHeapTuple(relation, dlist_tup->tup, NULL);
@@ -1094,7 +1128,6 @@ tempcat_update(Relation relation, ItemPointer otid, HeapTuple newtup)
 			dlist_tup->tup = heap_copytuple(newtup);
 			MemoryContextSwitchTo(oldctx);
 
-			pgstat_count_heap_update(relation, false);
 
 #ifdef TEMPCAT_DEBUG
 			elog(NOTICE, "TEMPCAT: tempcat_update - entry found and updated, newtup->t_self = %08X/%04X, oid = %d, tuples_num = %d",

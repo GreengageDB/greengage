@@ -13636,6 +13636,11 @@ ATExecAlterColumnType(List **wqueue,
 	ScanKeyData key[3];
 	SysScanDesc scan;
 	HeapTuple	depTup;
+
+	/* This recurses to children on its own; see ATSimpleRecursion(). */
+	tempcat_check_no_temp_dependents(RelationRelationId,
+									 RelationGetRelid(rel),
+									 RelationGetRelationName(rel));
 	ObjectAddress address;
 
 	/*
