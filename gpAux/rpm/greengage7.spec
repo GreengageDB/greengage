@@ -1,5 +1,7 @@
 # Run command: `make -C ./gpdb_src/gpAux pkg-rpm`
 
+%global _build_id_links none
+
 %{!?gproot: %global gproot /opt/greengagedb}
 %{!?gpdir:  %global gpdir  greengage7}
 %global     prefix %{gproot}/%{gpdir}
