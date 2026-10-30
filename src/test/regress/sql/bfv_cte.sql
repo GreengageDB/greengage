@@ -377,6 +377,8 @@ drop table rep;
 -- To ensure there's no duplicate hazard, the cost model chooses a plan that executes
 -- the producer and both consumers on one segment, before gathering the data onto
 -- the coordinator and return. There's 1 producer matching 1 consumer for each consumer.
+-- Despite having a gather motion from 3 segments, CTE is executed only once on 1 segment
+-- because of the one-time-filter.
 drop table if exists rep1, rep2;
 create table rep1 (id bigserial not null, isc varchar(15) not null,iscd varchar(15) null) distributed replicated;
 create table rep2 (id numeric null, rc varchar(255) null,ri numeric null) distributed replicated;
