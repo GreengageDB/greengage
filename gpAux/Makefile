@@ -356,7 +356,7 @@ PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print 
 
 version-vars : ../VERSION
 	$(eval FULL_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION))
-	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g' ../VERSION))
+	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g; s,-(?=\w),~,' ../VERSION))
 	$(eval VERSION_CODENAME := $(shell . /etc/os-release && echo $$VERSION_CODENAME))
 	$(eval IS_RELEASE := $(if $(findstring +dev,$(PACKAGE_VERSION)),no,yes))
 	$(eval BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build))
@@ -410,7 +410,7 @@ pkg-deb : debian/changelog debian/install
 
 # Build RPM package
 pkg-rpm : GPDIR := $(shell grep '^Name:' rpm/greengage7.spec | head -1 | awk '{print $$2}')
-pkg-rpm : RPM_ARCH := $(shell rpm --eval '%{_arch}')
+pkg-rpm : RPM_ARCH = $(shell rpm --eval '%{_arch}')
 pkg-rpm : RPM_TEMPDIR := $(CURDIR)/../RPM
 pkg-rpm : version-vars
 	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), ARCH=$(RPM_ARCH)"
@@ -419,7 +419,7 @@ pkg-rpm : version-vars
 	@if [ "$(IS_RELEASE)" = "yes" ]; then unset CONFIGURE_FLAGS; fi; \
 	rpmbuild -bb \
 		--define "_topdir $(RPM_TEMPDIR)" \
-		--define "gpdb_version $(subst +,.,$(subst -,.,$(PACKAGE_VERSION)))" \
+		--define "gpdb_version $(subst +,^,$(subst -,.,$(PACKAGE_VERSION)))" \
 		--define "gpdb_release 1" \
 		--define "gproot $(GPROOT)" \
 		--define "gpdir $(GPDIR)" \

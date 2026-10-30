@@ -96,9 +96,13 @@ make -C ./gpAux pkg-rpm GPROOT=/custom/path GPDIR=custom_dir
 
 Both package formats reuse `version-vars`:
 
-- Debian: `IS_RELEASE` and `BUILD_TYPE` are used for the changelog generation
-- RPM: `PACKAGE_VERSION` is normalized (`+`/`-` replaced with `.`) and passed
-  to `rpmbuild` via `--define gpdb_version`
+- Both formats: Dashes in pre-release suffixes (e.g., `-beta`) are replaced
+  with tildes (`~`) to sort them below the final release.
+- Debian: `IS_RELEASE` and `BUILD_TYPE` are used for the changelog generation.
+- RPM: The plus character in dev builds (e.g., `+dev`) is replaced with a
+  caret (`^`) to sort them above the base version. Remaining dashes are
+  replaced with dots (`.`). The result is passed to `rpmbuild` via
+  `--define gpdb_version`.
 - Both formats: If `IS_RELEASE` is `yes`, the `Makefile` unsets
   `CONFIGURE_FLAGS` before packaging to guarantee a clean production build.
 
