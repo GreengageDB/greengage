@@ -1,5 +1,8 @@
 FROM rockylinux:8.8 as base
 
+ARG WITH_ARROW_FLIGHT_DEPS=false
+ARG ARROW_FLIGHT_PACKAGE_VERSION=
+
 # Install some basic utilities and build tools
 RUN dnf -y install 'dnf-command(config-manager)' && dnf config-manager --set-enabled devel && dnf makecache && dnf update -y ca-certificates && \
     rpm --import https://mirror.yandex.ru/rockylinux/RPM-GPG-KEY-Rocky-8 && \
@@ -23,8 +26,14 @@ RUN dnf makecache && \
     dnf clean all && \
     #we install pytest from pypi since the version from the repository does not contain an executable file
     #the rest of the packages are not available in the repository.
-    pip3 install pytest gsutil behave~=1.2.6 coverage~=4.5 'mock<=5.0.0' allure-behave psutil && \
-    pip3 install protobuf==3.20.0
+    python3.11 -m pip install pytest gsutil behave~=1.2.6 coverage~=4.5 'mock<=5.0.0' allure-behave psutil && \
+    python3.11 -m pip install protobuf==3.20.0
+
+COPY ci/scripts/install_arrow_flight_deps.bash /tmp/install_arrow_flight_deps.bash
+RUN if [ "${WITH_ARROW_FLIGHT_DEPS}" = "true" ] || [ "${WITH_ARROW_FLIGHT_DEPS}" = "yes" ] || [ "${WITH_ARROW_FLIGHT_DEPS}" = "1" ]; then \
+        bash /tmp/install_arrow_flight_deps.bash; \
+    fi && \
+    rm -f /tmp/install_arrow_flight_deps.bash
 
 # setup ssh configuration
 RUN ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa && \
