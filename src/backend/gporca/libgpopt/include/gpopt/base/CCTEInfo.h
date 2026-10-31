@@ -127,6 +127,10 @@ private:
 		// is this CTE used
 		BOOL m_fUsed;
 
+		// statistics of the producer derived in the memo, i.e. after the
+		// producer body went through the transformations (can be null)
+		IStatistics *m_pstatsMemo;
+
 	public:
 		// ctors
 		CCTEInfoEntry(CMemoryPool *mp, CExpression *pexprCTEProducer);
@@ -172,6 +176,22 @@ private:
 
 		// return position of given consumer column in consumer output
 		ULONG UlConsumerColPos(CColRef *colref);
+
+		// memo statistics of the producer
+		IStatistics *
+		PstatsMemo() const
+		{
+			return m_pstatsMemo;
+		}
+
+		// replace memo statistics of the producer
+		void
+		SetStatsMemo(IStatistics *stats)
+		{
+			stats->AddRef();
+			CRefCount::SafeRelease(m_pstatsMemo);
+			m_pstatsMemo = stats;
+		}
 
 	};	//class CCTEInfoEntry
 
@@ -256,6 +276,12 @@ public:
 		CLogicalCTEConsumer *popConsumer,  // CTE Consumer operator
 		CColRefSet *pcrsStat  // required stat columns on the CTE Consumer
 	);
+
+	// publish the producer statistics derived in the memo
+	void SetProducerMemoStats(ULONG ulCTEId, IStatistics *stats);
+
+	// producer statistics derived in the memo, null if not derived yet
+	IStatistics *PstatsProducerMemo(ULONG ulCTEId) const;
 
 	// return a CTE requirement with all the producers as optional
 	CCTEReq *PcterProducers(CMemoryPool *mp) const;
