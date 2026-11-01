@@ -142,31 +142,23 @@ public:
 		CMemoryPool *mp, CExpressionHandle &exprhdl) const override;
 	// compute required stats columns of the n-th child
 	CColRefSet *
-	PcrsStat(CMemoryPool *,		   // mp
-			 CExpressionHandle &,  // exprhdl
-			 CColRefSet *pcrsInput,
+	PcrsStat(CMemoryPool *mp, CExpressionHandle &exprhdl, CColRefSet *pcrsInput,
 			 ULONG	// child_index
 	) const override
 	{
-		return PcrsStatsPassThru(pcrsInput);
+		// the consumers copy the producer stats, so ask for all its columns
+		CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp, *pcrsInput);
+		pcrs->Include(exprhdl.DeriveOutputColumns(0));
+
+		return pcrs;
 	}
 
 	// derive statistics
-	IStatistics *
-	PstatsDerive(CMemoryPool *,	 //mp,
-				 CExpressionHandle &exprhdl,
-				 IStatisticsArray *	 //stats_ctxt
-	) const override
-	{
-		return PstatsPassThruOuter(exprhdl);
-	}
+	IStatistics *PstatsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl,
+							  IStatisticsArray *stats_ctxt) const override;
 
 	// stat promise
-	EStatPromise
-	Esp(CExpressionHandle &) const override
-	{
-		return CLogical::EspHigh;
-	}
+	EStatPromise Esp(CExpressionHandle &exprhdl) const override;
 
 	//-------------------------------------------------------------------------------------
 	// Transformations
