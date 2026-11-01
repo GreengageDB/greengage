@@ -23,9 +23,10 @@
 #include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CLogicalSelect.h"
 #include "gpopt/operators/CLogicalUnionAll.h"
+#include "gpopt/operators/CNormalizer.h"
 #include "gpopt/operators/CPatternMultiLeaf.h"
 #include "gpopt/operators/CPatternTree.h"
-#include "gpopt/xforms/CXformUtils.h"
+#include "gpopt/operators/CPredicateUtils.h"
 
 using namespace gpmd;
 using namespace gpopt;
@@ -93,77 +94,46 @@ CXformSelectOverUnionAll2UnionAllOverSelect::Transform(CXformContext *pxfctxt,
 	CExpression *pexprUnionAll = (*pexpr)[0];
 	CExpression *pexprPred = (*pexpr)[1];
 
-	CLogicalUnionAll *popUnionAll =
-		CLogicalUnionAll::PopConvert(pexprUnionAll->Pop());
-
-	// output columns of Union All.
-	CColRefArray *pdrgpcrOutput = popUnionAll->PdrgpcrOutput();
-	CColRefSet *pcrsOutput = GPOS_NEW(mp) CColRefSet(mp, pdrgpcrOutput);
-
-	CColRef2dArray *pdrgpdrgpcrInput = popUnionAll->PdrgpdrgpcrInput();
-
-	// invariant: length of input array of arrays is equal to union arity
-	GPOS_ASSERT(pexprUnionAll->Arity() == pdrgpdrgpcrInput->Size());
-	GPOS_ASSERT(nullptr != (*pexprUnionAll)[0]->Pgexpr());
-
-	// Bail out if the predicate references columns the union does not
-	// produce (outer references, e.g. inside the inner side of a correlated
-	// apply). The remap below copies the predicate with must_exist = true,
-	// which would invent fresh column refs for such columns, and no union
-	// child could satisfy the resulting select
-	BOOL fPushable = pcrsOutput->ContainsAll(pexprPred->DeriveUsedColumns());
-	pcrsOutput->Release();
-	if (!fPushable)
-	{
-		return;
-	}
-
+	// Pushing a constant predicate into the branches only enlarges the
+	// plan space: a constant true select is dropped by the normalizer and
+	// a constant false one would be copied into every branch.
 	if (CUtils::FScalarConstTrue(pexprPred) ||
 		CUtils::FScalarConstFalse(pexprPred))
 	{
 		return;
 	}
 
-	// Replicates the logic from CNormalizer::PushThruSetOp(). We need
-	// to remap the predicate's column references to the children input
-	// columns. In this case pushdown will be legit in terms of output columns.
-	CExpressionArray *pdrgpexprSubSelects = GPOS_NEW(mp) CExpressionArray(mp);
-	const ULONG arity = pexprUnionAll->Arity();
-	for (ULONG ul = 0; ul < arity; ul++)
+	// Bail out unless at least one conjunct can be pushed, i.e. references
+	// only columns the union produces. Conjuncts with outer references
+	// (e.g. inside the inner side of a correlated apply) are kept on top by
+	// the normalizer; if none is pushable, the normalizer would return an
+	// expression identical to the input.
+	CColRefSet *pcrsOutput = pexprUnionAll->DeriveOutputColumns();
+	CExpressionArray *pdrgpexprConjuncts =
+		CPredicateUtils::PdrgpexprConjuncts(mp, pexprPred);
+	BOOL fPushable = false;
+	const ULONG ulConjuncts = pdrgpexprConjuncts->Size();
+	for (ULONG ul = 0; ul < ulConjuncts && !fPushable; ul++)
 	{
-		CExpression *pexprChild = (*pexprUnionAll)[ul];
-		CColRefArray *pdrgpcrChild = (*pdrgpdrgpcrInput)[ul];
-
-		pexprPred->AddRef();
-		CExpression *pexprRemappedPred = pexprPred;
-
-		// shortcut similar to CNormalizer::PushThruSetOp()
-		if (!pdrgpcrChild->Equals(pdrgpcrOutput))
-		{
-			UlongToColRefMap *colref_mapping =
-				CUtils::PhmulcrMapping(mp, pdrgpcrOutput, pdrgpcrChild);
-			pexprRemappedPred->Release();
-			pexprRemappedPred = pexprPred->PexprCopyWithRemappedColumns(
-				mp, colref_mapping, true /*must_exist*/);
-			colref_mapping->Release();
-		}
-
-		GPOS_ASSERT(pexprChild->DeriveOutputColumns()->ContainsAll(
-			pexprRemappedPred->DeriveUsedColumns()));
-
-		pexprChild->AddRef();
-		CExpression *pexprChildSelect =
-			CUtils::PexprLogicalSelect(mp, pexprChild, pexprRemappedPred);
-		pdrgpexprSubSelects->Append(pexprChildSelect);
+		fPushable = pcrsOutput->ContainsAll(
+			(*pdrgpexprConjuncts)[ul]->DeriveUsedColumns());
+	}
+	pdrgpexprConjuncts->Release();
+	if (!fPushable)
+	{
+		return;
 	}
 
-	pdrgpcrOutput->AddRef();
-	pdrgpdrgpcrInput->AddRef();
-	CLogicalUnionAll *popNewUnionAll =
-		GPOS_NEW(mp) CLogicalUnionAll(mp, pdrgpcrOutput, pdrgpdrgpcrInput);
-	CExpression *pexprResult =
-		GPOS_NEW(mp) CExpression(mp, popNewUnionAll, pdrgpexprSubSelects);
-	pxfres->Add(pexprResult);
+	// The normalizer pushes the predicate through the set operation
+	// (CNormalizer::PushThruSetOp) remapping the union's output columns to
+	// the input columns of each branch, and stops at the union's children
+	// because they are leaf patterns extracted from the memo.
+	CExpression *pexprNormalized = CNormalizer::PexprNormalize(mp, pexpr);
+	GPOS_ASSERT(COperator::EopLogicalUnionAll ==
+					pexprNormalized->Pop()->Eopid() ||
+				COperator::EopLogicalSelect == pexprNormalized->Pop()->Eopid());
+
+	pxfres->Add(pexprNormalized);
 }
 
 // EOF
