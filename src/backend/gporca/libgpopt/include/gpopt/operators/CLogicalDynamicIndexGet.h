@@ -12,6 +12,7 @@
 #define GPOPT_CLogicalDynamicIndexGet_H
 
 #include "gpos/base.h"
+#include "gpos/common/CBitSet.h"
 
 #include "gpopt/base/COrderSpec.h"
 #include "gpopt/metadata/CIndexDescriptor.h"
@@ -47,6 +48,10 @@ private:
 	// Number of predicate not applicable on the index
 	ULONG m_ulUnindexedPredColCount;
 
+	// positions in the partition list that belong to this operator; null
+	// when the operator covers every partition of the list
+	CBitSet *m_selected_parts{nullptr};
+
 public:
 	CLogicalDynamicIndexGet(const CLogicalDynamicIndexGet &) = delete;
 
@@ -59,6 +64,7 @@ public:
 							CColRefArray *pdrgpcrOutput,
 							CColRef2dArray *pdrgpdrgpcrPart,
 							IMdIdArray *partition_mdids,
+							CBitSet *selected_parts,
 							ULONG ulUnindexedPredColCount);
 
 	// dtor
@@ -136,6 +142,12 @@ public:
 	ResidualPredicateSize() const
 	{
 		return m_ulUnindexedPredColCount;
+	}
+
+	CBitSet *
+	GetSelectedParts() const
+	{
+		return m_selected_parts;
 	}
 
 	//-------------------------------------------------------------------------------------

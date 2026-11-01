@@ -47,6 +47,11 @@ CParseHandlerDynamicIndexScan::CParseHandlerDynamicIndexScan(
 {
 }
 
+CParseHandlerDynamicIndexScan::~CParseHandlerDynamicIndexScan()
+{
+	CRefCount::SafeRelease(m_selected_parts);
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CParseHandlerDynamicIndexScan::StartElement
@@ -68,6 +73,14 @@ CParseHandlerDynamicIndexScan::StartElement(
 	m_selector_ids = CDXLOperatorFactory::ExtractConvertValuesToArray(
 		m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenSelectorIds,
 		EdxltokenPhysicalDynamicIndexScan);
+
+	if (-1 !=
+		attrs.getIndex(CDXLTokens::XmlstrToken(EdxltokenSelectedPartitionSet)))
+	{
+		m_selected_parts = CDXLOperatorFactory::ExtractConvertRangesToIntBitSet(
+			m_parse_handler_mgr->GetDXLMemoryManager(), attrs,
+			EdxltokenSelectedPartitionSet, EdxltokenPhysicalDynamicIndexScan);
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -84,8 +97,12 @@ CParseHandlerDynamicIndexScan::EndElement(const XMLCh *const,  // element_uri,
 										  const XMLCh *const  // element_qname
 )
 {
+	if (m_selected_parts)
+	{
+		m_selected_parts->AddRef();
+	}
 	EndElementHelper(element_local_name, EdxltokenPhysicalDynamicIndexScan,
-					 m_selector_ids /*m_selector_ids*/);
+					 m_selector_ids /*m_selector_ids*/, m_selected_parts);
 }
 
 

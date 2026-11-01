@@ -31,16 +31,19 @@ using namespace gpdxl;
 CDXLPhysicalDynamicIndexScan::CDXLPhysicalDynamicIndexScan(
 	CMemoryPool *mp, CDXLTableDescr *table_descr,
 	CDXLIndexDescr *dxl_index_descr, EdxlIndexScanDirection idx_scan_direction,
-	IMdIdArray *part_mdids, ULongPtrArray *selector_ids)
+	IMdIdArray *part_mdids, CBitSet *selected_parts,
+	ULongPtrArray *selector_ids)
 	: CDXLPhysical(mp),
 	  m_dxl_table_descr(table_descr),
 	  m_dxl_index_descr(dxl_index_descr),
 	  m_index_scan_dir(idx_scan_direction),
 	  m_part_mdids(part_mdids),
+	  m_selected_parts(selected_parts),
 	  m_selector_ids(selector_ids)
 {
 	GPOS_ASSERT(nullptr != m_dxl_table_descr);
 	GPOS_ASSERT(nullptr != m_dxl_index_descr);
+	GPOS_ASSERT(nullptr == m_selected_parts || 0 != m_selected_parts->Size());
 }
 
 //---------------------------------------------------------------------------
@@ -56,6 +59,7 @@ CDXLPhysicalDynamicIndexScan::~CDXLPhysicalDynamicIndexScan()
 	m_dxl_index_descr->Release();
 	m_dxl_table_descr->Release();
 	m_part_mdids->Release();
+	CRefCount::SafeRelease(m_selected_parts);
 	CRefCount::SafeRelease(m_selector_ids);
 }
 
@@ -161,6 +165,16 @@ CDXLPhysicalDynamicIndexScan::SerializeToDXL(CXMLSerializer *xml_serializer,
 		CDXLTokens::GetDXLTokenStr(EdxltokenSelectorIds),
 		serialized_selector_ids);
 	GPOS_DELETE(serialized_selector_ids);
+	if (m_selected_parts)
+	{
+		CWStringDynamic *serialized_selected_parts =
+			CDXLUtils::SerializeCBitSetToCommaSeparatedRangesString(
+				m_mp, m_selected_parts);
+		xml_serializer->AddAttribute(
+			CDXLTokens::GetDXLTokenStr(EdxltokenSelectedPartitionSet),
+			serialized_selected_parts);
+		GPOS_DELETE(serialized_selected_parts);
+	}
 
 	// serialize properties
 	node->SerializePropertiesToDXL(xml_serializer);

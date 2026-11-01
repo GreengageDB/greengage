@@ -1486,6 +1486,11 @@ CTranslatorExprToDXL::PdxlnDynamicBitmapTableScan(
 	// construct dynamic table scan operator
 	IMdIdArray *part_mdids = pop->GetPartitionMdids();
 	part_mdids->AddRef();
+	CBitSet *selected_parts = pop->GetSelectedParts();
+	if (nullptr != selected_parts)
+	{
+		selected_parts->AddRef();
+	}
 
 	ULongPtrArray *selector_ids = GPOS_NEW(m_mp) ULongPtrArray(m_mp);
 	CPartitionPropagationSpec *pps_reqd =
@@ -1502,7 +1507,7 @@ CTranslatorExprToDXL::PdxlnDynamicBitmapTableScan(
 
 	CDXLPhysicalDynamicBitmapTableScan *pdxlopScan =
 		GPOS_NEW(m_mp) CDXLPhysicalDynamicBitmapTableScan(
-			m_mp, table_descr, part_mdids, selector_ids);
+			m_mp, table_descr, part_mdids, selected_parts, selector_ids);
 
 	CDXLNode *pdxlnScan = GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopScan);
 
@@ -1600,6 +1605,11 @@ CTranslatorExprToDXL::PdxlnDynamicIndexScan(
 	// construct dynamic table scan operator
 	IMdIdArray *part_mdids = popDIS->GetPartitionMdids();
 	part_mdids->AddRef();
+	CBitSet *selected_parts = popDIS->GetSelectedParts();
+	if (nullptr != selected_parts)
+	{
+		selected_parts->AddRef();
+	}
 
 	ULongPtrArray *selector_ids = GPOS_NEW(m_mp) ULongPtrArray(m_mp);
 	CPartitionPropagationSpec *pps_reqd = prpp->Pepp()->PppsRequired();
@@ -1620,17 +1630,17 @@ CTranslatorExprToDXL::PdxlnDynamicIndexScan(
 	CDXLNode *pdxlnDIS = nullptr;
 	if (indexOnly)
 	{
-		pdxlnDIS = GPOS_NEW(m_mp)
-			CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLPhysicalDynamicIndexOnlyScan(
-							   m_mp, table_descr, dxl_index_descr,
-							   EdxlisdForward, part_mdids, selector_ids));
+		pdxlnDIS = GPOS_NEW(m_mp) CDXLNode(
+			m_mp, GPOS_NEW(m_mp) CDXLPhysicalDynamicIndexOnlyScan(
+					  m_mp, table_descr, dxl_index_descr, EdxlisdForward,
+					  part_mdids, selected_parts, selector_ids));
 	}
 	else
 	{
-		pdxlnDIS = GPOS_NEW(m_mp)
-			CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLPhysicalDynamicIndexScan(
-							   m_mp, table_descr, dxl_index_descr,
-							   EdxlisdForward, part_mdids, selector_ids));
+		pdxlnDIS = GPOS_NEW(m_mp) CDXLNode(
+			m_mp, GPOS_NEW(m_mp) CDXLPhysicalDynamicIndexScan(
+					  m_mp, table_descr, dxl_index_descr, EdxlisdForward,
+					  part_mdids, selected_parts, selector_ids));
 	}
 
 	// set plan costs

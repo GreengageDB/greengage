@@ -38,12 +38,14 @@ CLogicalDynamicBitmapTableGet::CLogicalDynamicBitmapTableGet(
 	CMemoryPool *mp, CTableDescriptor *ptabdesc, ULONG ulOriginOpId,
 	const CName *pnameTableAlias, ULONG ulPartIndex,
 	CColRefArray *pdrgpcrOutput, CColRef2dArray *pdrgpdrgpcrPart,
-	IMdIdArray *partition_mdids)
+	IMdIdArray *partition_mdids, CBitSet *selected_parts)
 	: CLogicalDynamicGetBase(mp, pnameTableAlias, ptabdesc, ulPartIndex,
 							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids),
-	  m_ulOriginOpId(ulOriginOpId)
+	  m_ulOriginOpId(ulOriginOpId),
+	  m_selected_parts(selected_parts)
 
 {
+	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
 }
 
 //---------------------------------------------------------------------------
@@ -67,7 +69,10 @@ CLogicalDynamicBitmapTableGet::CLogicalDynamicBitmapTableGet(CMemoryPool *mp)
 //		Dtor
 //
 //---------------------------------------------------------------------------
-CLogicalDynamicBitmapTableGet::~CLogicalDynamicBitmapTableGet() = default;
+CLogicalDynamicBitmapTableGet::~CLogicalDynamicBitmapTableGet()
+{
+	CRefCount::SafeRelease(m_selected_parts);
+}
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -85,6 +90,10 @@ CLogicalDynamicBitmapTableGet::HashValue() const
 	ulHash = gpos::CombineHashes(ulHash, gpos::HashValue(&m_scan_id));
 	ulHash =
 		gpos::CombineHashes(ulHash, CUtils::UlHashColArray(m_pdrgpcrOutput));
+	if (m_selected_parts)
+	{
+		ulHash = gpos::CombineHashes(ulHash, m_selected_parts->HashValue());
+	}
 
 	return ulHash;
 }
@@ -202,13 +211,17 @@ CLogicalDynamicBitmapTableGet::PopCopyWithRemappedColumns(
 
 	Ptabdesc()->AddRef();
 	m_partition_mdids->AddRef();
+	if (m_selected_parts)
+	{
+		m_selected_parts->AddRef();
+	}
 
 	CColRef2dArray *pdrgpdrgpcrPart = CUtils::PdrgpdrgpcrRemap(
 		mp, m_pdrgpdrgpcrPart, colref_mapping, must_exist);
 
 	return GPOS_NEW(mp) CLogicalDynamicBitmapTableGet(
 		mp, Ptabdesc(), m_ulOriginOpId, pnameAlias, m_scan_id, pdrgpcrOutput,
-		pdrgpdrgpcrPart, m_partition_mdids);
+		pdrgpdrgpcrPart, m_partition_mdids, m_selected_parts);
 }
 
 //---------------------------------------------------------------------------

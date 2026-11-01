@@ -12,6 +12,7 @@
 #define GPOPT_CPhysicalDynamicIndexScan_H
 
 #include "gpos/base.h"
+#include "gpos/common/CBitSet.h"
 
 #include "gpopt/metadata/CIndexDescriptor.h"
 #include "gpopt/operators/CPhysicalDynamicScan.h"
@@ -43,6 +44,10 @@ private:
 	// Number of predicate not applicable on the index
 	ULONG m_ulUnindexedPredColCount;
 
+	// positions in the partition list that belong to this operator; null
+	// when the operator covers every partition of the list
+	CBitSet *m_selected_parts;
+
 public:
 	CPhysicalDynamicIndexScan(const CPhysicalDynamicIndexScan &) = delete;
 
@@ -53,11 +58,18 @@ public:
 							  CColRefArray *pdrgpcrOutput, ULONG scan_id,
 							  CColRef2dArray *pdrgpdrgpcrPart, COrderSpec *pos,
 							  IMdIdArray *partition_mdids,
+							  CBitSet *selected_parts,
 							  ColRefToUlongMapArray *root_col_mapping_per_part,
 							  ULONG ulUnindexedPredColCount);
 
 	// dtor
 	~CPhysicalDynamicIndexScan() override;
+
+	CBitSet *
+	GetSelectedParts() const
+	{
+		return m_selected_parts;
+	}
 
 
 	// ident accessors

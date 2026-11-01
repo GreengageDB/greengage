@@ -19,6 +19,7 @@
 #define GPOPT_CLogicalDynamicBitmapTableGet_H
 
 #include "gpos/base.h"
+#include "gpos/common/CBitSet.h"
 
 #include "gpopt/operators/CLogicalDynamicGetBase.h"
 
@@ -42,20 +43,28 @@ private:
 	// origin operator id -- gpos::ulong_max if operator was not generated via a transformation
 	ULONG m_ulOriginOpId;
 
+	// positions in the partition list that belong to this operator; null
+	// when the operator covers every partition of the list
+	CBitSet *m_selected_parts{nullptr};
+
 public:
 	CLogicalDynamicBitmapTableGet(const CLogicalDynamicBitmapTableGet &) =
 		delete;
 
 	// ctors
-	CLogicalDynamicBitmapTableGet(CMemoryPool *mp, CTableDescriptor *ptabdesc,
-								  ULONG ulOriginOpId,
-								  const CName *pnameTableAlias,
-								  ULONG ulPartIndex,
-								  CColRefArray *pdrgpcrOutput,
-								  CColRef2dArray *pdrgpdrgpcrPart,
-								  IMdIdArray *partition_mdids);
+	CLogicalDynamicBitmapTableGet(
+		CMemoryPool *mp, CTableDescriptor *ptabdesc, ULONG ulOriginOpId,
+		const CName *pnameTableAlias, ULONG ulPartIndex,
+		CColRefArray *pdrgpcrOutput, CColRef2dArray *pdrgpdrgpcrPart,
+		IMdIdArray *partition_mdids, CBitSet *selected_parts);
 
 	explicit CLogicalDynamicBitmapTableGet(CMemoryPool *mp);
+
+	CBitSet *
+	GetSelectedParts() const
+	{
+		return m_selected_parts;
+	}
 
 	// dtor
 	~CLogicalDynamicBitmapTableGet() override;

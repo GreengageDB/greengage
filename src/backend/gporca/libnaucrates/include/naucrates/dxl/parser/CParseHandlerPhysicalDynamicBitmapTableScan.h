@@ -13,6 +13,7 @@
 #define GPDXL_CParseHandlerPhysicalDynamicBitmapTableScan_H
 
 #include "gpos/base.h"
+#include "gpos/common/CBitSet.h"
 
 #include "naucrates/dxl/operators/CDXLOperatorFactory.h"
 #include "naucrates/dxl/parser/CParseHandlerPhysicalAbstractBitmapScan.h"
@@ -36,6 +37,8 @@ class CParseHandlerPhysicalDynamicBitmapTableScan
 {
 private:
 	ULongPtrArray *m_selector_ids;
+
+	CBitSet *m_selected_parts{nullptr};
 
 	// process the start of an element
 	void StartElement(
@@ -63,6 +66,11 @@ public:
 		: CParseHandlerPhysicalAbstractBitmapScan(mp, parse_handler_mgr,
 												  parse_handler_root)
 	{
+	}
+
+	~CParseHandlerPhysicalDynamicBitmapTableScan() override
+	{
+		CRefCount::SafeRelease(m_selected_parts);
 	}
 };
 }  // namespace gpdxl

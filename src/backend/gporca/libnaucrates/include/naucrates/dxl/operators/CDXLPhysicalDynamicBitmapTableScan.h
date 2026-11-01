@@ -13,6 +13,7 @@
 #define GPDXL_CDXLPhysicalDynamicBitmapTableScan_H
 
 #include "gpos/base.h"
+#include "gpos/common/CBitSet.h"
 
 #include "naucrates/dxl/operators/CDXLPhysicalAbstractBitmapScan.h"
 
@@ -37,6 +38,9 @@ class CDXLPhysicalDynamicBitmapTableScan : public CDXLPhysicalAbstractBitmapScan
 private:
 	IMdIdArray *m_part_mdids;
 
+	// positions in m_part_mdids this scan covers; null means all of them
+	CBitSet *m_selected_parts;
+
 	ULongPtrArray *m_selector_ids = nullptr;
 
 public:
@@ -47,12 +51,16 @@ public:
 	CDXLPhysicalDynamicBitmapTableScan(CMemoryPool *mp,
 									   CDXLTableDescr *table_descr,
 									   IMdIdArray *part_mdids,
+									   CBitSet *selected_parts,
 									   ULongPtrArray *selector_ids)
 		: CDXLPhysicalAbstractBitmapScan(mp, table_descr),
 		  m_part_mdids(part_mdids),
+		  m_selected_parts(selected_parts),
 		  m_selector_ids(selector_ids)
 	{
 		GPOS_ASSERT(nullptr != table_descr);
+		GPOS_ASSERT(nullptr == m_selected_parts ||
+					0 != m_selected_parts->Size());
 	}
 
 	// dtor
@@ -69,6 +77,12 @@ public:
 	const CWStringConst *GetOpNameStr() const override;
 
 	IMdIdArray *GetParts() const;
+
+	CBitSet *
+	GetSelectedParts() const
+	{
+		return m_selected_parts;
+	}
 
 	const ULongPtrArray *
 	GetSelectorIds() const

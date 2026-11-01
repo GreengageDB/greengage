@@ -49,11 +49,12 @@ public:
 								CColRefArray *pdrgpcrOutput,
 								CColRef2dArray *pdrgpdrgpcrPart,
 								IMdIdArray *partition_mdids,
+								CBitSet *selected_parts,
 								ULONG ulUnindexedPredColCount)
 		: CLogicalDynamicIndexGet(mp, pmdindex, ptabdesc, ulOriginOpId,
 								  pnameAlias, ulPartIndex, pdrgpcrOutput,
 								  pdrgpdrgpcrPart, partition_mdids,
-								  ulUnindexedPredColCount)
+								  selected_parts, ulUnindexedPredColCount)
 	{
 	}
 

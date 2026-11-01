@@ -126,7 +126,7 @@ CParseHandlerPhysicalAbstractBitmapScan::StartElementHelper(
 void
 CParseHandlerPhysicalAbstractBitmapScan::EndElementHelper(
 	const XMLCh *const element_local_name, Edxltoken token_type,
-	ULongPtrArray *selector_ids)
+	ULongPtrArray *selector_ids, CBitSet *selected_parts)
 {
 	if (0 != XMLString::compareString(CDXLTokens::XmlstrToken(token_type),
 									  element_local_name))
@@ -176,7 +176,8 @@ CParseHandlerPhysicalAbstractBitmapScan::EndElementHelper(
 			partition_mdids_parse_handler->GetMdIdArray();
 		mdid_partitions_array->AddRef();
 		dxl_op = GPOS_NEW(m_mp) CDXLPhysicalDynamicBitmapTableScan(
-			m_mp, table_descr, mdid_partitions_array, selector_ids);
+			m_mp, table_descr, mdid_partitions_array, selected_parts,
+			selector_ids);
 	}
 	m_dxl_node = GPOS_NEW(m_mp) CDXLNode(m_mp, dxl_op);
 

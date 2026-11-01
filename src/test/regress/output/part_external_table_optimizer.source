@@ -521,6 +521,41 @@ select * from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
  15 | 15 | 15
 (1 row)
 
+-- Dynamic partition elimination over the dynamic index only scan of the heap
+-- branch. The partition selector refers to positions in the full partition
+-- list, so the scan keeps that list and applies its own set of partitions on
+-- top of the partitions chosen by the selector.
+create index on part_mixed(a, b);
+set optimizer_enable_dynamictablescan = off;
+set optimizer_enable_dynamicindexscan = off;
+explain (costs off) select pm.a, pm.b from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (pm.b = ft.a)
+         ->  Append
+               ->  Dynamic Index Only Scan on part_mixed_a_b_idx on part_mixed pm
+                     Index Cond: (a = 15)
+                     Number of partitions to scan: 2 (out of 3)
+               ->  Dynamic Foreign Scan on part_mixed pm
+                     Filter: (a = 15)
+                     Number of partitions to scan: 1 (out of 3)
+         ->  Hash
+               ->  Partition Selector (selector id: $0)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on filter_table ft
+ Optimizer: GPORCA
+(15 rows)
+
+select pm.a, pm.b from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
+ a  | b  
+----+----
+ 15 | 15
+(1 row)
+
+reset optimizer_enable_dynamictablescan;
+reset optimizer_enable_dynamicindexscan;
 drop table part_mixed cascade;
 -- Find a value in the last external partition
 CREATE TABLE part_mixed (a int, b int) PARTITION BY RANGE (b);

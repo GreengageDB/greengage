@@ -1330,7 +1330,9 @@ CUtils::FMatchDynamicIndex(T *pop1, COperator *pop2)
 		   pop1->Ptabdesc()->MDId()->Equals(popIndex2->Ptabdesc()->MDId()) &&
 		   pop1->Pindexdesc()->MDId()->Equals(
 			   popIndex2->Pindexdesc()->MDId()) &&
-		   pop1->PdrgpcrOutput()->Equals(popIndex2->PdrgpcrOutput());
+		   pop1->PdrgpcrOutput()->Equals(popIndex2->PdrgpcrOutput()) &&
+		   FMatchSelectedParts(pop1->GetSelectedParts(),
+							   popIndex2->GetSelectedParts());
 }
 
 //---------------------------------------------------------------------------
@@ -1379,6 +1381,8 @@ CUtils::FMatchDynamicBitmapScan(T *pop1, COperator *pop2)
 	T *popDynamicBitmapScan2 = T::PopConvert(pop2);
 
 	return pop1->UlOriginOpId() == popDynamicBitmapScan2->UlOriginOpId() &&
+		   FMatchSelectedParts(pop1->GetSelectedParts(),
+							   popDynamicBitmapScan2->GetSelectedParts()) &&
 		   FMatchDynamicScan(
 			   pop1,
 			   pop2);  // call match dynamic scan to compare other member vars
