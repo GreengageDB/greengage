@@ -757,6 +757,22 @@ ExecSquelchNode(PlanState *node)
 			ExecSquelchProjectSetNode((ProjectSetState *) node);
 			break;
 
+		case T_CustomScanState:
+
+			/*
+			 * The provider's children may sit in custom_ps too. The scan is
+			 * not shut down: a rescan may follow a squelch, as a Nested Loop
+			 * rescans its squelched side, and a provider may release in its
+			 * shutdown callback what a rescan needs. The callback runs where
+			 * PostgreSQL runs it, after each run of the executor: at the end
+			 * of the plan, or of a FETCH from a cursor that cannot scroll.
+			 */
+			ExecSquelchNode(outerPlanState(node));
+			ExecSquelchNode(innerPlanState(node));
+			foreach(lc, ((CustomScanState *) node)->custom_ps)
+				ExecSquelchNode((PlanState *) lfirst(lc));
+			break;
+
 			/*
 			 * Node types that need no special handling, just recurse to
 			 * children.

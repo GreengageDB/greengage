@@ -1576,6 +1576,28 @@ motion_sanity_walker(Node *node, sanity_result_t *result)
 				return true;
 			break;
 
+		case T_CustomScan:
+			{
+				ListCell   *lc;
+
+				/*
+				 * plan_tree_walker hands custom_plans to this walker as one
+				 * List, which is not a plan node and so is skipped: walk each
+				 * child here, so that a join above sees the Motions under the
+				 * scan. A scan with several children is not checked the way a
+				 * join is above: only the provider knows whether it reads one
+				 * child to the end before it reads another.
+				 */
+				if (plan_tree_walker(node, motion_sanity_walker, result, true))
+					return true;
+				foreach(lc, ((CustomScan *) node)->custom_plans)
+				{
+					if (motion_sanity_walker((Node *) lfirst(lc), result))
+						return true;
+				}
+			}
+			break;
+
 		case T_Motion:
 			if (plan_tree_walker(node, motion_sanity_walker, result, true))
 				return true;

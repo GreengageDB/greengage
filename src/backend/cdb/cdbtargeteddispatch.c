@@ -22,8 +22,10 @@
 #include "utils/relcache.h"		/* RelationGetPartitioningKey() */
 #include "optimizer/optimizer.h"
 #include "optimizer/predtest_valueset.h"
+#include "optimizer/restrictinfo.h"
 
 #include "catalog/gp_distribution_policy.h"
+#include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
 
 #include "catalog/pg_proc.h"
@@ -34,6 +36,7 @@
 #include "cdb/cdbhash.h"
 #include "cdb/cdbllize.h"
 #include "cdb/cdbmutate.h"
+#include "cdb/cdbpathlocus.h"
 #include "cdb/cdbplan.h"
 #include "cdb/cdbvars.h"
 #include "cdb/cdbutil.h"
@@ -115,11 +118,12 @@ GetContentIdsFromPlanForSingleRelation(PlannerInfo *root, Plan *plan, int rangeT
 		 * since we will recurse to the child scan.
 		 */
 	}
-	else
+	else if (!IsA(plan, CustomScan))
 	{
+		/* A custom scan may keep children in its trees too. */
 		Assert(plan->lefttree == NULL);
 	}
-	Assert(plan->righttree == NULL);
+	Assert(plan->righttree == NULL || IsA(plan, CustomScan));
 
 	/* open and get relation info */
 	rte = planner_rt_fetch(rangeTableIndex, root);
@@ -529,6 +533,14 @@ DirectDispatchUpdateContentIdsFromPlan(PlannerInfo *root, Plan *plan)
 													 * foreign tables ...
 													 * so disable */
 			break;
+		case T_CustomScan:
+
+			/*
+			 * Only the custom path tells what the scan reads: see
+			 * DirectDispatchUpdateContentIdsFromCustomPath.
+			 */
+			DisableTargetedDispatch(&dispatchInfo);
+			break;
 		case T_SplitUpdate:
 			break;
 		default:
@@ -545,6 +557,170 @@ DirectDispatchUpdateContentIdsFromPlan(PlannerInfo *root, Plan *plan)
 		/* learned new info: merge it in */
 		MergeDirectDispatchCalculationInfo(&root->curSlice->directDispatch, &dispatchInfo);
 	}
+}
+
+/*
+ * The relations whose rows a rel holds. An upper rel lists none of its own:
+ * it holds rows of every base relation of the query level. They are
+ * collected here, as root->all_baserels stays empty for a set operation.
+ */
+static Relids
+RelidsHeldBy(PlannerInfo *root, RelOptInfo *rel)
+{
+	Relids		relids = NULL;
+	int			i;
+
+	if (!IS_UPPER_REL(rel) || !bms_is_empty(rel->relids))
+		return rel->relids;
+
+	for (i = 1; i < root->simple_rel_array_size; i++)
+	{
+		RelOptInfo *base = root->simple_rel_array[i];
+
+		if (base != NULL && base->reloptkind == RELOPT_BASEREL)
+			relids = bms_add_member(relids, i);
+	}
+
+	return relids;
+}
+
+/*
+ * The relations whose rows a child path brings. A path of an upper rel that
+ * lists no relations brings what its inputs bring, which here a custom path
+ * or a projection tells; of any other such path the core cannot tell, so it
+ * counts as bringing none.
+ */
+static Relids
+RelidsBroughtBy(Path *path)
+{
+	Relids		relids = NULL;
+	ListCell   *lc;
+
+	if (!IS_UPPER_REL(path->parent) || !bms_is_empty(path->parent->relids))
+		return path->parent->relids;
+
+	if (IsA(path, ProjectionPath))
+		return RelidsBroughtBy(((ProjectionPath *) path)->subpath);
+	if (IsA(path, CustomPath))
+	{
+		foreach(lc, ((CustomPath *) path)->custom_paths)
+			relids = bms_add_members(relids, RelidsBroughtBy((Path *) lfirst(lc)));
+	}
+
+	return relids;
+}
+
+/*
+ * Whether the rows of a relation reach a custom scan through its children:
+ * a child holds the relation, or, for the parent of an appendrel (a
+ * partitioned table, an inheritance tree, a UNION ALL), the children reach
+ * every member the planner kept.
+ */
+static bool
+RelidReachedByChildren(PlannerInfo *root, Index relid, Relids children)
+{
+	bool		members = false;
+	ListCell   *lc;
+
+	if (bms_is_member(relid, children))
+		return true;
+
+	foreach(lc, root->append_rel_list)
+	{
+		AppendRelInfo *appinfo = lfirst_node(AppendRelInfo, lc);
+		RelOptInfo *member;
+
+		if (appinfo->parent_relid != relid)
+			continue;
+		member = root->simple_rel_array[appinfo->child_relid];
+		if (member == NULL || IS_DUMMY_REL(member))
+			continue;
+		if (!RelidReachedByChildren(root, appinfo->child_relid, children))
+			return false;
+		members = true;
+	}
+
+	return members;
+}
+
+/*
+ * Targeted dispatch for a custom scan, from its path: the plan alone does
+ * not tell which relations the provider reads itself.
+ */
+void
+DirectDispatchUpdateContentIdsFromCustomPath(PlannerInfo *root,
+											 CustomPath *path, Plan *plan)
+{
+	DirectDispatchInfo dispatchInfo;
+	RelOptInfo *rel = path->path.parent;
+	Index		scanrelid = ((Scan *) plan)->scanrelid;
+	RangeTblEntry *rte = scanrelid > 0 ? planner_rt_fetch(scanrelid, root) : NULL;
+
+	InitDirectDispatchCalculationInfo(&dispatchInfo);
+
+	if (rte != NULL && rel->relid == scanrelid &&
+		rte->rtekind == RTE_RELATION && !rte->inh &&
+		(rte->relkind == RELKIND_RELATION ||
+		 rte->relkind == RELKIND_MATVIEW))
+	{
+		/*
+		 * A scan of a table returns only rows that pass the table's
+		 * restrictions, wherever the provider tests them, so its segments
+		 * follow from them as for a Seq Scan, where its rows lie as the
+		 * table's do. A provider that reads them from elsewhere, laid out
+		 * otherwise, says so in the path's locus. A Strewn locus, as of a
+		 * randomly distributed table, cannot tell, so the scan of such a
+		 * table goes to every segment. Not so for the parent of an
+		 * inheritance tree or a partitioned table: its members may be
+		 * distributed otherwise, so its children must reach them.
+		 */
+		if (cdbpathlocus_equal(path->path.locus,
+							   cdbpathlocus_from_baserel(root, rel)))
+			dispatchInfo = GetContentIdsFromPlanForSingleRelation(root, plan, scanrelid,
+																  extract_actual_clauses(rel->baserestrictinfo,
+																						 false));
+		else
+			DisableTargetedDispatch(&dispatchInfo);
+	}
+	else if (scanrelid > 0 && rel->relid != scanrelid)
+	{
+		/*
+		 * A scan of a join or an upper rel that reads a table itself
+		 * (scanrelid), which PostgreSQL expects only of a scan of that
+		 * table. Following its children could leave out the table's rows
+		 * on other segments, whatever the children reach.
+		 */
+		DisableTargetedDispatch(&dispatchInfo);
+	}
+	else
+	{
+		Relids		needed = RelidsHeldBy(root, rel);
+		Relids		children = NULL;
+		int			relid = -1;
+		ListCell   *lc;
+
+		foreach(lc, path->custom_paths)
+			children = bms_add_members(children, RelidsBroughtBy((Path *) lfirst(lc)));
+
+		/*
+		 * The children set the segments of the rows they bring. A relation
+		 * they do not reach, the provider reads itself, from segments the
+		 * core cannot tell: dispatch to every segment.
+		 */
+		if (path->custom_paths == NIL)
+			DisableTargetedDispatch(&dispatchInfo);
+		while ((relid = bms_next_member(needed, relid)) >= 0)
+		{
+			if (!RelidReachedByChildren(root, relid, children))
+			{
+				DisableTargetedDispatch(&dispatchInfo);
+				break;
+			}
+		}
+	}
+
+	if (dispatchInfo.haveProcessedAnyCalculations)
+		MergeDirectDispatchCalculationInfo(&root->curSlice->directDispatch, &dispatchInfo);
 }
 
 void

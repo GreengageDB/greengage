@@ -23,6 +23,7 @@
 #include "utils/resource_manager.h"
 #include "access/heapam.h"
 #include "miscadmin.h"
+#include "nodes/extensible.h"
 #include "cdb/cdbvars.h"
 #include "optimizer/clauses.h"
 #include "parser/parsetree.h"
@@ -236,6 +237,16 @@ IsResultMemoryIntensive(Result *res)
 	}
 }
 
+/*
+ * Is a node a custom scan that asked for memory of its own?
+ */
+static inline bool
+IsCustomScanMemoryIntensive(Node *node)
+{
+	return IsA(node, CustomScan) &&
+		(((CustomScan *) node)->flags & CUSTOMPATH_GP_MEMORY_INTENSIVE) != 0;
+}
+
 /**
  * Is an operator memory intensive?
  */
@@ -264,6 +275,8 @@ IsMemoryIntensiveOperator(Node *node, PlannedStmt *stmt)
 				Result *res = (Result *) node;
 				return IsResultMemoryIntensive(res);
 			}
+		case T_CustomScan:
+			return IsCustomScanMemoryIntensive(node);
 		default:
 			return false;
 	}
@@ -716,6 +729,22 @@ PolicyEagerFreePrelimWalker(Node *node, PolicyEagerFreeContext *context)
 		{
 			IncrementOperatorCount(node, parentGroupNode, context->plannedStmt);
 		}
+
+		/*
+		 * A custom scan that asked for memory may keep it while its children
+		 * run, as a hash join keeps its Hash's table while it reads its
+		 * outer side. Like the Hash, it gets a group of its own beside the
+		 * groups of its children, which share the memory with it.
+		 */
+		if (IsCustomScanMemoryIntensive(node))
+		{
+			OperatorGroupNode *own = CreateOperatorGroupNode(context->nextGroupId++,
+															  context->groupNode);
+
+			own->numMemIntenseOps = 1;
+			context->groupNode->childGroups =
+				lappend(context->groupNode->childGroups, own);
+		}
 	}
 
 	bool result = plan_tree_walker(node, PolicyEagerFreePrelimWalker, context, true);
@@ -819,6 +848,30 @@ PolicyEagerFreeAssignWalker(Node *node, PolicyEagerFreeContext *context)
 				{
 					planNode->operatorMemKB = memKBInParentGroup;
 				}
+			}
+
+			/*
+			 * A custom scan that asked for memory gets at most the memory of
+			 * its own group, which the prelim walk made beside its
+			 * children's.
+			 */
+			if (IsCustomScanMemoryIntensive(node))
+			{
+				ListCell   *lc;
+				OperatorGroupNode *own = NULL;
+
+				foreach(lc, context->groupNode->childGroups)
+				{
+					own = (OperatorGroupNode *) lfirst(lc);
+					if (own->groupId == context->nextGroupId)
+						break;
+				}
+				Assert(own != NULL && own->groupId == context->nextGroupId);
+				context->nextGroupId++;
+
+				ComputeMemLimitForChildGroups(context->groupNode);
+				planNode->operatorMemKB = Min(planNode->operatorMemKB,
+											  own->groupMemKB);
 			}
 		}
 	}
