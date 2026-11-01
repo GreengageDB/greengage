@@ -227,3 +227,30 @@ ExecShutdownCustomScan(CustomScanState *node)
 	if (methods->ShutdownCustomScan)
 		methods->ShutdownCustomScan(node);
 }
+
+/*
+ * Greengage: the parent reads no more rows from the scan until a rescan.
+ * The provider's callback squelches the children the scan will not read
+ * again; without it, every child is squelched. The scan is not shut down: a
+ * rescan may follow a squelch, as a SubPlan rescans a Nested Loop that
+ * squelched itself, and a provider may release in its shutdown callback
+ * what a rescan needs. The shutdown callback runs where PostgreSQL runs it,
+ * after each run of the executor: at the end of the plan, or of a FETCH
+ * from a cursor that cannot scroll.
+ */
+void
+ExecSquelchCustomScan(CustomScanState *node)
+{
+	const CustomExecMethods *methods = node->methods;
+	ListCell   *lc;
+
+	if (methods->SquelchCustomScan)
+	{
+		methods->SquelchCustomScan(node);
+		return;
+	}
+	ExecSquelchNode(outerPlanState(node));
+	ExecSquelchNode(innerPlanState(node));
+	foreach(lc, node->custom_ps)
+		ExecSquelchNode((PlanState *) lfirst(lc));
+}

@@ -2276,6 +2276,16 @@ cdbpath_contains_wts(Path *path)
 		}
 		return false;
 	}
+	else if (IsA(path, CustomPath))
+	{
+		/* A custom path's children, as a join's. */
+		foreach(lc, ((CustomPath *) path)->custom_paths)
+		{
+			if (cdbpath_contains_wts((Path *) lfirst(lc)))
+				return true;
+		}
+		return false;
+	}
 
 	return path->pathtype == T_WorkTableScan;
 }
