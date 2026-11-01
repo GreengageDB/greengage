@@ -80,6 +80,89 @@ extern const ExtensibleNodeMethods *GetExtensibleNodeMethods(const char *name,
  */
 #define CUSTOMPATH_SUPPORT_BACKWARD_SCAN	0x0001
 #define CUSTOMPATH_SUPPORT_MARK_RESTORE		0x0002
+#define CUSTOMPATH_SUPPORT_PROJECTION		0x0004
+
+/*
+ * Greengage: CUSTOMPATH_SUPPORT_PROJECTION comes from PostgreSQL 15. Before
+ * it, the planner took every custom scan to compute its output expressions;
+ * now a Result above a scan without the flag computes them. The planner
+ * reads the flag on the path and on the plan, so PlanCustomPath copies the
+ * path's flags to CustomScan.flags, as it does the flags below.
+ */
+
+/*
+ * Greengage: a custom scan's children are visited as any plan's are: the
+ * plan walkers and mutators, the slice table, squelch and the walks of
+ * plan states go into custom_plans and custom_ps. An extension whose
+ * custom scans have children of their own needs these.
+ *
+ * As for any path, the provider sets the fields of its CustomPath that
+ * Greengage adds: locus, where the rows lie, which for a scan over
+ * children is usually that of the child it returns the rows of;
+ * motionHazard and rescannable, from its children; sameslice_relids. The
+ * plan reaches the segments, so the library that registers the scan's
+ * methods is loaded there too.
+ *
+ * List custom_plans in the order the scan runs them: a hash join lists
+ * its inner side first, as it builds its table before it reads the outer
+ * side. The walk that picks the producer of a CTE shared by several scans
+ * visits lefttree, righttree and then custom_plans in list order, and the
+ * first scan of the CTE it meets produces it. A producer shared with
+ * another slice writes out the whole CTE at its first row, and the other
+ * slice waits for it. So a child must reach its scans of a shared CTE
+ * before the scan waits on a later child, as when the scan reads each
+ * child to its end before it starts the next; otherwise each slice may
+ * wait for the other. Motions under two children deadlock the same way
+ * when the scan reads a row from one and then waits on the other, as a
+ * join without prefetch_inner would (see motion_sanity_walker), and the
+ * core does not check how a custom scan reads its children. EXPLAIN shows
+ * the children in the order of custom_ps, which the provider may build
+ * otherwise.
+ *
+ * The walkers do not look into custom_private, as in PostgreSQL: keep in
+ * custom_exprs what the core must see. Squelch reaches the children but
+ * does not call ShutdownCustomScan, since a rescan may follow a squelch:
+ * the callback runs where PostgreSQL runs it, after each run of the
+ * executor. ExecReScan clears the squelch of the node it rescans, so
+ * ReScanCustomScan rescans each child the scan reads again; a scan that
+ * stops reading a child early squelches it, as a Limit does.
+ */
+#define CUSTOMSCAN_GP_CHILDREN 1
+
+/*
+ * Greengage: the custom scan reads rows only from its children, the plans
+ * the core makes from custom_paths, as an Agg or a Hash Join does: no
+ * relation itself and no plan it adds in PlanCustomPath. One without
+ * children returns no rows of a relation, as a Values Scan. Targeted
+ * dispatch then sends its slice where the scans under it go. The flag
+ * counts only for a scan whose scanrelid is 0: a custom scan of a table
+ * follows the table's restrictions, as a Seq Scan does, where the path's
+ * locus is the table's and not Strewn. Any other custom scan turns
+ * targeted dispatch off, as a foreign scan does: the core cannot tell
+ * where the provider reads its rows. The core reads the flag in
+ * CustomScan.flags, which PlanCustomPath sets from the path.
+ */
+#define CUSTOMPATH_GP_CHILD_ROWS_ONLY		0x00010000
+
+/*
+ * Greengage: the custom scan needs memory of its own, as a Hash or a Sort
+ * does. The resource manager gives such a scan a share of the query's
+ * memory (memquota.c), which it reads with PlanStateOperatorMemKB; a scan
+ * without the flag gets the small share of an operator that needs none.
+ * The core reads the flag in CustomScan.flags, which PlanCustomPath sets
+ * from the path.
+ *
+ * Eager free gives the operators above a blocking one, such as a Sort, the
+ * memory of those below it, which are done once it has read its input: a
+ * scan should release its memory when it has read its children to the
+ * end. A squelch, as from a LIMIT, does not tell the scan to release it,
+ * and the scan keeps it until the plan ends, as a Sort that may be
+ * rescanned keeps its own. Eager free does not count that memory: once a
+ * blocking operator above the LIMIT has read its input, the operators
+ * above it get the memory of the scan too, so such a plan may use more
+ * than the query's memory.
+ */
+#define CUSTOMPATH_GP_MEMORY_INTENSIVE		0x00020000
 
 /*
  * Custom path methods.  Mostly, we just need to know how to convert a
