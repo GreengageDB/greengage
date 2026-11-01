@@ -256,8 +256,12 @@ plan_tree_walker(Node *node,
 				return true;
 			if (walker(((CustomScan *) node)->custom_exprs, context))
 				return true;
-			if (walker(((CustomScan *) node)->custom_private, context))
-				return true;
+
+			/*
+			 * custom_private is the provider's own data: the core copies and
+			 * serializes it but does not look into it. What the core must
+			 * see, the provider keeps in custom_exprs, as in PostgreSQL.
+			 */
 			if (walker(((CustomScan *) node)->custom_scan_tlist, context))
 				return true;
 			break;

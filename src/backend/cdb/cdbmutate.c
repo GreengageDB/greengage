@@ -29,6 +29,7 @@
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/pathnode.h"
+#include "nodes/extensible.h"
 #include "nodes/makefuncs.h"
 
 #include "commands/tablecmds.h"
@@ -521,6 +522,32 @@ shareinput_walker(SHAREINPUT_MUTATOR f, Node *node, PlannerInfo *root)
 			{
 				shareinput_walker(f, (Node *) lfirst(cell), root);
 			}
+		}
+		else if (IsA(node, CustomScan))
+		{
+			CustomScan *cscan = (CustomScan *) node;
+			List	   *children = cscan->custom_plans;
+			ListCell   *cell;
+
+			/*
+			 * The trees, then the provider's children in their order of
+			 * execution. A List here is linked, so list_nth walks from the
+			 * head: children that run from the last to the first are visited
+			 * through a reversed copy instead.
+			 */
+			shareinput_walker(f, (Node *) plan->lefttree, root);
+			shareinput_walker(f, (Node *) plan->righttree, root);
+			if (cscan->flags & CUSTOMPATH_GP_LAST_CHILD_FIRST)
+			{
+				children = NIL;
+				foreach(cell, cscan->custom_plans)
+					children = lcons(lfirst(cell), children);
+			}
+			foreach(cell, children)
+				shareinput_walker(f, (Node *) lfirst(cell), root);
+			if (children != cscan->custom_plans)
+				list_free(children);
+			shareinput_walker(f, (Node *) plan->initPlan, root);
 		}
 		else
 		{

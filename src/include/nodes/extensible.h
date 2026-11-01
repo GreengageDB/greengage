@@ -80,6 +80,38 @@ extern const ExtensibleNodeMethods *GetExtensibleNodeMethods(const char *name,
  */
 #define CUSTOMPATH_SUPPORT_BACKWARD_SCAN	0x0001
 #define CUSTOMPATH_SUPPORT_MARK_RESTORE		0x0002
+#define CUSTOMPATH_SUPPORT_PROJECTION		0x0004
+
+/*
+ * Greengage: the scan executes its custom_plans from the last to the
+ * first, as a hash join builds its inner side before it reads the outer
+ * one. Without it, they execute in list order. Walks that must follow
+ * the order of execution, such as the one that assigns the producers of
+ * shared scans, visit the children so.
+ */
+#define CUSTOMPATH_GP_LAST_CHILD_FIRST		0x00010000
+
+/*
+ * Greengage: a custom scan's children are visited as any plan's are: the
+ * plan walkers and mutators, the slice table, squelch and the walks of
+ * plan states go into custom_plans and custom_ps. A custom scan turns
+ * targeted dispatch off, as a foreign scan does. An extension whose
+ * custom scans have children of their own needs these.
+ *
+ * The walkers do not look into custom_private, as in PostgreSQL: keep in
+ * custom_exprs what the core must see. Squelch calls ShutdownCustomScan,
+ * which may run again when the plan ends, and a rescan may follow it.
+ */
+#define CUSTOMSCAN_GP_CHILDREN 1
+
+/*
+ * Greengage: the custom scan needs memory of its own, as a Hash or a Sort
+ * does. The resource manager gives such a scan a share of the query's
+ * memory (memquota.c), which it reads with PlanStateOperatorMemKB; a scan
+ * without the flag gets the small share of an operator that needs none.
+ * The flag passes from the path to the plan as the provider sets it.
+ */
+#define CUSTOMPATH_GP_MEMORY_INTENSIVE		0x00020000
 
 /*
  * Custom path methods.  Mostly, we just need to know how to convert a

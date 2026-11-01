@@ -4257,6 +4257,14 @@ create_projection_path_with_quals(PlannerInfo *root,
 	pathnode->path.locus = subpath->locus;
 	pathnode->path.sameslice_relids = subpath->sameslice_relids;
 
+	/*
+	 * motionHazard says that a Motion below streams its rows into this path,
+	 * so a join above must read its inner side first, or two Motions can wait
+	 * on each other. A Result streams its input too, so it keeps the hazard
+	 * of its subpath.
+	 */
+	pathnode->path.motionHazard = subpath->motionHazard;
+
 	pathnode->subpath = subpath;
 
 	/*

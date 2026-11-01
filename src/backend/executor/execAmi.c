@@ -757,6 +757,21 @@ ExecSquelchNode(PlanState *node)
 			ExecSquelchProjectSetNode((ProjectSetState *) node);
 			break;
 
+		case T_CustomScanState:
+
+			/*
+			 * As for a foreign scan, the provider's shutdown callback lets it
+			 * release what it holds; a rescan may follow, as after any
+			 * squelch, and the callback runs again when the plan ends. The
+			 * provider's children may sit in custom_ps too.
+			 */
+			ExecShutdownCustomScan((CustomScanState *) node);
+			ExecSquelchNode(outerPlanState(node));
+			ExecSquelchNode(innerPlanState(node));
+			foreach(lc, ((CustomScanState *) node)->custom_ps)
+				ExecSquelchNode((PlanState *) lfirst(lc));
+			break;
+
 			/*
 			 * Node types that need no special handling, just recurse to
 			 * children.

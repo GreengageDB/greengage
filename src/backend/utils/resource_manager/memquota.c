@@ -23,6 +23,7 @@
 #include "utils/resource_manager.h"
 #include "access/heapam.h"
 #include "miscadmin.h"
+#include "nodes/extensible.h"
 #include "cdb/cdbvars.h"
 #include "optimizer/clauses.h"
 #include "parser/parsetree.h"
@@ -236,6 +237,16 @@ IsResultMemoryIntensive(Result *res)
 	}
 }
 
+/*
+ * Is a node a custom scan that asked for memory of its own?
+ */
+static inline bool
+IsCustomScanMemoryIntensive(Node *node)
+{
+	return IsA(node, CustomScan) &&
+		(((CustomScan *) node)->flags & CUSTOMPATH_GP_MEMORY_INTENSIVE) != 0;
+}
+
 /**
  * Is an operator memory intensive?
  */
@@ -264,6 +275,8 @@ IsMemoryIntensiveOperator(Node *node, PlannedStmt *stmt)
 				Result *res = (Result *) node;
 				return IsResultMemoryIntensive(res);
 			}
+		case T_CustomScan:
+			return IsCustomScanMemoryIntensive(node);
 		default:
 			return false;
 	}
@@ -839,6 +852,68 @@ PolicyEagerFreeAssignWalker(Node *node, PolicyEagerFreeContext *context)
 }
 
 /*
+ * Whether the plan has a custom scan that asked for memory of its own
+ * (CUSTOMPATH_GP_MEMORY_INTENSIVE).
+ */
+typedef struct CustomMemoryContext
+{
+	plan_tree_base_prefix base; /* Required prefix for
+								 * plan_tree_walker/mutator */
+} CustomMemoryContext;
+
+static bool
+HasMemoryIntensiveCustomScanWalker(Node *node, CustomMemoryContext *context)
+{
+	if (node == NULL)
+		return false;
+	if (IsCustomScanMemoryIntensive(node))
+		return true;
+	return plan_tree_walker(node, HasMemoryIntensiveCustomScanWalker, context, true);
+}
+
+/*
+ * Whether the auto policy can assign the memory: the query's memory pays
+ * the fixed share of every operator that is not memory intensive, and
+ * leaves every memory intensive one at least a kilobyte, a share of none
+ * being taken for no assignment at all (PlanStateOperatorMemKB).
+ */
+static bool
+PolicyAutoFits(PlannedStmt *stmt, uint64 memAvailableBytes)
+{
+	PolicyAutoContext ctx;
+
+	exec_init_plan_tree_base(&ctx.base, stmt);
+	ctx.queryMemKB = (uint64) (memAvailableBytes / 1024);
+	ctx.numMemIntensiveOperators = 0;
+	ctx.numNonMemIntensiveOperators = 0;
+	ctx.plannedStmt = stmt;
+	(void) PolicyAutoPrelimWalker((Node *) stmt->planTree, &ctx);
+	{
+		uint64		fixedKB = ctx.numNonMemIntensiveOperators *
+			(*gp_resmanager_memory_policy_auto_fixed_mem);
+
+		return ctx.queryMemKB > fixedKB &&
+			ctx.queryMemKB - fixedKB >= ctx.numMemIntensiveOperators;
+	}
+}
+
+/*
+ * A memory hungry custom scan that eager free gave no memory gets a
+ * kilobyte: a share of none is read as no assignment at all, which gives
+ * work_mem (PlanStateOperatorMemKB), and the scan would fill that.
+ */
+static bool
+ClampCustomScanMemoryWalker(Node *node, CustomMemoryContext *context)
+{
+	if (node == NULL)
+		return false;
+	if (IsCustomScanMemoryIntensive(node) &&
+		((Plan *) node)->operatorMemKB == 0)
+		((Plan *) node)->operatorMemKB = 1;
+	return plan_tree_walker(node, ClampCustomScanMemoryWalker, context, true);
+}
+
+/*
  * PolicyEagerFreeAssignOperatorMemoryKB
  *    Main entry point for memory quota OPTIMIZE. This function distributes the memory
  * among all operators in a more optimized way than the AUTO policy.
@@ -850,6 +925,26 @@ void
 PolicyEagerFreeAssignOperatorMemoryKB(PlannedStmt *stmt, uint64 memAvailableBytes)
 {
 	PolicyEagerFreeContext ctx;
+	CustomMemoryContext custom;
+	bool		custom_memory;
+
+	/*
+	 * Eager free lets the groups of operators that do not run at once reuse
+	 * one another's memory, knowing how long the core's blocking operators
+	 * keep theirs. A custom scan that asked for memory may keep it while its
+	 * children run, a hash join's table while it reads its outer side, which
+	 * the groups do not know: such a plan takes the auto policy, which gives
+	 * every memory intensive operator its share at once. Where the query's
+	 * memory cannot pay every operator's fixed share at once, which the auto
+	 * policy refuses, eager free assigns it as before.
+	 */
+	exec_init_plan_tree_base(&custom.base, stmt);
+	custom_memory = HasMemoryIntensiveCustomScanWalker((Node *) stmt->planTree, &custom);
+	if (custom_memory && PolicyAutoFits(stmt, memAvailableBytes))
+	{
+		PolicyAutoAssignOperatorMemoryKB(stmt, memAvailableBytes);
+		return;
+	}
 	exec_init_plan_tree_base(&ctx.base, stmt);
 	ctx.groupTree = NULL;
 	ctx.groupNode = NULL;
@@ -888,6 +983,8 @@ PolicyEagerFreeAssignOperatorMemoryKB(PlannedStmt *stmt, uint64 memAvailableByte
 		PolicyEagerFreeAssignWalker((Node *) stmt->planTree, &ctx);
 
 	Assert(!result);
+	if (custom_memory)
+		(void) ClampCustomScanMemoryWalker((Node *) stmt->planTree, &custom);
 }
 
 /*
