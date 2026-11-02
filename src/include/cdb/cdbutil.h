@@ -87,10 +87,12 @@ struct CdbComponentDatabaseInfo
 	((p)->config->mode == GP_SEGMENT_CONFIGURATION_MODE_NOTINSYNC ? true : false)
 
 /* --------------------------------------------------------------------------------------------------
- * Structure for return value from getCdbSegmentDatabases()
+ * Structure for the return value of cdbcomponent_getCdbComponents().
  *
- * The storage for instances of this structure returned by getCdbSegmentInstances() is palloc'd.
- * freeCdbSegmentDatabases() can be used to release the structure.
+ * The structure is palloc'd in a dedicated long-lived memory context and
+ * cached process-wide; callers get it via cdbcomponent_getCdbComponents().
+ * It is released by cdbcomponent_destroyCdbComponents() (which deletes the
+ * whole context, together with all subsidiary allocations).
  */
 struct CdbComponentDatabases
 {
@@ -137,14 +139,14 @@ extern void cdb_cleanup(int code, Datum arg  __attribute__((unused)) );
 
 
 /*
- * cdbcomponent_getCdbComponents() returns a pointer to a CdbComponentDatabases
- * structure. Both the segment_db_info array and the entry_db_info_array are ordered by segindex,
- * isprimary desc.
+ * cdbcomponent_getCdbComponents() returns a pointer to the process-wide
+ * cached CdbComponentDatabases structure.  Both the segment_db_info array
+ * and the entry_db_info_array are ordered by segindex, isprimary desc.
  *
- * The CdbComponentDatabases structure, and the segment_db_info array and the entry_db_info_array
- * are contained in palloc'd storage allocated from the current storage context.
- * The same is true for pointer-based values in CdbComponentDatabaseInfo.  The caller is responsible
- * for setting the current storage context and releasing the storage occupied the returned values.
+ * The structure and all its subsidiary allocations live in a dedicated
+ * long-lived memory context, not in the caller's context: callers must not
+ * free the returned pointer.  The storage is released all at once by
+ * cdbcomponent_destroyCdbComponents().
  */
 CdbComponentDatabases * cdbcomponent_getCdbComponents(void);
 void cdbcomponent_destroyCdbComponents(void);
