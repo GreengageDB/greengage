@@ -1,116 +1,272 @@
-# Greengage Packaging System
+# Greengage Database Packaging System
 
 ## Overview
 
-The packaging system produces OS-native packages for Greengage Database.
-It reuses the project's `make dist` installation flow — the same target
-used for development builds — and wraps it with platform-specific packaging
-tools.
+This documentation describes the packaging system for Greengage Database:
+Debian packages (`pkg-deb`, using `debian/rules`) and RPM packages
+(`pkg-rpm`, using `rpm/greengage7.spec`).
 
-The Makefile in `gpAux/` is the single entry point.  For Debian packaging
-it invokes `debuild` (from the `devscripts` package), which in turn calls
-back into this same Makefile recursively via `debian/rules` to perform the
-actual installation into a staging directory.  Standard build targets
-(`configure`, `build`, `clean`) are overridden and skipped; only
-`make dist` is used.
+## Location and Structure
 
-### Supported formats
+The packaging system is located in [gpAux/](../gpAux/):
 
-| Format | Status | Tooling |
-|---|---|---|
-| Debian (`.deb`) | Active | debhelper + debuild |
-| RPM (`.rpm`) | TODO | — |
-
-## Build Flow (Debian)
-
-```
-../getversion → ../VERSION → version-vars → debian/changelog
-                                                  ↓
-make pkg-deb → debuild → debian/rules → make dist → .deb / .ddeb
-```
-
-`debuild` re-invokes this Makefile through `debian/rules` using the
-standard debhelper targets (`override_dh_auto_install`, etc.).  The
-`override_dh_auto_install` target runs `make dist` with `DESTDIR`
-pointing at the staging area.
-
-## Makefile Targets
-
-### Version
-
-| Target | Description |
-|---|---|
-| `../VERSION` | Runs `../getversion`, writes result to `../VERSION` |
-| `version-vars` | Reads `../VERSION`, sets `FULL_VERSION`, `PACKAGE_VERSION`, `DISTRO_CODENAME`, `IS_RELEASE`, `STABILITY`, `BUILD_TYPE` |
-| `version-info` | Prints the above variables (debug) |
-
-### Packaging
-
-| Target | Description |
-|---|---|
-| `pkg` | Alias for `pkg-deb` |
-| `pkg-deb` | Main build: generates changelog + install manifest, runs `debuild`, collects artifacts into `../Package/` |
-| `changelog` | Generates `debian/changelog` from version-vars |
-| `debian/install` | Generates install manifest (`debian/install`) |
-
-## debian/rules
-
-Standard debhelper flow with overrides:
-
-| Override | Behaviour |
-|---|---|
-| `dh_auto_clean` | Skipped |
-| `dh_auto_configure` | Skipped |
-| `dh_auto_build` | Skipped |
-| `dh_auto_install` | Runs `make dist` with `DESTDIR=debian/tmp/$(PACKAGE_NAME)`, `GPROOT=/opt/greengagedb`, `GPDIR=$(PACKAGE_NAME)`, parallel `-j$(nproc)`. Unsets `CFLAGS`, `CPPFLAGS`, `CXXFLAGS`, `LDFLAGS` |
-| `dh_dwz` | Skipped |
-| `dh_fixperms` | Strips executable bit from `.py`, `.pm`, `.sh` files without a shebang |
-| `dh_gencontrol` | Standard |
-
-## Environment Variables
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `GPROOT` | `/opt/greengagedb` | Installation root |
-| `GPDIR` | value from `debian/control` (e.g. `greengage7`) | Subdirectory under `GPROOT` |
-| `PACKAGE_NAME` | value from `debian/control` | Package name |
-| `ARTIFACTS_DIR` | `$(CURDIR)/../Package` | Where build artifacts are collected |
-
-## Build Artifacts
-
-`pkg-deb` moves these files from the parent directory into `ARTIFACTS_DIR`:
-
-- `*.deb` — binary package
-- `*.ddeb` — debug symbols
-- `*.build`, `*.buildinfo`, `*.changes` — build metadata
-
-## Dependencies
-
-Declared in `debian/control`:
-
-```
-iproute2, iputils-ping, less, openssh-client, openssh-server,
-openssl, python3, python3-pkg-resources, python3-psutil, python3-psycopg2, python3-yaml, rsync, zip, net-tools
-```
+- [Makefile](Makefile) -
+  Defines packaging targets, version management, and artifact collection
+- [debian/rules](debian/rules) -
+  Debian build rules with custom overrides
+- [debian/compat](debian/compat) -
+  Debhelper compatibility level
+- [debian/control](debian/control) -
+  Package metadata and dependencies
+- [debian/copyright](debian/copyright) -
+  Copyright information
+- [debian/lintian-overrides](debian/lintian-overrides) -
+  Lintian warning overrides
+- [rpm/greengage7.spec](rpm/greengage7.spec) -
+  RPM spec file defining package metadata and build steps
+- [rpm/greengage7.rpmlintrc](rpm/greengage7.rpmlintrc) -
+  `rpmlint` warning overrides, analogous to `debian/lintian-overrides`
 
 ## Usage
 
+Run the commands from the project root directory.
+
+### Building the Package
+
+The default target detects the platform and builds the correct format:
+
 ```bash
-# Build package
-make -C ./gpAux pkg-deb
-
-# Custom install path
-make -C ./gpAux pkg-deb GPROOT=/opt/custom GPDIR=custom-db
-
-# Debug version variables
-make -C ./gpAux version-info
+make -C ./gpAux pkg
 ```
 
-## Key Files
+### Building the Debian Package
 
-| File | Purpose |
-|---|---|
-| `Makefile` | Version management, packaging targets, artifact collection |
-| `debian/rules` | Debhelper overrides, `make dist` integration |
-| `debian/control` | Package metadata, dependencies |
-| `debian/lintian-overrides` | Suppressed lintian warnings |
+```bash
+make -C ./gpAux pkg-deb
+```
+
+### Building the RPM Package
+
+```bash
+make -C ./gpAux pkg-rpm
+```
+
+### Custom Installation Paths
+
+To customize installation paths, pass the variables to `make`:
+
+```bash
+make -C ./gpAux pkg-deb GPROOT=/custom/path GPDIR=custom_dir
+```
+
+```bash
+make -C ./gpAux pkg-rpm GPROOT=/custom/path GPDIR=custom_dir
+```
+
+### Environment Variables
+
+- `GPROOT`: Installation root directory (default: `/opt/greengagedb`)
+- `GPDIR`: Subdirectory under `GPROOT` (default: same as `PACKAGE_NAME`)
+- `PACKAGE_NAME`: Package name (default: from `Package:` in `debian/control`,
+  e.g., `greengage7`)
+- `ARTIFACTS_DIR`: Directory for artifacts (default: `$(CURDIR)/../Package`,
+  shared between `.deb` and `.rpm` outputs)
+- `RPM_TEMPDIR`: `rpmbuild` working directory, used only by `pkg-rpm`
+  (default: `$(CURDIR)/../RPM`, removed before the build and kept after
+  the build for inspection)
+
+## Build Process
+
+### Makefile Targets
+
+- `pkg`: Default target.
+  Runs `pkg-deb` on DEB-based platforms (Ubuntu, Astra, etc.)
+  and `pkg-rpm` on RPM-based platforms (RHEL, Rocky, etc.).
+  The selection uses the variable `BLD_ARCH`.
+- `pkg-deb`: Builds the Debian package
+- `pkg-rpm`: Builds the RPM package
+- `changelog`: Generates `debian/changelog` (not stored in repo)
+- `debian/install`: Creates the installation manifest (not stored in repo)
+- `../VERSION`: Generates the version file using `../getversion`
+- `version-vars`: Sets build variables (`FULL_VERSION`, `PACKAGE_VERSION`,
+  `VERSION_CODENAME`, `IS_RELEASE`, `BUILD_TYPE`) from the `../VERSION` file
+- `version-info`: Displays version information for debugging
+
+### Version
+
+Both package formats reuse `version-vars`:
+
+- Both formats: Dashes in pre-release suffixes (e.g., `-beta`) are replaced
+  with tildes (`~`) to sort them below the final release.
+- Debian: `IS_RELEASE` and `BUILD_TYPE` are used for the changelog generation.
+- RPM: The plus character in dev builds (e.g., `+dev`) is replaced with a
+  caret (`^`) to sort them above the base version. Remaining dashes are
+  replaced with dots (`.`). The result is passed to `rpmbuild` via
+  `--define gpdb_version`.
+- Both formats: If `IS_RELEASE` is `yes`, the `Makefile` unsets
+  `CONFIGURE_FLAGS` before packaging to guarantee a clean production build.
+
+### Debian Package
+
+`pkg-deb` does the following:
+
+- Unsets `CONFIGURE_FLAGS` if `IS_RELEASE` is `yes` to build a production
+  package without debug assertions.
+- Executes `debuild` with preserved environment variables (`GPROOT`, `GPDIR`,
+  `PACKAGE_NAME`). The `DESTDIR` is set in `debian/rules` using the
+  `PACKAGE_NAME` value.
+- Skips signing with `-us -uc` flags and skips tests
+  (`DEB_BUILD_OPTIONS=nocheck`) for faster builds
+- Collects only the build artifacts (`.deb`, `.ddeb`, `.build`, `.buildinfo`,
+  `.changes`) into `ARTIFACTS_DIR`
+
+The `debian/rules` file uses debhelper (dh) with custom overrides:
+
+- Skips the standard configure, build, clean and optimize debug (`dwz`) steps
+- Uses the project's `make dist` target for installation into
+  `debian/tmp/$(PACKAGE_NAME)`
+- Unsets standard compiler flags to avoid conflicts with the project's build
+  system
+- Enables parallel builds using all available CPU cores
+- Removes the executable bit from Python/Perl/Bash files without shebang files
+  (custom `dh_fixperms`)
+- Uses the standard `dh_gencontrol` invocation (no dynamic dependency
+  injection)
+
+### RPM Package
+
+`pkg-rpm` does the following:
+
+- Removes `RPM_TEMPDIR` and sets up the `rpmbuild` tree under it
+- Unsets `CONFIGURE_FLAGS` if `IS_RELEASE` is `yes` to build a production
+  package without debug assertions.
+- Runs `rpmbuild -bb rpm/greengage7.spec` without signing, with `gpdb_version`,
+  `gpdb_release`, `gproot`, `gpdir` and `sourcedir` passed via `--define`
+- Runs `rpmlint` with `rpm/greengage7.rpmlintrc` on the `.rpm` files in
+  `RPMS/$(RPM_ARCH)` and fails the build if `rpmlint` reports errors
+- Collects only the resulting `.rpm` for the host architecture
+  (`rpm --eval '%{_arch}'`) into `ARTIFACTS_DIR`
+
+The `rpm/greengage7.spec` file defines the RPM build:
+
+- `%install` runs `make dist` with `DESTDIR` set to `%{buildroot}` and with
+  the standard compiler flags unset, as in `debian/rules`
+- Excludes the entire install prefix from `brp-mangle-shebangs` via
+  `__brp_mangle_shebangs_exclude_from` — scripts intentionally use
+  `#!/usr/bin/env python3` and `#!/usr/bin/env perl`; rewriting shebangs
+  would diverge package contents from the source and mask issues
+- Strips symbols and debug info from ELF files (executables and `*.so*`)
+  via `strip --strip-unneeded`, which also removes BUILDROOT paths embedded by
+  the compiler (e.g., PyGreSQL's `_pg.so`) that would otherwise fail
+  `check-buildroot` validation
+- Applies the same executable bit cleanup as the custom `dh_fixperms` of
+  `debian/rules`
+- Has one `%changelog` entry with the build date
+
+## Dependencies
+
+### Build Dependencies
+
+Both `pkg-deb` and `pkg-rpm` package an already configured and built source
+tree. They assume that the build dependencies are installed and that
+`make dist` works on the host; neither target installs dependencies or
+prepares the environment.
+
+To get a complete environment, use the Docker images instead of installing
+the dependencies manually:
+
+- [ci/Dockerfile.ubuntu](../ci/Dockerfile.ubuntu) - Ubuntu 22.04 (default)
+- [ci/Dockerfile.rockylinux](../ci/Dockerfile.rockylinux) - Rocky Linux 9
+
+### Building Packages in Docker
+
+You can use the provided Dockerfiles to get a complete build environment and
+build the package inside a container.
+
+The example below builds the RPM package on Rocky Linux 9:
+
+```bash
+TARGET_OS='rockylinux'
+TARGET_OS_VERSION='9'
+
+# 1. Build the Docker image
+docker build -t ggdb7_${TARGET_OS}${TARGET_OS_VERSION}:pkg \
+  --build-arg OS_VERSION=${TARGET_OS_VERSION} \
+  --build-arg SKIP_UNITTESTS=1 \
+  -f ci/Dockerfile.${TARGET_OS} .
+
+# 2. Check the version variables
+docker run --rm -it ggdb7_${TARGET_OS}${TARGET_OS_VERSION}:pkg make -C gpdb_src/gpAux version-info
+
+# 3. Build the package (the 'pkg' target auto-detects DEB or RPM)
+docker run --rm -it -v ./Package:/home/gpadmin/gpdb_src/Package \
+  ggdb7_${TARGET_OS}${TARGET_OS_VERSION}:pkg \
+  make -C gpdb_src/gpAux pkg
+```
+
+The `-v ./Package:/home/gpadmin/gpdb_src/Package` flag mounts the local
+directory to collect the built artifacts. The resulting package files
+(e.g., `.rpm`, `.deb`, `.ddeb`, `.changes`) will appear in the `Package/`
+directory on your host.
+
+If you want to build the package from a local mount of the source code,
+replace the volume flag in the last command with `-v ./:/home/gpadmin/gpdb_src`.
+
+> **⚠️ WARNING:** New files created during the build will be owned by `root`.
+
+To change the ownership of the built artifacts to your current user, run the
+following command after the build:
+
+```bash
+sudo chown -R $(id -u):$(id -g) ./Package
+```
+
+If you mounted the entire source directory (`-v ./:/home/gpadmin/gpdb_src`),
+apply the command to the root directory:
+
+```bash
+sudo chown -R $(id -u):$(id -g) ./
+```
+
+### Building Packages on a Host
+
+If you want to build the package directly on your host machine without Docker,
+you must install the build dependencies manually.
+
+Refer to the main installation guides for your operating system:
+
+- [README.Linux.md](../README.Linux.md)
+- [README.Ubuntu.bash](../README.Ubuntu.bash) (Ubuntu)
+- [README.Rhel-Rocky.bash](../README.Rhel-Rocky.bash) (RHEL/Rocky Linux)
+
+Once the dependencies are installed, run the packaging targets from the
+project root as described in the "Usage" section.
+
+### Package Dependencies
+
+The package dependencies and conflicts are defined in the files listed in the
+[Updating Package Metadata](#updating-package-metadata) section.
+
+The RPM package also requires the library `libxerces-c-3.2.so` (package
+`xerces-c`), which comes from EPEL on Rocky Linux 9. Enable EPEL before
+installing the package:
+
+```bash
+dnf -y install epel-release
+```
+
+## Maintenance
+
+### Updating Package Metadata
+
+Edit to update:
+
+| Metadata | DEB (`debian/control`) | RPM (`rpm/greengage7.spec`) |
+| --- | --- | --- |
+| Package description | `Description` | `Summary`, `%description` |
+| Maintainer information | `Maintainer` | — |
+| Dependencies | `Depends` | `Requires` |
+| Group | `Section` | `Group` |
+| License | `debian/copyright` (not in `control`) | `License` |
+| URL | — | `URL` |
+| Conflicts | `Conflicts` | `Conflicts` |
