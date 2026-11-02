@@ -184,6 +184,29 @@ Feature: ggrebalance behave tests
         | on_enter_STATE_SHRINK_CATALOG_STARTED_begin                                 |
         | on_enter_STATE_SHRINK_CATALOG_STARTED_end                                   |
 
+    Scenario: test 1.4. shrink - check continue after the catalog is shrunk, if the cluster is not shrunk by half
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1", with 3 segments on each
+         And segment information for content 2 is saved in context
+         And all files in gpAdminLogs directory are deleted
+         And database "test_db_1" exists
+         And schema "test_schema_1" exists in "test_db_1"
+         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "100" rows
+        When set fault inject "on_enter_STATE_SHRINK_CATALOG_STARTED_end"
+         And the user runs "ggrebalance -x 2 --skip-rebalance"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
+         And unset fault inject
+        When user will answer "yes" to the prompt "Proceed with continue?"
+         And the user runs "ggrebalance"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+         And ggrebalance should not print "Cluster restarted after previous run" to logfile with latest timestamp
+         And clear user's answers
+         And verify no segment running for saved segment information
+         And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 2, row count = 100
+
     Scenario: test 2.1. shrink - check rollback after interrupted state, if interruption is done before the rebalance schema creation
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
