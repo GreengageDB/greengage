@@ -2188,6 +2188,44 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
     13 |     5
 (1 row)
 
+-- filter of a non-first DQA must not see columns nulled out by the previous
+-- split of the same input tuple
+select count(distinct b), count(distinct a) filter (where a > 3) from dqa_f1;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Aggregate functions with FILTER
+ count | count 
+-------+-------
+     5 |    13
+(1 row)
+
+select count(distinct a), count(distinct b) filter (where b > 3) from dqa_f1;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Aggregate functions with FILTER
+ count | count 
+-------+-------
+    17 |     1
+(1 row)
+
+select c, count(distinct b) from dqa_f1 group by c
+  having count(distinct a) filter (where a > 3) > 1 order by c;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Aggregate functions with FILTER
+ c | count 
+---+-------
+ 0 |     5
+ 1 |     5
+ 2 |     5
+(3 rows)
+
+select count(distinct a), count(distinct b) filter (where b > 3),
+       count(distinct c) filter (where b < 2) from dqa_f1;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Aggregate functions with FILTER
+ count | count | count 
+-------+-------+-------
+    17 |     1 |     3
+(1 row)
+
 explain select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Aggregate functions with FILTER
