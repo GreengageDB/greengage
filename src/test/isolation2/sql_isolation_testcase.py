@@ -1143,6 +1143,17 @@ class SQLIsolationTestCase(object):
 
 if __name__ == "__main__":
 
+    # For python 3.14 we need to use "fork" method. Pythons 2.7..3.3
+    # don't even have a set_start_method, but they don't need it: fork
+    # was still the default for posix systems. So try and gracefully
+    # fail. Python 3.14 needs "fork" because "forkserver" is the new
+    # default, but then we would fail on pickling ("cannot pickle
+    # 'TextIOWrapper' instances").
+    try:
+        multiprocessing.set_start_method("fork", force=True)
+    except AttributeError:
+        pass
+
     parser = OptionParser()
     parser.add_option("--dbname", dest="dbname",
                       help="connect to database DBNAME", metavar="DBNAME")
