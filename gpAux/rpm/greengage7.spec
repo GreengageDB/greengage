@@ -1,10 +1,13 @@
 # Run command: `make -C ./gpdb_src/gpAux pkg-rpm`
 
-%global _build_id_links none
+Name: greengage7
 
 %{!?gproot: %global gproot /opt/greengagedb}
-%{!?gpdir:  %global gpdir  greengage7}
+%{!?gpdir:  %global gpdir %{name}}
 %global     prefix %{gproot}/%{gpdir}
+
+# Disable build-id links for /opt packages
+%global _build_id_links none
 
 # Do not export the bundled PostgreSQL libraries to avoid conflicts
 %global __provides_exclude_from ^%{prefix}/.*$
@@ -13,7 +16,6 @@
 # Scripts use `#!/usr/bin/env <interpreter>' for portability
 %global __brp_mangle_shebangs_exclude_from ^%{prefix}/.*$
 
-Name:    greengage7
 Version: %{gpdb_version}
 Release: %{gpdb_release}%{?dist}
 Summary: Greengage MPP database engine

@@ -410,11 +410,11 @@ pkg-deb : debian/changelog debian/install
 
 # Build RPM package
 pkg-rpm : GPROOT = /opt/greengagedb
-pkg-rpm : GPDIR := $(shell grep '^Name:' rpm/greengage7.spec | head -1 | awk '{print $$2}')
+pkg-rpm : GPDIR_DEFINE = $(if $(filter command line environment,$(origin GPDIR)),--define "gpdir $(GPDIR)")
 pkg-rpm : RPM_ARCH = $(shell rpm --eval '%{_arch}')
 pkg-rpm : RPM_TEMPDIR := $(CURDIR)/../RPM
 pkg-rpm : version-vars
-	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), ARCH=$(RPM_ARCH)"
+	@echo "Building RPM with GPROOT=$(GPROOT), ARCH=$(RPM_ARCH)"
 	@rm -rf $(RPM_TEMPDIR)
 	@mkdir -p $(addprefix $(RPM_TEMPDIR)/,BUILD BUILDROOT RPMS SOURCES SPECS SRPMS)
 	@if [ "$(IS_RELEASE)" = "yes" ]; then unset CONFIGURE_FLAGS; fi; \
@@ -422,8 +422,7 @@ pkg-rpm : version-vars
 		--define "_topdir $(RPM_TEMPDIR)" \
 		--define "gpdb_version $(subst +,^,$(subst -,.,$(PACKAGE_VERSION)))" \
 		--define "gpdb_release 1" \
-		--define "gproot $(GPROOT)" \
-		--define "gpdir $(GPDIR)" \
+		--define "gproot $(GPROOT)" $(GPDIR_DEFINE) \
 		--define "sourcedir $(CURDIR)/.." \
 		rpm/greengage7.spec
 	@rpmlint -f rpm/greengage7.rpmlintrc $(RPM_TEMPDIR)/RPMS/$(RPM_ARCH)/*.rpm
