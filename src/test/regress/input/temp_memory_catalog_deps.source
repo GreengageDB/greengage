@@ -392,6 +392,81 @@ SELECT count(*) FROM pg_shdepend
    AND refobjid = (SELECT oid FROM pg_roles WHERE rolname = 'drole')
    AND deptype = 'o';
 
+-- VACUUM must not advance datfrozenxid past a live temporary table: its
+-- virtual pg_class row is invisible to vac_update_datfrozenxid()'s scan,
+-- so the registry publishes the session's oldest relfrozenxid/relminmxid
+-- as a floor for that scan (clog/multixact truncation would otherwise
+-- drop status the table's rows still need).
+CREATE OR REPLACE FUNCTION tempcat_burn_xids(int4) RETURNS void
+	AS '@abs_builddir@/regress@DLSUFFIX@', 'test_consume_xids'
+	LANGUAGE C;
+
+SELECT tempcat_dep_session_exec('SET gp_enable_temp_memory_catalog = on');
+SELECT tempcat_dep_session_exec('CREATE TEMP TABLE dep_clog (a int)');
+SELECT tempcat_dep_session_exec('INSERT INTO dep_clog SELECT generate_series(1, 100)');
+
+-- March the xid horizon past the table's rows: the owner's gang burns on
+-- every segment, this session burns on the QD
+SELECT tempcat_dep_session_exec($q$
+	SELECT count(*) FROM gp_dist_random('gp_id'),
+	       LATERAL (SELECT tempcat_burn_xids(50000)) b$q$);
+SELECT tempcat_burn_xids(100000);
+
+-- Every on-disk relfrozenxid advances to the current horizon; datfrozenxid
+-- must stay behind the temporary table's floor instead, on the QD and on
+-- each segment (datfrozenxid equal to the on-disk minimum means the floor
+-- was ignored)
+VACUUM FREEZE;
+
+DO $d$
+DECLARE
+	d bigint;
+	m bigint;
+BEGIN
+	SELECT datfrozenxid::text::bigint INTO d
+	  FROM pg_database WHERE datname = current_database();
+	SELECT min(relfrozenxid::text::bigint) INTO m
+	  FROM pg_class WHERE relkind IN ('r', 'm', 't')
+	   AND relfrozenxid::text::bigint > 0;
+	IF d >= m THEN
+		RAISE EXCEPTION 'datfrozenxid % not held behind the temporary floor (on-disk minimum %)', d, m;
+	END IF;
+END;
+$d$;
+
+DO $d$
+DECLARE
+	n int;
+BEGIN
+	SELECT count(*) INTO n
+	  FROM gp_dist_random('pg_database') d
+	 WHERE d.datname = 'postgres'
+	   AND d.datfrozenxid::text::bigint >=
+	       (SELECT min(c.relfrozenxid::text::bigint)
+	          FROM gp_dist_random('pg_class') c
+	         WHERE c.relkind IN ('r', 'm', 't')
+	           AND c.relfrozenxid::text::bigint > 0);
+	IF n > 0 THEN
+		RAISE EXCEPTION '% segment(s) advanced datfrozenxid past the temporary floor', n;
+	END IF;
+END;
+$d$;
+
+-- The owner's rows are still readable
+SELECT tempcat_dep_session_exec($q$
+	DO $d$
+	DECLARE
+		n bigint;
+	BEGIN
+		SELECT count(*) INTO n FROM dep_clog;
+		IF n <> 100 THEN
+			RAISE EXCEPTION 'count %', n;
+		END IF;
+	END;
+	$d$$q$);
+
+DROP FUNCTION tempcat_burn_xids(int4);
+
 SELECT tempcat_retry_drop('DROP TYPE dty');
 SELECT tempcat_retry_drop('DROP FUNCTION dfn(int)');
 SELECT tempcat_retry_drop('DROP OWNED BY drole');

@@ -32,6 +32,12 @@
  * abort.  A watermark - the smallest reserved OID - lets allocations below
  * it skip the probe entirely.
  *
+ * The registry also carries, per backend, the oldest relfrozenxid and
+ * relminmxid of that backend's virtual pg_class rows, so that
+ * vac_update_datfrozenxid() - whose pg_class scan cannot see those rows -
+ * still holds the database horizon (and clog/multixact truncation) behind
+ * every live temporary table.
+ *
  * src/backend/access/common/tempcat_registry.c
  *
  *-------------------------------------------------------------------------
@@ -62,9 +68,23 @@ typedef struct TempcatOidReservation
 	int			pid;
 } TempcatOidReservation;
 
+/*
+ * Oldest relfrozenxid/relminmxid of a backend's virtual pg_class rows,
+ * indexed by pgprocno.  Consulted by vac_update_datfrozenxid(); invalid
+ * ids mean the slot (or that horizon) contributes nothing.
+ */
+typedef struct TempcatFrozenFloor
+{
+	int			pid;
+	Oid			dbid;
+	TransactionId frozenxid;
+	TransactionId minmxid;		/* MultiXactId */
+} TempcatFrozenFloor;
+
 static HTAB *TempcatRegistryHash;
 static HTAB *TempcatOidHash;
 static pg_atomic_uint32 *TempcatOidWatermark;
+static TempcatFrozenFloor *TempcatFrozenFloors;	/* [MaxBackends] */
 
 static bool tempcat_owner_is_me(int pgprocno, int pid);
 static bool tempcat_owner_is_alive(int pgprocno, int pid);
@@ -86,10 +106,12 @@ Size
 tempcat_registry_shmem_size(void)
 {
 	return add_size(hash_estimate_size(TEMPCAT_REGISTRY_MAX_EDGES,
-									  sizeof(TempcatDepEdge)),
+									   sizeof(TempcatDepEdge)),
 					add_size(hash_estimate_size(TEMPCAT_REGISTRY_MAX_OIDS,
 												sizeof(TempcatOidReservation)),
-							 sizeof(pg_atomic_uint32)));
+							 add_size(sizeof(pg_atomic_uint32),
+									  mul_size(MaxBackends,
+											   sizeof(TempcatFrozenFloor)))));
 }
 
 void
@@ -121,10 +143,18 @@ tempcat_registry_init(void)
 								   HASH_ELEM | HASH_BLOBS);
 
 	TempcatOidWatermark = ShmemInitStruct("Tempcat OID watermark",
-										  sizeof(pg_atomic_uint32),
-										  &found);
+										   sizeof(pg_atomic_uint32),
+										   &found);
 	if (!found)
 		pg_atomic_init_u32(TempcatOidWatermark, PG_UINT32_MAX);
+
+	TempcatFrozenFloors = ShmemInitStruct("Tempcat frozen floors",
+										   mul_size(MaxBackends,
+													sizeof(TempcatFrozenFloor)),
+										   &found);
+	if (!found)
+		MemSet(TempcatFrozenFloors, 0,
+			   mul_size(MaxBackends, sizeof(TempcatFrozenFloor)));
 }
 
 /*
@@ -203,6 +233,21 @@ tempcat_registry_publish(int nedges, const TempcatDepEdge *edges,
 
 	tempcat_oid_watermark_recompute();
 
+	/* Same regeneration for the frozen floors: drop dead owners' slots. */
+	for (i = 0; i < MaxBackends; i++)
+	{
+		TempcatFrozenFloor *slot = &TempcatFrozenFloors[i];
+
+		if (slot->pid != 0 &&
+			!tempcat_owner_is_alive(i, slot->pid))
+		{
+			slot->pid = 0;
+			slot->dbid = InvalidOid;
+			slot->frozenxid = InvalidTransactionId;
+			slot->minmxid = InvalidTransactionId;
+		}
+	}
+
 	LWLockRelease(TempcatDependencyLock);
 
 	if (overflow)
@@ -238,6 +283,15 @@ tempcat_registry_unpublish(void)
 		if (tempcat_owner_is_me(oidentry->pgprocno, oidentry->pid))
 			(void) hash_search(TempcatOidHash, oidentry,
 							   HASH_REMOVE, NULL);
+	}
+
+	{
+		TempcatFrozenFloor *slot = &TempcatFrozenFloors[MyProc->pgprocno];
+
+		slot->pid = 0;
+		slot->dbid = InvalidOid;
+		slot->frozenxid = InvalidTransactionId;
+		slot->minmxid = InvalidTransactionId;
 	}
 
 	tempcat_oid_watermark_recompute();
@@ -404,6 +458,72 @@ tempcat_registry_reserve_oid(Oid oid)
 		pg_atomic_write_u32(TempcatOidWatermark, oid);
 
 	LWLockRelease(TempcatDependencyLock);
+}
+
+/*
+ * Publish this backend's frozen-xid floor (see tempcat.h).  Called with
+ * the values regenerated from the committed snapshot, at the same points
+ * as tempcat_registry_publish().
+ */
+void
+tempcat_registry_publish_floor(TransactionId frozenxid, TransactionId minmxid)
+{
+	TempcatFrozenFloor *slot;
+
+	Assert(TempcatFrozenFloors != NULL);
+
+	LWLockAcquire(TempcatDependencyLock, LW_EXCLUSIVE);
+
+	slot = &TempcatFrozenFloors[MyProc->pgprocno];
+	slot->pid = MyProc->pid;
+	slot->dbid = MyDatabaseId;
+	slot->frozenxid = frozenxid;
+	slot->minmxid = minmxid;
+
+	LWLockRelease(TempcatDependencyLock);
+}
+
+/*
+ * Oldest floor among the live sessions of this database; false when none
+ * contributes.  Consulted by vac_update_datfrozenxid().
+ */
+bool
+tempcat_registry_floor(TransactionId *frozenxid, TransactionId *minmxid)
+{
+	TransactionId minXid = InvalidTransactionId;
+	TransactionId minMxid = InvalidTransactionId;
+	int			i;
+
+	if (TempcatFrozenFloors == NULL)
+		return false;
+
+	LWLockAcquire(TempcatDependencyLock, LW_SHARED);
+
+	for (i = 0; i < MaxBackends; i++)
+	{
+		TempcatFrozenFloor *slot = &TempcatFrozenFloors[i];
+
+		if (slot->dbid != MyDatabaseId ||
+			!tempcat_owner_is_alive(i, slot->pid))
+			continue;
+
+		if (TransactionIdIsNormal(slot->frozenxid) &&
+			(!TransactionIdIsNormal(minXid) ||
+			 TransactionIdPrecedes(slot->frozenxid, minXid)))
+			minXid = slot->frozenxid;
+
+		if (TransactionIdIsNormal(slot->minmxid) &&
+			(!TransactionIdIsNormal(minMxid) ||
+			 TransactionIdPrecedes(slot->minmxid, minMxid)))
+			minMxid = slot->minmxid;
+	}
+
+	LWLockRelease(TempcatDependencyLock);
+
+	*frozenxid = minXid;
+	*minmxid = minMxid;
+
+	return TransactionIdIsNormal(minXid) || TransactionIdIsNormal(minMxid);
 }
 
 /* Caller must hold TempcatDependencyLock exclusively. */

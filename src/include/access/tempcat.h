@@ -219,6 +219,18 @@ extern bool tempcat_registry_oid_taken(Oid oid);
 extern void tempcat_registry_reserve_oid(Oid oid);
 
 /*
+ * The oldest relfrozenxid/relminmxid among a session's virtual pg_class
+ * rows.  vac_update_datfrozenxid() takes it into account: those rows are
+ * invisible to its pg_class scan, so without it clog and multixact
+ * truncation could pass xids a live temporary table still needs.
+ * Invalid id means no contribution.  minmxid is a MultiXactId.
+ */
+extern void tempcat_registry_publish_floor(TransactionId frozenxid,
+										   TransactionId minmxid);
+extern bool tempcat_registry_floor(TransactionId *frozenxid,
+								   TransactionId *minmxid);
+
+/*
  * Glue for the OID allocator: reserve the OID and mark this session's
  * registry state as pending, so the next commit or abort regenerates it
  * from the committed snapshot.

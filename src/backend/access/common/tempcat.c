@@ -273,6 +273,8 @@ TempcatRegistrySyncFromCommitted(void)
 	Oid		   *oids = NULL;
 	int			noids = 0;
 	int			maxoids = 0;
+	TransactionId minFrozen = InvalidTransactionId;
+	TransactionId minMxid = InvalidTransactionId;
 	dlist_iter	iter;
 
 	if (!TempcatRegistryExitHookRegistered)
@@ -293,6 +295,7 @@ TempcatRegistrySyncFromCommitted(void)
 			bool		is_edge_catalog;
 			Oid			dbid;
 			dlist_iter	tupIter;
+		bool		is_relation_catalog;
 
 			if (entry->relid == DependRelationId)
 			{
@@ -315,6 +318,8 @@ TempcatRegistrySyncFromCommitted(void)
 				is_edge_catalog = false;
 				dbid = InvalidOid;
 			}
+
+			is_relation_catalog = (entry->relid == RelationRelationId);
 
 			/*
 			 * Rows not written by this backend (deserialized reader
@@ -347,6 +352,33 @@ TempcatRegistrySyncFromCommitted(void)
 							oids = repalloc(oids, maxoids * sizeof(Oid));
 					}
 					oids[noids++] = DatumGetObjectId(oiddatum);
+				}
+
+				/*
+				 * The relfrozenxid/relminmxid minimum mirrors what
+				 * vac_update_datfrozenxid() computes from on-disk
+				 * pg_class rows, non-normal ids skipped.
+				 */
+				if (is_relation_catalog)
+				{
+					TransactionId relfrozenxid =
+						DatumGetTransactionId(TempcatGetAttrNotNull(tup,
+												Anum_pg_class_relfrozenxid,
+												tupDesc));
+					TransactionId relminmxid =
+						DatumGetTransactionId(TempcatGetAttrNotNull(tup,
+												Anum_pg_class_relminmxid,
+												tupDesc));
+
+					if (TransactionIdIsNormal(relfrozenxid) &&
+						(!TransactionIdIsNormal(minFrozen) ||
+						 TransactionIdPrecedes(relfrozenxid, minFrozen)))
+						minFrozen = relfrozenxid;
+
+					if (TransactionIdIsNormal(relminmxid) &&
+						(!TransactionIdIsNormal(minMxid) ||
+						 TransactionIdPrecedes(relminmxid, minMxid)))
+						minMxid = relminmxid;
 				}
 
 				if (!is_edge_catalog)
@@ -402,6 +434,7 @@ TempcatRegistrySyncFromCommitted(void)
 	}
 
 	tempcat_registry_publish(nedges, edges, noids, oids);
+	tempcat_registry_publish_floor(minFrozen, minMxid);
 
 	if (edges != NULL)
 		pfree(edges);
