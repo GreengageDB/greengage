@@ -1785,3 +1785,19 @@ Feature: Incrementally analyze the database
         Then analyzedb should print "-public.mv_test_view" to stdout
         And the user runs "analyzedb -a -t public.mv_test_view -d incr_analyze"
         Then analyzedb should print "-public.mv_test_view" to stdout
+
+    Scenario Outline: analyzedb blocked on leaf <leaf> holds no other aoseg lock
+        Given there is a hard coded ao partition table "analyzedb_aoseg_locks" with 4 child partitions in schema "public"
+        And the user starts a transaction and runs "TRUNCATE public.analyzedb_aoseg_locks_1_prt_<leaf>;" on "incr_analyze"
+        And the environment variable "PGOPTIONS" is set to "-c deadlock_timeout=600s"
+        When the user asynchronously runs "analyzedb -a -d incr_analyze -t public.analyzedb_aoseg_locks" and the process is saved
+        And a session waits for the aoseg table of "public.analyzedb_aoseg_locks_1_prt_<leaf>" in "incr_analyze"
+        And the transaction runs "TRUNCATE public.analyzedb_aoseg_locks;"
+        And the user rollsback the transaction
+        Then the async process finished with a return code of 0
+        And "PGOPTIONS" environment variable should be restored
+
+        Examples:
+            | leaf |
+            | 2    |
+            | 3    |
