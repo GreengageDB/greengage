@@ -931,9 +931,11 @@ index_create(Relation heapRelation,
 	}
 
 	/*
-	 * Route catalog writes to the in-memory virtual catalog for temp tables.
+	 * Route catalog writes to the in-memory virtual catalog for temp tables
+	 * that live there.
 	 */
-	BEGIN_TEMP_TABLE_SCOPE(heapRelation->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
+	BEGIN_TEMP_TABLE_SCOPE(heapRelation->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(RelationGetRelid(heapRelation)));
 
 	/*
 	 * construct tuple descriptor for index tuples

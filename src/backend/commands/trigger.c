@@ -777,7 +777,8 @@ CreateTriggerFiringOn(CreateTrigStmt *stmt, const char *queryString,
 		return InvalidObjectAddress;
 	}
 
-	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
+	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(RelationGetRelid(rel)));
 
 	/*
 	 * If it's a user-entered CREATE CONSTRAINT TRIGGER command, make a

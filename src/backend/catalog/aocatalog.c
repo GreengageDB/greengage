@@ -148,7 +148,8 @@ CreateAOAuxiliaryTable(
 	 * must never roll back (row numbers are embedded in index TIDs), see
 	 * IsTempTableScopeFor().
 	 */
-	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
+	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(RelationGetRelid(rel)));
 
 	aoauxiliary_relid = heap_create_with_catalog(aoauxiliary_relname,
 											     namespaceid,

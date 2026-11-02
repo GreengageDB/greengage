@@ -62,6 +62,7 @@
 #include "storage/bufmgr.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 #include "utils/inval.h"
 #include "utils/memutils.h"
 #include "lib/stringinfo.h"
@@ -1005,6 +1006,27 @@ tempcat_relation_has_entries(Relation rel)
 
 	entry = find_relation_entry(TempcatSnapshotGetCurrent(), rel);
 	return entry != NULL && entry->tuples_num > 0;
+}
+
+/*
+ * Does the relation's metadata live in the in-memory catalog?  A temp table
+ * created while the GUC was off keeps its rows on disk: routing its later
+ * DDL into tempcat would mix the two.  The pg_class row's item pointer tells
+ * which side owns the relation.
+ */
+bool
+tempcat_relation_is_virtual(Oid relid)
+{
+	HeapTuple	tup = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+	bool		result = false;
+
+	if (HeapTupleIsValid(tup))
+	{
+		result = IsTempcatItemPointer(&tup->t_self);
+		ReleaseSysCache(tup);
+	}
+
+	return result;
 }
 
 /*

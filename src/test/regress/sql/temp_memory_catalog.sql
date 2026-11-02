@@ -453,3 +453,32 @@ SELECT count(*) FROM tempcat_abort_prepared;
 DROP TABLE tempcat_abort_prepared;
 DROP TABLE tempcat_abort_src;
 RESET gp_enable_temp_memory_catalog;
+
+-- ============================================================
+-- DDL on a temp table created with the GUC off stays on disk
+-- ============================================================
+-- The temp-table scopes of ALTER, CREATE INDEX, COMMENT and ANALYZE route
+-- on the relation's persistence alone, so a table created while the GUC
+-- was off (rows on disk) picked up in-memory rows from later DDL: mixed
+-- metadata, and the virtual rows pinned tempcat_is_empty() so the GUC
+-- could not be disabled again until the table was dropped.  Routing on
+-- whether the relation's pg_class row is virtual keeps such DDL on disk.
+
+SET gp_enable_temp_memory_catalog = off;
+CREATE TEMP TABLE tempcat_mixed (a int) DISTRIBUTED BY (a);
+
+SET gp_enable_temp_memory_catalog = on;
+ALTER TABLE tempcat_mixed ADD COLUMN b text;
+CREATE INDEX tempcat_mixed_b ON tempcat_mixed (b);
+COMMENT ON TABLE tempcat_mixed IS 'created with the GUC off';
+GRANT SELECT ON tempcat_mixed TO public;
+INSERT INTO tempcat_mixed VALUES (1, 'x');
+ANALYZE tempcat_mixed;
+
+-- The rows went to disk: no temporary table metadata entered the
+-- in-memory catalog, so the switch back must be allowed.
+SET gp_enable_temp_memory_catalog = off;
+SELECT a, b FROM tempcat_mixed;
+
+DROP TABLE tempcat_mixed;
+RESET gp_enable_temp_memory_catalog;

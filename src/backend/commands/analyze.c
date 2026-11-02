@@ -2765,7 +2765,8 @@ update_attstats(Oid relid, bool inh, int natts, VacAttrStats **vacattrstats)
 	if (natts <= 0)
 		return;					/* nothing to do */
 
-	BEGIN_TEMP_TABLE_SCOPE(get_rel_persistence(relid) == RELPERSISTENCE_TEMP);
+	BEGIN_TEMP_TABLE_SCOPE(get_rel_persistence(relid) == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(relid));
 
 	sd = table_open(StatisticRelationId, RowExclusiveLock);
 

@@ -121,8 +121,9 @@ shdepDependerIsTempObject(const ObjectAddress *depender)
 			{
 				Oid			namespaceId = get_rel_namespace(depender->objectId);
 
-				return isTempNamespace(namespaceId) ||
-					isTempToastNamespace(namespaceId);
+				return (isTempNamespace(namespaceId) ||
+						isTempToastNamespace(namespaceId)) &&
+					tempcat_relation_is_virtual(depender->objectId);
 			}
 		case TypeRelationId:
 			{
@@ -130,7 +131,8 @@ shdepDependerIsTempObject(const ObjectAddress *depender)
 				Oid			relid = get_typ_typrelid(depender->objectId);
 
 				return OidIsValid(relid) &&
-					isTempNamespace(get_rel_namespace(relid));
+					isTempNamespace(get_rel_namespace(relid)) &&
+					tempcat_relation_is_virtual(relid);
 			}
 		default:
 			return false;

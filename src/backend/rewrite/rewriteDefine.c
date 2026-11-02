@@ -292,7 +292,8 @@ DefineQueryRewrite(const char *rulename,
 	 */
 	event_relation = table_open(event_relid, AccessExclusiveLock);
 
-	BEGIN_TEMP_TABLE_SCOPE(event_relation->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
+	BEGIN_TEMP_TABLE_SCOPE(event_relation->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(RelationGetRelid(event_relation)));
 
 	/*
 	 * Verify relation is of a type that rules can sensibly be applied to.

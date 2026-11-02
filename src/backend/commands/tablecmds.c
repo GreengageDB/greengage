@@ -5044,7 +5044,8 @@ ATController(AlterTableStmt *parsetree,
 
 	cdb_sync_oid_to_segments();
 
-	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
+	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(RelationGetRelid(rel)));
 
 	/* Phase 1: preliminary examination of commands, create work queue */
 	/*

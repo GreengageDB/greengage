@@ -176,7 +176,8 @@ CreateComments(Oid oid, Oid classoid, int32 subid, const char *comment)
 	int			i;
 
 	BEGIN_TEMP_TABLE_SCOPE(classoid == RelationRelationId &&
-						  get_rel_persistence(oid) == RELPERSISTENCE_TEMP);
+						  get_rel_persistence(oid) == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(oid));
 
 	/* Reduce empty-string to NULL case */
 	if (comment != NULL && strlen(comment) == 0)
