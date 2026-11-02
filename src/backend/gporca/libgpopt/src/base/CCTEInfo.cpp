@@ -36,7 +36,8 @@ CCTEInfo::CCTEInfoEntry::CCTEInfoEntry(CMemoryPool *mp,
 	: m_mp(mp),
 	  m_pexprCTEProducer(pexprCTEProducer),
 	  m_phmcrulConsumers(nullptr),
-	  m_fUsed(true)
+	  m_fUsed(true),
+	  m_pstatsMemo(nullptr)
 {
 	GPOS_ASSERT(nullptr != mp);
 	GPOS_ASSERT(nullptr != pexprCTEProducer);
@@ -59,7 +60,8 @@ CCTEInfo::CCTEInfoEntry::CCTEInfoEntry(CMemoryPool *mp,
 	: m_mp(mp),
 	  m_pexprCTEProducer(pexprCTEProducer),
 	  m_phmcrulConsumers(nullptr),
-	  m_fUsed(fUsed)
+	  m_fUsed(fUsed),
+	  m_pstatsMemo(nullptr)
 {
 	GPOS_ASSERT(nullptr != mp);
 	GPOS_ASSERT(nullptr != pexprCTEProducer);
@@ -80,6 +82,7 @@ CCTEInfo::CCTEInfoEntry::~CCTEInfoEntry()
 {
 	m_pexprCTEProducer->Release();
 	m_phmcrulConsumers->Release();
+	CRefCount::SafeRelease(m_pstatsMemo);
 }
 
 
@@ -333,6 +336,43 @@ CCTEInfo::DeriveProducerStats(CLogicalCTEConsumer *popConsumer,
 
 	// cleanup
 	prprel->Release();
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CCTEInfo::SetProducerMemoStats
+//
+//	@doc:
+//		Publish the statistics the memo derived for the CTE producer. Unlike
+//		the statistics of the producer expression kept here, which are derived
+//		once before the search, these reflect the transformed producer body
+//
+//---------------------------------------------------------------------------
+void
+CCTEInfo::SetProducerMemoStats(ULONG ulCTEId, IStatistics *stats)
+{
+	CCTEInfoEntry *pcteinfoentry = m_phmulcteinfoentry->Find(&ulCTEId);
+	GPOS_ASSERT(nullptr != pcteinfoentry);
+
+	pcteinfoentry->SetStatsMemo(stats);
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CCTEInfo::PstatsProducerMemo
+//
+//	@doc:
+//		Statistics published by SetProducerMemoStats, null if none
+//
+//---------------------------------------------------------------------------
+IStatistics *
+CCTEInfo::PstatsProducerMemo(ULONG ulCTEId) const
+{
+	CCTEInfoEntry *pcteinfoentry = m_phmulcteinfoentry->Find(&ulCTEId);
+	GPOS_ASSERT(nullptr != pcteinfoentry);
+
+	return pcteinfoentry->PstatsMemo();
 }
 
 //---------------------------------------------------------------------------
