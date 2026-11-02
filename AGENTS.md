@@ -357,6 +357,9 @@ effects, and check that variables are initialized before use. Two architectural
 committee approvals are required before merge unless the project sets another
 rule.
 
+Record workflow mistakes in `MISTAKES.md` at the repository root, and read it
+before starting a task. Git ignores the file, and it must not be committed.
+
 ## Common traps
 
 - Generated headers such as `pg_config.h`, `gram.h`, `errcodes.h`, and
