@@ -1459,6 +1459,33 @@ Use --without-zlib to disable zlib support.])])
 fi
 
 if test "$with_zstd" = yes; then
+  if test "$PORTNAME" = darwin; then
+    AC_MSG_CHECKING([for static zstd library])
+    zstd_static_lib=
+    for pgac_option in $LDFLAGS; do
+      case $pgac_option in
+        -L*)
+          pgac_dir=`echo "$pgac_option" | sed -e 's/^-L//'`
+          if test -f "$pgac_dir/libzstd.a"; then
+            zstd_static_lib="$pgac_dir/libzstd.a"
+            break
+          fi
+          ;;
+      esac
+    done
+    if test -z "$zstd_static_lib"; then
+      AC_MSG_RESULT([no])
+      AC_MSG_ERROR([static zstd library libzstd.a not found
+Add its directory with --with-libraries, or use --without-zstd to disable
+zstd support.])
+    fi
+    AC_MSG_RESULT([$zstd_static_lib])
+    LIBS="$zstd_static_lib $LIBS"
+    AC_CHECK_FUNC(ZSTD_compressCCtx,
+                  [AC_DEFINE(HAVE_LIBZSTD, 1,
+                             [Define to 1 if you have the `zstd' library (-lzstd).])],
+                  [AC_MSG_ERROR([static zstd library $zstd_static_lib cannot be linked])])
+  else
   dnl Spell out the action-if-found: the library is linked as -l:libzstd.a, so
   dnl the name autoconf would derive for the automatic define does not match
   dnl the HAVE_LIBZSTD the tree actually tests for.
@@ -1470,6 +1497,7 @@ if test "$with_zstd" = yes; then
 If you have libzstd already installed, see config.log for details on the
 failure.  It is possible the compiler isn't looking in the proper directory.
 Use --without-zstd to disable zstd support.])])
+  fi
 fi
 
 if test "$with_quicklz" = yes; then
