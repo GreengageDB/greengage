@@ -40,6 +40,7 @@ brew install libyaml   # enables `--enable-mapreduce`
 brew install libevent # gpfdist
 brew install apr # gpperfmon
 brew install apr-util # gpperfmon
+brew install zstd
 brew install libxml2
 brew install pkg-config
 brew link --force apr
@@ -119,8 +120,8 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:\$PATH";
 alias python="/usr/local/bin/python"
 
-export LDFLAGS="-L/opt/homebrew/opt/libxml2/lib -L/opt/homebrew/opt/openssl\@3/lib"
-export CPPFLAGS="-I/opt/homebrew/opt/libxml2/include -I/opt/homebrew/opt/openssl\@3/include"
+export LDFLAGS="-L/opt/homebrew/lib -L/opt/homebrew/opt/libxml2/lib -L/opt/homebrew/opt/openssl@3/lib -L/opt/homebrew/opt/zstd/lib"
+export CPPFLAGS="-I/opt/homebrew/include -I/opt/homebrew/opt/libxml2/include -I/opt/homebrew/opt/openssl@3/include -I/opt/homebrew/opt/zstd/include"
 export LD_LIBRARY_PATH="/Users/`whoami`/.pyenv/versions/${python_version}/lib/"
 export OPENSSL_INCLUDE_DIR="$(brew --prefix openssl)/include"
 export OPENSSL_LIB_DIR="$(brew --prefix openssl)/lib"
