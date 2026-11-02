@@ -102,11 +102,11 @@ SELECT tempcat_assert_blocked('DROP FUNCTION dfn(int)',
 SELECT tempcat_assert_blocked('DROP TYPE dty CASCADE',
 	'temporary objects in other sessions depend on it');
 SELECT tempcat_assert_blocked('DROP OWNED BY drole',
-	'belongs to another session');
+	'because of temporary');
 SELECT tempcat_assert_blocked('REASSIGN OWNED BY drole TO drole2',
-	'belongs to another session');
+	'because of temporary');
 SELECT tempcat_assert_blocked('DROP ROLE drole',
-	'belongs to another session');
+	'because of temporary');
 
 -- start_ignore
 -- One raw demonstration of the reporting, ignored in the diff because the

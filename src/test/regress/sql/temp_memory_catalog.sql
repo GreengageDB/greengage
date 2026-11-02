@@ -324,8 +324,7 @@ SET gp_enable_temp_memory_catalog = off;
 DROP TABLE tempcat_test2;
 SET gp_enable_temp_memory_catalog = off;
 DROP TABLE tempcat_test_sp;
--- No temporary table metadata left (the pg_temp_N namespace rows don't
--- count): the switch succeeds ...
+-- No temporary table metadata left: the switch succeeds ...
 SET gp_enable_temp_memory_catalog = off;
 -- ... and toggling back on inside a transaction is refused as well
 BEGIN;
@@ -504,3 +503,36 @@ CREATE FUNCTION tempcat_dep_set() RETURNS int
     AS $$ SELECT 1 $$ LANGUAGE sql
     SET gp_enable_temp_memory_catalog = on;
 RESET gp_enable_temp_memory_catalog;
+
+-- ============================================================
+-- The temporary namespace row stays on disk
+-- ============================================================
+-- One pg_temp_N row per session is negligible churn, while rows on disk
+-- that name the schema (pg_dump, objects in pg_temp, autovacuum's orphan
+-- scan after a crash) resolve again.  A plain SQL scan sees it.
+
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_ns_probe (a int) DISTRIBUTED BY (a);
+SELECT count(*) AS ns_on_disk FROM pg_namespace WHERE oid = pg_my_temp_schema();
+DROP TABLE tempcat_ns_probe;
+RESET gp_enable_temp_memory_catalog;
+
+-- ============================================================
+-- DDL in an event trigger body stays out of the temp table scope
+-- ============================================================
+-- A table_rewrite trigger firing during ALTER TABLE of a temporary table
+-- must not have its ordinary table's catalog rows captured into memory.
+
+CREATE FUNCTION tempcat_et_rewrite() RETURNS event_trigger LANGUAGE plpgsql AS
+  $$ BEGIN CREATE TABLE tempcat_et_log (a int) DISTRIBUTED BY (a); END $$;
+CREATE EVENT TRIGGER tempcat_et ON table_rewrite EXECUTE FUNCTION tempcat_et_rewrite();
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_et_t (a int) DISTRIBUTED BY (a);
+INSERT INTO tempcat_et_t VALUES (1);
+ALTER TABLE tempcat_et_t ALTER COLUMN a TYPE bigint;
+SELECT count(*) AS trigger_table_on_disk FROM pg_class WHERE relname = 'tempcat_et_log';
+DROP TABLE tempcat_et_t;
+RESET gp_enable_temp_memory_catalog;
+DROP EVENT TRIGGER tempcat_et;
+DROP TABLE tempcat_et_log;
+DROP FUNCTION tempcat_et_rewrite();

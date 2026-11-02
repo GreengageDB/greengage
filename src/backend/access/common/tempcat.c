@@ -44,6 +44,7 @@
 #include "miscadmin.h"
 #include "storage/ipc.h"
 #include "access/tempcat.h"
+#include "cdb/cdbvars.h"
 #include "access/relscan.h"
 #include "access/xact.h"
 #include "access/valid.h"
@@ -836,6 +837,21 @@ tempcat_prepare_transaction(void)
 	TempcatSnapshot snapshot;
 
 	Assert(TempcatTransactionInProgress());
+
+	/*
+	 * A user-driven PREPARE TRANSACTION (only reachable in utility mode)
+	 * parks this transaction's changes until COMMIT PREPARED, and
+	 * tempcat_finish_prepared_transaction() drops anything committed in
+	 * between: refuse instead of losing it.
+	 */
+	if (Gp_role == GP_ROLE_UTILITY &&
+		(!tempcat_is_empty() ||
+		 TempcatSnapshotHasEntries(TempcatSnapshotGetCurrent())))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot PREPARE a transaction that has used the in-memory temporary catalog"),
+				 errhint("Commit or roll back this transaction before PREPARE, or disable gp_enable_temp_memory_catalog.")));
+
 	snapshot = TempcatSnapshotPopBack();
 
 	/* PrepareTransaction() asserts s->parent == NULL: no subtransaction
@@ -1424,12 +1440,8 @@ tempcat_is_dirty(void)
  * covers everything reachable in the stack: at transaction boundaries it
  * *is* the root snapshot with the committed entries.
  *
- * The pg_temp_N / pg_toast_temp_N pg_namespace rows are deliberately
- * ignored: they are virtual once the first temporary table was created
- * and stay in tempcat for the whole session, even after every temporary
- * table is dropped.  Catalog scans still merge them and TID-routed
- * deletes still work with the feature disabled, so they do not block
- * disabling the GUC.
+ * The pg_temp_N namespace row always stays on disk (see
+ * IsTempTableScopeFor), so it never keeps the GUC pinned here.
  *
  * A relation entry with tuples_num == 0 can remain after all its tuples
  * were deleted, so iterate over the entries instead of relying on
@@ -1452,9 +1464,6 @@ tempcat_is_empty(void)
 	{
 		TempcatSnapshotRelationData *entry =
 			dlist_container(TempcatSnapshotRelationData, node, iter.cur);
-
-		if (entry->relid == NamespaceRelationId)
-			continue;
 
 		if (entry->tuples_num > 0)
 			return false;

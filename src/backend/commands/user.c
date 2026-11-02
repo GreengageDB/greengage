@@ -1631,7 +1631,7 @@ DropRole(DropRoleStmt *stmt)
 												&tempDepender))
 				ereport(ERROR,
 						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
-						 errmsg("cannot drop role %s because %s belongs to another session",
+						 errmsg("cannot drop role %s because of %s",
 								role,
 								getTempObjectDescription(&tempDepender)),
 						 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));

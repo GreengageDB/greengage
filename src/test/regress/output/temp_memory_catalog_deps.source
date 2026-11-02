@@ -135,21 +135,21 @@ SELECT tempcat_assert_blocked('DROP TYPE dty CASCADE',
 (1 row)
 
 SELECT tempcat_assert_blocked('DROP OWNED BY drole',
-	'belongs to another session');
+	'because of temporary');
  tempcat_assert_blocked 
 ------------------------
  
 (1 row)
 
 SELECT tempcat_assert_blocked('REASSIGN OWNED BY drole TO drole2',
-	'belongs to another session');
+	'because of temporary');
  tempcat_assert_blocked 
 ------------------------
  
 (1 row)
 
 SELECT tempcat_assert_blocked('DROP ROLE drole',
-	'belongs to another session');
+	'because of temporary');
  tempcat_assert_blocked 
 ------------------------
  

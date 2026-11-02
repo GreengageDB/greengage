@@ -1405,7 +1405,7 @@ shdepDropOwned(List *roleids, DropBehavior behavior)
 												&tempDepender))
 				ereport(ERROR,
 						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
-						 errmsg("cannot drop objects owned by %s because %s belongs to another session",
+						 errmsg("cannot drop objects owned by %s because of %s",
 								GetUserNameFromId(roleid, false),
 								getTempObjectDescription(&tempDepender)),
 						 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));
@@ -1587,7 +1587,7 @@ shdepReassignOwned(List *roleids, Oid newrole)
 												&tempDepender))
 				ereport(ERROR,
 						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
-						 errmsg("cannot reassign objects owned by %s because %s belongs to another session",
+						 errmsg("cannot reassign objects owned by %s because of %s",
 								GetUserNameFromId(roleid, false),
 								getTempObjectDescription(&tempDepender)),
 						 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));

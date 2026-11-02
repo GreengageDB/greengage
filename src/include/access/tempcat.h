@@ -32,6 +32,7 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_depend_d.h"
 #include "catalog/pg_inherits_d.h"
+#include "catalog/pg_namespace_d.h"
 #include "catalog/pg_shdepend_d.h"
 #include "catalog/objectaddress.h"
 #include "storage/itemptr.h"
@@ -126,6 +127,11 @@ extern bool temp_table_scope;
  * yields wrong index scan results (see the invariant comment atop
  * gp_fastsequence.c).
  *
+ * pg_namespace is always excluded too: one pg_temp_N row per session is
+ * negligible churn next to the per-table rows tempcat removes, while rows
+ * on disk that name the temporary schema (pg_dump, objects created in
+ * pg_temp, autovacuum's orphan scan after a crash) resolve again.
+ *
  * pg_depend and pg_shdepend rows of temporary objects are routed into the
  * in-memory catalog with every other row of the object, but their edges
  * are additionally published to the shared-memory registry
@@ -136,7 +142,8 @@ extern bool temp_table_scope;
  */
 #define IsTempTableScopeFor(rel)  \
 	(temp_table_scope && IsCatalogRelation(rel) && \
-	 RelationGetRelid(rel) != FastSequenceRelationId)
+	 RelationGetRelid(rel) != FastSequenceRelationId && \
+	 RelationGetRelid(rel) != NamespaceRelationId)
 
 /* Dirty tracking for tempcat versioning */
 extern bool tempcat_is_dirty(void);
