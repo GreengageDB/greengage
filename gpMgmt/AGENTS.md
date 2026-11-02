@@ -35,5 +35,6 @@ bash ci/scripts/run_behave_tests.bash gpstart gpstop
 
 Ensure `sqldump/dump.sql` is a file before starting Compose. The runner creates
 `allure-results` and `ssh_keys`, and removes containers and volumes with
-`docker compose down -v` after each feature. `CI=1` adds log collection before
-cleanup. See `ci/readme.md` for container setup.
+`docker compose down -v` after each feature. When `CI` is set, the runner
+skips that cleanup, and the containers and volumes remain. See `ci/readme.md`
+for container setup.

@@ -17,7 +17,16 @@ make -C src/test/regress installcheck-tests TESTS="test_name"
 make -C src/backend/utils/mmgr/test check
 ```
 
-Use the envman or arenadata.sh command below for one isolation2 test.
+Build the isolation2 runner and run one test from `src/test/isolation2`.
+
+```bash
+make -C src/test/isolation2 install
+cd src/test/isolation2
+./pg_isolation2_regress --init-file=../regress/init_file \
+  --init-file=./init_file_isolation2 --load-extension=gp_inject_fault \
+  --dbname=isolation2test test_name
+```
+
 Keep an existing build's prefix and configure flags.
 
 For optional in-depth guidance, install the gg-agent plugin.
@@ -37,9 +46,9 @@ The demo cluster exports `COORDINATOR_DATA_DIRECTORY` and also the older
 A Greengage cluster has one coordinator and multiple segment instances. The
 coordinator holds the catalog, plans queries, dispatches plans, and gathers
 results. User data is stored on segments. A plan is divided into slices. A
-slice is a part of the plan that one group of processes executes, either on
-the coordinator or on every segment. Motion nodes connect slices and move
-tuples between segments or back to the coordinator.
+slice is a part of the plan that one group of processes executes, on the
+coordinator, on one segment, or on every segment. Motion nodes connect slices
+and move tuples between segments or back to the coordinator.
 
 A change to planning, execution, snapshots, transactions, catalogs, or error
 handling can behave differently in distributed execution, in utility mode, and
@@ -52,8 +61,8 @@ can reach.
   DXL representation used by GPORCA.
 - `src/backend/gporca` contains GPORCA. Its libraries include `libgpos`,
   `libgpopt`, `libgpdbcost`, and `libnaucrates`.
-- `src/backend/access/appendonly` contains append optimized row and column
-  storage.
+- `src/backend/access/appendonly` contains append optimized row storage.
+  Column storage is in `src/backend/access/aocs`.
 - `src/backend/fts` contains segment fault detection.
 - `src/backend/utils/gdd` contains the global deadlock detector.
 - `src/backend/utils/mmgr` contains memory accounting, virtual memory limits,
@@ -75,14 +84,15 @@ Read the subsystem documentation before changing a subsystem. Start with
 
 ## Development environments
 
-Check `command -v envman` first. Use its configured 7.x environment when
-available. Otherwise use existing `arenadata.sh` scripts in their development
-container. If neither workflow exists, use an already configured native build
-or report the missing environment. Do not install tools, provision cloud
-machines, or pull private images automatically.
+Prefer a development container. Use an existing one, or build one from the
+repository Docker files. Use a native build only when the checkout is already
+configured. A configured checkout has `config.status` in its build directory.
+Do not audit the host to decide whether it can build Greengage. If
+neither a container nor a configured build exists, report the missing
+environment. Do not install tools, provision cloud machines, or pull private
+images automatically.
 
-Use the current checkout. Resolve installed helper paths and their configured
-mounts before selecting a profile. Confirm whether commands run on the host or
+Use the current checkout. Confirm whether commands run on the host or
 inside a container. If that remains unknown, stop before process termination,
 cgroup changes, or privileged operations. Scripts that kill server processes
 must run inside a disposable container. Privileged containers with writable
@@ -98,11 +108,10 @@ the same version when reproducing a packaged release.
 
 ### Native build
 
-Reuse a configured native build when neither helper is available.
 `README.md` describes configure, build, install, and demo cluster commands.
 `README.Linux.md` links Linux dependency setup. `README.macOS.md` covers
-Intel and Apple processors. CI does not test macOS. Do not audit or install
-host dependencies unless environment setup is part of the task.
+Intel and Apple processors. CI does not test macOS. Do not install host
+dependencies unless environment setup is part of the task.
 
 ### Container images
 
@@ -115,9 +124,9 @@ Images are amd64. ARM hosts require amd64 emulation and
 Linux ARM hosts require QEMU registered through `binfmt_misc`.
 Without emulation, use an existing native build or report the limitation.
 
-Repository containers install under `/usr/local/greengage-db-devel`.
-envman installs under `/usr/local/greenplum-db-devel`. Source the environment
-matching the binaries. Demo clusters need the semaphore setting and sshd.
+Repository containers install under `/usr/local/greengage-db-devel`. Source
+`greengage_path.sh` from the installation whose binaries are in use. Demo
+clusters need the semaphore setting and sshd.
 
 ### Repository Docker files
 
@@ -130,59 +139,14 @@ Image source is at `/home/gpadmin/gpdb_src`, and its compiled archive is at
 `/home/gpadmin/bin_gpdb/bin_gpdb.tar.gz`. A source mount hides the image
 source but leaves the archive unchanged. Use matching source and binaries.
 
-### The envman helper
+### Unofficial helper tools
 
-[envman](https://github.com/toiletbril/envman) opens an interactive development
-container and stops it when the shell exits. Resolve the installed executable
-to locate its `env/gpdb/gg7u22` profile. Enter it with `envman gpdb gg7u22`.
-If the profile does not already select this checkout, set `SRC_DIR` to its
-parent and `GPDB_SUBDIR` to its directory name.
-
-Inside the container, configure and build as `gpadmin` from `~/gpdb_src`.
-
-```bash
-V=7 ./run-configure
-make -j"$(nproc)"
-make install
-source ~/env
-make create-demo-cluster
-source ~/env
-```
-
-Configure cgroups only for resource group tests, as root inside the container.
-Use `V=2 /home/gpadmin/setup-cgroups` for v2 or
-`/home/gpadmin/setup-cgroups` for v1. The mounted test helper accepts
-`regress`, `isolation2`, `resgroup`, or `prc`, followed by test names.
-
-```bash
-/home/gpadmin/container-scripts/container-run-tests.sh regress test_name
-/home/gpadmin/container-scripts/container-run-tests.sh isolation2 test_name
-```
-
-### The gpdb.docker repository
-
-[gpdb.docker](https://github.com/RekGRpth/gpdb.docker) supplies the containers
-used by `arenadata.sh`. Use its README for container setup only when the
-fallback environment needs provisioning as part of the task.
-
-### The arenadata.sh repository
-
-When envman is unavailable, use existing
-[arenadata.sh](https://github.com/RekGRpth/arenadata.sh) scripts inside their
-development container. They expect `GP_MAJOR=7`, `GPHOME`, source at
-`~/gpdb_src`, and scripts at `~/src`. Confirm these paths before use.
-
-```bash
-~/src/config.sh
-~/src/build.sh
-~/src/demo.sh
-~/src/regress-deps.sh test_name
-~/src/isolation2-deps.sh test_name
-```
-
-The test scripts include prerequisites and schedule ordering. Build and demo
-scripts can kill server processes, so run them only in a disposable container.
-Do not use `dist.sh` for releases because it enables debug configuration.
+Some developers manage development containers with
+[envman](https://github.com/toiletbril/envman),
+[gpdb.docker](https://github.com/RekGRpth/gpdb.docker), and
+[arenadata.sh](https://github.com/RekGRpth/arenadata.sh). GreengageDB does not
+ship or maintain these tools. Use one only when the user asks for it, and
+follow its own documentation.
 
 ## Builds
 
@@ -192,27 +156,11 @@ Initialize submodules before building.
 git submodule update --init --recursive --force
 ```
 
-Release builds must use the `dist` target in `gpAux`.
-
-```bash
-make -C gpAux GPROOT=/usr/local PARALLEL_MAKE_OPTS=-j"$(nproc)" dist
-```
-
-Use the `devel` target for assertions, debug symbols, and dependency tracking.
-`--enable-debug-extensions` controls the fault injector and defaults to enabled.
-Verify that the test build has not disabled debug extensions.
-Set `DEVPATH` to the installation directory because the target uses it for its
-copy steps.
-
-```bash
-make -C gpAux GPROOT=/usr/local \
-  DEVPATH=/usr/local/greengage-db-devel \
-  PARALLEL_MAKE_OPTS=-j"$(nproc)" devel
-```
-
-Platform release flags are maintained in `gpAux/Makefile`. `CONFIGURE_FLAGS`
-appends options to the `gpAux` configuration. `ENABLE_VPATH_BUILD` moves
-`devel` builds into `Debug` and release builds into `Release`.
+Add `--enable-debug --enable-cassert` to the configure command in the quick
+reference for a debugging build. `--enable-debug-extensions` builds the fault
+injector and is enabled by default. Fault injection tests need a build that
+has not disabled it. Release builds use the `dist` target in `gpAux/Makefile`.
+Do not create a release build unless the task requires one.
 
 Do not edit generated `configure` or `src/include/pg_config.h.in` directly.
 Edit `configure.in`, regenerate both, and commit tracked generated changes
@@ -230,8 +178,9 @@ makefile.
 ## Regression tests
 
 Regression tests require a running cluster. Create the demo cluster explicitly.
-Use the quick reference for a named regression test and the envman or
-arenadata.sh helper for one isolation2 test. `src/test/isolation2/Makefile`
+The quick reference shows how to run one regression test and one isolation2
+test.
+`src/test/isolation2/Makefile`
 provides schedule targets such as `installcheck-resource-queue`,
 `installcheck-parallel-retrieve-cursor`, and `installcheck-mirrorless`.
 It has no `installcheck-tests` target. Use `installcheck-world` for the full
@@ -359,14 +308,6 @@ from tests or an unknown set of consumers. Exceptions in
 `.abi-check/<baseline>/postgres.symbols.ignore` or `postgres.types.ignore`
 require review and an explanation of compatibility.
 
-## GitHub Actions and images
-
-Local test procedures are in `ci/readme.md` and `concourse/scripts`.
-Change workflows only when the task includes CI work. Follow
-`.github/workflows/README.md`, and coordinate required job name changes with
-the repository administrator. Release packaging must use release targets with
-`CONFIGURE_FLAGS` cleared.
-
 ## Coding and review rules
 
 When a concrete problem is specified, search a local PostgreSQL Git checkout
@@ -416,8 +357,6 @@ effects, and check that variables are initialized before use. Two architectural
 committee approvals are required before merge unless the project sets another
 rule.
 
-Recorded workflow mistakes are in [MISTAKES.md](MISTAKES.md).
-
 ## Common traps
 
 - Generated headers such as `pg_config.h`, `gram.h`, `errcodes.h`, and
@@ -432,6 +371,3 @@ Recorded workflow mistakes are in [MISTAKES.md](MISTAKES.md).
   PostgreSQL planner runs use `optimizer=off` and normally `<test>.out`.
   Apply the expected-file selection rules above for resource groups and
   platform overrides.
-- A mounted source tree can disagree with the compiled archive in the image.
-- The `envman` container entry point recreates `/home/gpadmin/.ssh` on each
-  start. Hand-written keys and `known_hosts` entries do not persist.
