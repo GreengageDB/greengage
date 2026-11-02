@@ -1891,10 +1891,10 @@ CTranslatorExprToDXL::PdxlnResult(CExpression *pexprRelational,
 {
 	GPOS_ASSERT(nullptr != pexprRelational);
 
-	// translate relational child expression
+	// Project required subplan outputs in the child before the filter uses them.
 	CDXLNode *pdxlnRelationalChild = CreateDXLNode(
 		pexprRelational, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
-		pfDML, false /*fRemap*/, false /*fRoot */);
+		pfDML, true /*fRemap*/, false /*fRoot */);
 	GPOS_ASSERT(nullptr != pexprRelational->Prpp());
 	CColRefSet *pcrsOutput = pexprRelational->Prpp()->PcrsRequired();
 

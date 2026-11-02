@@ -4239,3 +4239,101 @@ INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL c
 reset test_print_direct_dispatch_info;
 reset optimizer;
 drop table foo;
+-- A filter must read correlated subplan outputs from its child projection.
+create table gg211_foo as select a::int4 from generate_series(1, 10) a distributed by (a);
+create table gg211_bar as select b::int4 from generate_series(1, 10) b distributed by (b);
+create table gg211_baz as select c::int4 from generate_series(1, 10) c distributed by (c);
+set optimizer = on;
+explain (costs off)
+select * from gg211_foo where
+    (select c from gg211_baz where c != a limit 1) >
+    (select b from gg211_bar where b != a limit 1);
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
+         Filter: (((SubPlan 1)) > (SubPlan 2))
+         ->  Seq Scan on gg211_foo
+               SubPlan 1
+                 ->  Limit
+                       ->  Result
+                             Filter: (gg211_baz.c <> gg211_foo.a)
+                             ->  Materialize
+                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                         ->  Seq Scan on gg211_baz
+         SubPlan 2
+           ->  Limit
+                 ->  Result
+                       Filter: (gg211_bar.b <> gg211_foo.a)
+                       ->  Materialize
+                             ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                   ->  Seq Scan on gg211_bar
+ Optimizer: GPORCA
+(19 rows)
+
+-- Ordering makes the scalar subquery results deterministic across segments.
+select a from gg211_foo where
+    (select c from gg211_baz where c != a order by c limit 1) >
+    (select b from gg211_bar where b != a order by b desc limit 1) order by a;
+ a 
+---
+(0 rows)
+
+select a from gg211_foo where
+    (select c from gg211_baz where c != a order by c limit 1) =
+    (select b from gg211_bar where b != a order by b limit 1) order by a;
+ a  
+----
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+(10 rows)
+
+select a from gg211_foo where
+    (select c from gg211_baz where c != a order by c limit 1) !=
+    (select b from gg211_bar where b != a order by b desc limit 1) order by a;
+ a  
+----
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+(10 rows)
+
+select a from gg211_foo where
+    (select c from gg211_baz where c != a order by c limit 1) not in
+    (select b from gg211_bar where b != a order by b limit 1) order by a;
+ a 
+---
+(0 rows)
+
+-- Empty scalar subqueries return NULL; NULL comparisons must reject the row.
+select a from gg211_foo where
+    (select c from gg211_baz where c > a + 10 limit 1) >
+    (select b from gg211_bar where b != a limit 1);
+ a 
+---
+(0 rows)
+
+select a from gg211_foo where
+    (select null::int from gg211_baz where c != a limit 1) >
+    (select b from gg211_bar where b != a limit 1);
+ a 
+---
+(0 rows)
+
+reset optimizer;
+drop table gg211_foo, gg211_bar, gg211_baz;
