@@ -643,7 +643,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 						 "backend-private memory instead of pg_catalog, "
 						 "preventing catalog bloating from frequent temp table "
 						 "creation and deletion."),
-			GUC_NOT_IN_SAMPLE | GUC_CHECK_HOOK_ON_RESET
+			GUC_NOT_IN_SAMPLE | GUC_CHECK_HOOK_ON_RESET | GUC_NO_PROCONFIG
 		},
 		&enable_temp_memory_catalog,
 		false,

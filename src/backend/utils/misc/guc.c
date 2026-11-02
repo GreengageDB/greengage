@@ -11147,6 +11147,18 @@ ProcessGUCArray(ArrayType *array,
 		valuecopy = pstrdup(value);
 		free(value);
 
+		/*
+		 * A proconfig entry (function SET clause): applied only in this
+		 * backend and save-restored past the check hooks, so parameters
+		 * that carry session-wide invariants refuse it outright.
+		 */
+		if (action == GUC_ACTION_SAVE &&
+			(GetConfigOptionFlags(namecopy, true) & GUC_NO_PROCONFIG))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("parameter \"%s\" cannot be set by a function",
+							namecopy)));
+
 		(void) set_config_option(namecopy, valuecopy,
 								 context, source,
 								 action, true, 0, false);

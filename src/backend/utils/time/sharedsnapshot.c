@@ -626,7 +626,11 @@ SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription
 	slot->startTimestamp = 0;
 	slot->distributedXid = InvalidDistributedTransactionId;
 	slot->segmateSync = 0;
-	slot->tempcat_version = 0;
+	/*
+	 * tempcat_version keeps counting: a reused slot must never repeat a
+	 * version, or a pooled reader QE that cached (slot, version) from the
+	 * previous slot owner would skip the new owner's publish.
+	 */
 
 	sharedSnapshotArray->numSlots -= 1;
 

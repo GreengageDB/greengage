@@ -1009,15 +1009,13 @@ tempcat_relation_has_entries(Relation rel)
 }
 
 /*
- * Does the relation's metadata live in the in-memory catalog?  A temp table
- * created while the GUC was off keeps its rows on disk: routing its later
- * DDL into tempcat would mix the two.  The pg_class row's item pointer tells
- * which side owns the relation.
+ * Does a catalog row identified by a single-OID syscache live in the
+ * in-memory catalog?  The row's item pointer carries the marker.
  */
-bool
-tempcat_relation_is_virtual(Oid relid)
+static bool
+tempcat_catalog_tuple_is_virtual(int cacheId, Oid oid)
 {
-	HeapTuple	tup = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+	HeapTuple	tup = SearchSysCache1(cacheId, ObjectIdGetDatum(oid));
 	bool		result = false;
 
 	if (HeapTupleIsValid(tup))
@@ -1027,6 +1025,28 @@ tempcat_relation_is_virtual(Oid relid)
 	}
 
 	return result;
+}
+
+/*
+ * Does the relation's metadata live in the in-memory catalog?  A temp table
+ * created while the GUC was off keeps its rows on disk: routing its later
+ * DDL into tempcat would mix the two.  The pg_class row's item pointer tells
+ * which side owns the relation.
+ */
+bool
+tempcat_relation_is_virtual(Oid relid)
+{
+	return tempcat_catalog_tuple_is_virtual(RELOID, relid);
+}
+
+/*
+ * Same for a type: a temp table's composite and array types have their
+ * pg_type rows in the in-memory catalog.
+ */
+bool
+tempcat_type_is_virtual(Oid typoid)
+{
+	return tempcat_catalog_tuple_is_virtual(TYPEOID, typoid);
 }
 
 /*

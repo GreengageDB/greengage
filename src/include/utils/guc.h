@@ -250,6 +250,8 @@ typedef enum
 #define GUC_CHECK_HOOK_ON_RESET 0x02000000 /* run the check hook when the value is
 											* reset (RESET, RESET ALL), not only
 											* when it is set */
+#define GUC_NO_PROCONFIG	0x04000000 /* cannot appear in a function's SET
+										* clause */
 
 /* GUC lists for gp_guc_list_init().  (List of struct config_generic) */
 extern List    *gp_guc_list_for_explain;

@@ -482,3 +482,25 @@ SELECT a, b FROM tempcat_mixed;
 
 DROP TABLE tempcat_mixed;
 RESET gp_enable_temp_memory_catalog;
+
+-- ============================================================
+-- Permanent objects cannot depend on temporary ones
+-- ============================================================
+-- A temp table's composite type exists only in the creating session:
+-- a disk-logged pg_depend edge to it would dangle once the session is
+-- gone, so recording one is refused.  A function's SET clause is no
+-- way around the GUC's checks either.
+
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_dep_src (a int) DISTRIBUTED BY (a);
+CREATE TABLE tempcat_dep_perm (a int, c tempcat_dep_src) DISTRIBUTED BY (a);
+CREATE FUNCTION tempcat_dep_fn() RETURNS tempcat_dep_src
+    AS $$ SELECT NULL::tempcat_dep_src $$ LANGUAGE sql;
+CREATE TEMP TABLE tempcat_dep_temp (a int, c tempcat_dep_src) DISTRIBUTED BY (a);
+SELECT 'temp-dependent-ok' AS probe, count(*) FROM tempcat_dep_temp;
+DROP TABLE tempcat_dep_temp;
+DROP TABLE tempcat_dep_src;
+CREATE FUNCTION tempcat_dep_set() RETURNS int
+    AS $$ SELECT 1 $$ LANGUAGE sql
+    SET gp_enable_temp_memory_catalog = on;
+RESET gp_enable_temp_memory_catalog;
