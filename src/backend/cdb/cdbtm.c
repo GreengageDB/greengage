@@ -545,8 +545,8 @@ doNotifyingCommitPrepared(void)
 {
 	bool		succeeded;
 	int			retry = 0;
-	volatile int savedInterruptHoldoffCount;
-	MemoryContext oldcontext = CurrentMemoryContext;;
+	int32		savedInterruptHoldoffCount;
+	MemoryContext oldcontext = CurrentMemoryContext;
 	time_t		retry_time_start;
 	bool		retry_timedout;
 
@@ -668,8 +668,8 @@ retryAbortPrepared(void)
 {
 	int			retry = 0;
 	bool		succeeded = false;
-	volatile int savedInterruptHoldoffCount;
-	MemoryContext oldcontext = CurrentMemoryContext;;
+	int32		savedInterruptHoldoffCount;
+	MemoryContext oldcontext = CurrentMemoryContext;
 	time_t 		retry_time_start;
 	bool		retry_timedout;
 
@@ -748,7 +748,7 @@ static void
 doNotifyingAbort(void)
 {
 	bool		succeeded;
-	volatile int savedInterruptHoldoffCount;
+	int32		savedInterruptHoldoffCount;
 	MemoryContext oldcontext = CurrentMemoryContext;
 
 	elog(DTM_DEBUG5, "doNotifyingAborted entering in state = %s", DtxStateToString(MyTmGxactLocal->state));

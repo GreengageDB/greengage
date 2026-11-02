@@ -1261,17 +1261,18 @@ SELECT a1, a2, a3 FROM cte WHERE a1<42;
                                QUERY PLAN                               
 ------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop
-         Join Filter: true
+   ->  Hash Join
+         Hash Cond: (t2.a = t3.a)
          ->  Nested Loop
                Join Filter: true
+               ->  Index Only Scan using your_awesome_index on your_table t2
+                     Index Cond: (a < 42)
+               ->  Index Scan using my_incredible_index on my_table t1
+                     Index Cond: ((a = t2.a) AND (a < 42))
+         ->  Hash
                ->  Dynamic Index Scan on our_amazing_index on our_table t3
                      Index Cond: (a < 42)
                      Number of partitions to scan: 4 (out of 4)
-               ->  Index Scan using my_incredible_index on my_table t1
-                     Index Cond: ((a = t3.a) AND (a < 42))
-         ->  Index Only Scan using your_incredible_index on your_table t2
-               Index Cond: ((a = t1.a) AND (a < 42))
  Optimizer: GPORCA
 (13 rows)
 
@@ -1289,17 +1290,18 @@ SELECT a1, a2, a3 FROM cte WHERE a1<42;
                                QUERY PLAN                               
 ------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop
-         Join Filter: true
+   ->  Hash Join
+         Hash Cond: (t2.a = t3.a)
          ->  Nested Loop
                Join Filter: true
+               ->  Index Only Scan using your_awesome_index on your_table t2
+                     Index Cond: (a < 42)
+               ->  Index Scan using my_awesome_index on my_table t1
+                     Index Cond: ((a = t2.a) AND (a < 42))
+         ->  Hash
                ->  Dynamic Index Scan on our_awesome_index on our_table t3
                      Index Cond: (a < 42)
                      Number of partitions to scan: 4 (out of 4)
-               ->  Index Scan using my_awesome_index on my_table t1
-                     Index Cond: ((a = t3.a) AND (a < 42))
-         ->  Index Only Scan using your_incredible_index on your_table t2
-               Index Cond: ((a = t1.a) AND (a < 42))
  Optimizer: GPORCA
 (13 rows)
 
@@ -1316,17 +1318,18 @@ SELECT a1, a2, a3 FROM cte WHERE a1<42;
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop
-         Join Filter: true
+   ->  Hash Join
+         Hash Cond: (t2.a = t3.a)
          ->  Nested Loop
                Join Filter: true
+               ->  Index Only Scan using your_amazing_index on your_table t2
+                     Index Cond: (a < 42)
+               ->  Index Only Scan using my_incredible_index on my_table t1
+                     Index Cond: ((a = t2.a) AND (a < 42))
+         ->  Hash
                ->  Dynamic Index Only Scan on our_amazing_index on our_table t3
                      Index Cond: (a < 42)
                      Number of partitions to scan: 4 (out of 4)
-               ->  Index Only Scan using my_incredible_index on my_table t1
-                     Index Cond: ((a = t3.a) AND (a < 42))
-         ->  Index Only Scan using your_amazing_index on your_table t2
-               Index Cond: ((a = t1.a) AND (a < 42))
  Optimizer: GPORCA
 (13 rows)
 
@@ -1343,17 +1346,18 @@ SELECT a1, a2, a3 FROM cte WHERE a1<42;
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop
-         Join Filter: true
+   ->  Hash Join
+         Hash Cond: (t2.a = t3.a)
          ->  Nested Loop
                Join Filter: true
+               ->  Index Only Scan using your_awesome_index on your_table t2
+                     Index Cond: (a < 42)
+               ->  Index Only Scan using my_awesome_index on my_table t1
+                     Index Cond: ((a = t2.a) AND (a < 42))
+         ->  Hash
                ->  Dynamic Index Only Scan on our_awesome_index on our_table t3
                      Index Cond: (a < 42)
                      Number of partitions to scan: 4 (out of 4)
-               ->  Index Only Scan using my_awesome_index on my_table t1
-                     Index Cond: ((a = t3.a) AND (a < 42))
-         ->  Index Only Scan using your_incredible_index on your_table t2
-               Index Cond: ((a = t1.a) AND (a < 42))
  Optimizer: GPORCA
 (13 rows)
 

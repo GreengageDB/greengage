@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/\(cost=.*\)/
+-- s/\(cost=.*\)//
+-- end_matchsubs
 --
 -- Test queries mixes window functions with aggregate functions or grouping.
 --
@@ -581,6 +585,8 @@ drop table rep;
 -- To ensure there's no duplicate hazard, the cost model chooses a plan that executes
 -- the producer and both consumers on one segment, before gathering the data onto
 -- the coordinator and return. There's 1 producer matching 1 consumer for each consumer.
+-- Despite having a gather motion from 3 segments, CTE is executed only once on 1 segment
+-- because of the one-time-filter.
 drop table if exists rep1, rep2;
 NOTICE:  table "rep1" does not exist, skipping
 NOTICE:  table "rep2" does not exist, skipping
@@ -734,4 +740,179 @@ explain select * from a_table join cte_view on a_table.a = (select a from cte_vi
  Optimizer: Postgres-based planner
 (22 rows)
 
+--
+-- Test that the row estimate of a shared CTE accounts for the filters inside
+-- the CTE body. The consumers used to see the statistics of the unfiltered
+-- producer scan, so the estimate of a query using the CTE more than once was
+-- orders of magnitude lower than that of the same query with the CTE inlined.
+--
+create table bfv_cte_left(id1 int, val1 int);
+create table bfv_cte_right(id2 int, val2 int);
+create table bfv_cte_t1(a int);
+insert into bfv_cte_left select i, 10000 + i from generate_series(1, 10000) i;
+insert into bfv_cte_right select i, 100000 + i from generate_series(1, 10000) i;
+insert into bfv_cte_t1 select generate_series(1, 10000);
+analyze bfv_cte_left;
+analyze bfv_cte_right;
+analyze bfv_cte_t1;
+-- Returns the row estimate of the top plan node
+create function bfv_cte_est_rows(query text) returns bigint as $$
+declare
+	line text;
+begin
+	for line in execute 'explain ' || query loop
+		return substring(line from 'rows=([0-9]+)')::bigint;
+	end loop;
+end;
+$$ language plpgsql;
+-- Actual number of rows is 5000
+explain analyze with cte as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000)) select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null;
+                                                                 QUERY PLAN                                                                 
+--------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=135.46..190.63 rows=13 width=12) (actual time=3.956..6.995 rows=5000 loops=1)
+   ->  Hash Anti Join  (cost=135.46..190.45 rows=4 width=12) (actual time=4.371..6.335 rows=1686 loops=1)
+         Hash Cond: (bfv_cte_t1.a = bfv_cte_left.id1)
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 2 max, using 1696 of 262144 buckets.
+         ->  Seq Scan on bfv_cte_t1  (cost=0.00..37.33 rows=3333 width=4) (actual time=0.032..0.378 rows=3385 loops=1)
+         ->  Hash  (cost=125.04..125.04 rows=833 width=8) (actual time=3.406..3.408 rows=1714 loops=1)
+               Buckets: 262144  Batches: 1  Memory Usage: 2115kB
+               ->  Hash Semi Join  (cost=66.50..125.04 rows=833 width=8) (actual time=1.305..2.869 rows=1714 loops=1)
+                     Hash Cond: (bfv_cte_left.id1 = bfv_cte_right.id2)
+                     Extra Text: (seg0)   Hash chain length 1.0 avg, 2 max, using 1704 of 262144 buckets.
+                     ->  Seq Scan on bfv_cte_left  (cost=0.00..45.67 rows=1667 width=8) (actual time=0.233..0.548 rows=1714 loops=1)
+                           Filter: (id1 > 5000)
+                           Rows Removed by Filter: 1654
+                     ->  Hash  (cost=45.67..45.67 rows=1667 width=4) (actual time=0.970..0.971 rows=1714 loops=1)
+                           Buckets: 262144  Batches: 1  Memory Usage: 2109kB
+                           ->  Seq Scan on bfv_cte_right  (cost=0.00..45.67 rows=1667 width=4) (actual time=0.230..0.588 rows=1714 loops=1)
+                                 Filter: (id2 > 5000)
+                                 Rows Removed by Filter: 1654
+ Optimizer: Postgres-based planner
+ Planning Time: 1.015 ms
+   (slice0)    Executor memory: 61K bytes.
+   (slice1)    Executor memory: 4309K bytes avg x 3 workers, 4331K bytes max (seg0).  Work_mem: 2115K bytes max.
+ Memory used:  128000kB
+ Execution Time: 7.527 ms
+(24 rows)
+
+select bfv_cte_est_rows($$
+with cte as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000))
+select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null
+$$) between 4000 and 6000 as single_consumer_ok;
+ single_consumer_ok 
+--------------------
+ f
+(1 row)
+
+-- Actual number of rows is 10000
+explain analyze with cte as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000)) select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null union all select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null;
+                                                                            QUERY PLAN                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=135.46..381.39 rows=27 width=12) (actual time=3.717..10.617 rows=10000 loops=1)
+   ->  Append  (cost=135.46..381.04 rows=9 width=12) (actual time=3.122..9.572 rows=3372 loops=1)
+         ->  Hash Anti Join  (cost=135.46..190.45 rows=4 width=12) (actual time=3.121..4.751 rows=1686 loops=1)
+               Hash Cond: (bfv_cte_t1.a = bfv_cte_left.id1)
+               Extra Text: (seg1)   Hash chain length 1.0 avg, 2 max, using 1691 of 131072 buckets.
+               ->  Seq Scan on bfv_cte_t1  (cost=0.00..37.33 rows=3333 width=4) (actual time=0.032..0.380 rows=3385 loops=1)
+               ->  Hash  (cost=125.04..125.04 rows=833 width=8) (actual time=3.001..3.003 rows=1714 loops=1)
+                     Buckets: 131072  Batches: 1  Memory Usage: 1091kB
+                     ->  Hash Semi Join  (cost=66.50..125.04 rows=833 width=8) (actual time=1.254..2.482 rows=1714 loops=1)
+                           Hash Cond: (bfv_cte_left.id1 = bfv_cte_right.id2)
+                           Extra Text: (seg0)   Hash chain length 1.0 avg, 3 max, using 1698 of 131072 buckets.
+                           ->  Seq Scan on bfv_cte_left  (cost=0.00..45.67 rows=1667 width=8) (actual time=0.230..0.563 rows=1714 loops=1)
+                                 Filter: (id1 > 5000)
+                                 Rows Removed by Filter: 1654
+                           ->  Hash  (cost=45.67..45.67 rows=1667 width=4) (actual time=0.984..0.985 rows=1714 loops=1)
+                                 Buckets: 131072  Batches: 1  Memory Usage: 1085kB
+                                 ->  Seq Scan on bfv_cte_right  (cost=0.00..45.67 rows=1667 width=4) (actual time=0.234..0.598 rows=1714 loops=1)
+                                       Filter: (id2 > 5000)
+                                       Rows Removed by Filter: 1654
+         ->  Hash Anti Join  (cost=135.46..190.45 rows=4 width=12) (actual time=2.988..4.580 rows=1686 loops=1)
+               Hash Cond: (bfv_cte_t1_1.a = bfv_cte_left_1.id1)
+               Extra Text: (seg1)   Hash chain length 1.0 avg, 2 max, using 1691 of 131072 buckets.
+               ->  Seq Scan on bfv_cte_t1 bfv_cte_t1_1  (cost=0.00..37.33 rows=3333 width=4) (actual time=0.015..0.367 rows=3385 loops=1)
+               ->  Hash  (cost=125.04..125.04 rows=833 width=8) (actual time=2.903..2.904 rows=1714 loops=1)
+                     Buckets: 131072  Batches: 1  Memory Usage: 1091kB
+                     ->  Hash Semi Join  (cost=66.50..125.04 rows=833 width=8) (actual time=1.240..2.443 rows=1714 loops=1)
+                           Hash Cond: (bfv_cte_left_1.id1 = bfv_cte_right_1.id2)
+                           Extra Text: (seg0)   Hash chain length 1.0 avg, 3 max, using 1698 of 131072 buckets.
+                           ->  Seq Scan on bfv_cte_left bfv_cte_left_1  (cost=0.00..45.67 rows=1667 width=8) (actual time=0.221..0.533 rows=1714 loops=1)
+                                 Filter: (id1 > 5000)
+                                 Rows Removed by Filter: 1654
+                           ->  Hash  (cost=45.67..45.67 rows=1667 width=4) (actual time=0.985..0.986 rows=1714 loops=1)
+                                 Buckets: 131072  Batches: 1  Memory Usage: 1085kB
+                                 ->  Seq Scan on bfv_cte_right bfv_cte_right_1  (cost=0.00..45.67 rows=1667 width=4) (actual time=0.221..0.587 rows=1714 loops=1)
+                                       Filter: (id2 > 5000)
+                                       Rows Removed by Filter: 1654
+ Optimizer: Postgres-based planner
+ Planning Time: 1.480 ms
+   (slice0)    Executor memory: 97K bytes.
+   (slice1)    Executor memory: 2309K bytes avg x 3 workers, 2330K bytes max (seg0).  Work_mem: 1091K bytes max.
+ Memory used:  128000kB
+ Execution Time: 11.441 ms
+(42 rows)
+
+select bfv_cte_est_rows($$
+with cte as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000))
+select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null
+union all
+select * from bfv_cte_t1 left join cte on bfv_cte_t1.a = cte.id1 where id1 is null
+$$) between 8000 and 12000 as two_consumers_ok;
+ two_consumers_ok 
+------------------
+ f
+(1 row)
+
+-- Actual number of rows is 5000: the second CTE reads the first one
+explain analyze with c1 as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000)), c2 as (select * from c1 where val1 > 0) select * from c1 join c2 using (id1);
+                                                                         QUERY PLAN                                                                         
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=201.96..461.87 rows=6250 width=12) (actual time=4.855..7.674 rows=5000 loops=1)
+   ->  Hash Join  (cost=201.96..378.54 rows=2083 width=12) (actual time=4.430..6.972 rows=1714 loops=1)
+         Hash Cond: (bfv_cte_left.id1 = bfv_cte_left_1.id1)
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 3 max, using 1698 of 131072 buckets.
+         ->  Hash Semi Join  (cost=66.50..133.37 rows=833 width=8) (actual time=1.294..2.710 rows=1714 loops=1)
+               Hash Cond: (bfv_cte_left.id1 = bfv_cte_right.id2)
+               Extra Text: (seg0)   Hash chain length 1.0 avg, 3 max, using 1698 of 131072 buckets.
+               ->  Seq Scan on bfv_cte_left  (cost=0.00..54.00 rows=1667 width=8) (actual time=0.278..0.663 rows=1714 loops=1)
+                     Filter: ((val1 > 0) AND (id1 > 5000))
+                     Rows Removed by Filter: 1654
+               ->  Hash  (cost=45.67..45.67 rows=1667 width=4) (actual time=0.973..0.973 rows=1714 loops=1)
+                     Buckets: 131072  Batches: 1  Memory Usage: 1085kB
+                     ->  Seq Scan on bfv_cte_right  (cost=0.00..45.67 rows=1667 width=4) (actual time=0.229..0.589 rows=1714 loops=1)
+                           Filter: (id2 > 5000)
+                           Rows Removed by Filter: 1654
+         ->  Hash  (cost=125.04..125.04 rows=833 width=8) (actual time=3.093..3.094 rows=1714 loops=1)
+               Buckets: 131072  Batches: 1  Memory Usage: 1091kB
+               ->  Hash Semi Join  (cost=66.50..125.04 rows=833 width=8) (actual time=1.384..2.583 rows=1714 loops=1)
+                     Hash Cond: (bfv_cte_left_1.id1 = bfv_cte_right_1.id2)
+                     Extra Text: (seg0)   Hash chain length 1.0 avg, 3 max, using 1698 of 131072 buckets.
+                     ->  Seq Scan on bfv_cte_left bfv_cte_left_1  (cost=0.00..45.67 rows=1667 width=8) (actual time=0.227..0.545 rows=1714 loops=1)
+                           Filter: (id1 > 5000)
+                           Rows Removed by Filter: 1654
+                     ->  Hash  (cost=45.67..45.67 rows=1667 width=4) (actual time=1.104..1.105 rows=1714 loops=1)
+                           Buckets: 131072  Batches: 1  Memory Usage: 1085kB
+                           ->  Seq Scan on bfv_cte_right bfv_cte_right_1  (cost=0.00..45.67 rows=1667 width=4) (actual time=0.227..0.667 rows=1714 loops=1)
+                                 Filter: (id2 > 5000)
+                                 Rows Removed by Filter: 1654
+ Optimizer: Postgres-based planner
+ Planning Time: 0.793 ms
+   (slice0)    Executor memory: 75K bytes.
+   (slice1)    Executor memory: 3389K bytes avg x 3 workers, 3421K bytes max (seg0).  Work_mem: 1091K bytes max.
+ Memory used:  128000kB
+ Execution Time: 8.257 ms
+(34 rows)
+
+select bfv_cte_est_rows($$
+with c1 as (select * from bfv_cte_left where id1 in (select id2 from bfv_cte_right where id2 > 5000)),
+     c2 as (select * from c1 where val1 > 0)
+select * from c1 join c2 using (id1)
+$$) between 4000 and 6000 as nested_consumers_ok;
+ nested_consumers_ok 
+---------------------
+ f
+(1 row)
+
+drop function bfv_cte_est_rows(text);
+drop table bfv_cte_left, bfv_cte_right, bfv_cte_t1;
 reset optimizer_trace_fallback;

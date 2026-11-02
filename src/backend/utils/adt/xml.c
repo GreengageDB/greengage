@@ -4340,6 +4340,7 @@ wellformed_xml(text *data, XmlOptionType xmloption_arg)
 {
 	bool		result;
 	volatile xmlDocPtr doc = NULL;
+	MemoryContext oldcontext = CurrentMemoryContext;
 
 	/* We want to catch any exceptions and return false */
 	PG_TRY();
@@ -4349,6 +4350,7 @@ wellformed_xml(text *data, XmlOptionType xmloption_arg)
 	}
 	PG_CATCH();
 	{
+		MemoryContextSwitchTo(oldcontext);
 		FlushErrorState();
 		result = false;
 	}
