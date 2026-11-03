@@ -1,0 +1,32 @@
+# 3rd-party package installs to /opt
+addFilter(r"dir-or-file-in-opt")
+
+# Scripts use /usr/bin/env on purpose. See `__brp_mangle_shebangs_exclude_from` in the spec
+addFilter(r"env-script-interpreter")
+
+# Python modules in lib/python are imported, not executed
+addFilter(r"non-executable-script")
+
+# PostgreSQL loadable modules do not need other libraries
+addFilter(r"shared-lib-without-dependency-information")
+
+# PostgreSQL loadable modules get libc from the postgres executable
+addFilter(r"library-not-linked-against-libc .*/lib/postgresql/")
+
+# Timezone data files are hard links by design (PostgreSQL build)
+addFilter(r"cross-directory-hard-link")
+
+# Headers, static libraries and pkg-config files are in the main package
+addFilter(r"devel-file-in-non-devel-package")
+
+# PostgreSQL sets the cipher list from the `ssl_ciphers` setting
+addFilter(r"crypto-policy-non-compliance-openssl")
+
+# These files are empty by design
+addFilter(r"zero-length .*(linux-ops\.h|orafce--.*\.sql|dist-info/REQUESTED)")
+
+# Correct words in the description
+addFilter(r"spelling-error .* (analytics|analytical) ")
+
+# The documentation is in /opt/greengagedb/greengage7/docs
+addFilter(r"no-documentation")
