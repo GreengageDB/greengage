@@ -502,6 +502,11 @@ class PatroniAgentsStop(Command):
         Command.__init__(self, name, "pkill -TERM -f 'python.*patroni'", ctxt, remoteHost)
 
     @staticmethod
+    def local(name):
+        cmd = PatroniAgentsStop(name)
+        cmd.run(validateAfter = True)
+
+    @staticmethod
     def remote(name, host):
         cmd = PatroniAgentsStop(name, ctxt = REMOTE, remoteHost = host)
         cmd.run(validateAfter = True)

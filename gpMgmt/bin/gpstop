@@ -854,6 +854,93 @@ class GpStop:
                          str(db.getSegmentPort()), db.getSegmentStatus()])
         tabLog.outputTable()
 
+
+class GpStopHA (GpStop):
+
+    COORDINATOR_STOP_TIMEOUT_SEC = 30
+
+    ######
+    def __init__(self, mode, coordinator_datadir=None,
+                 parallel=DEFAULT_NUM_WORKERS, quiet=False,
+                 timeout=SEGMENT_STOP_TIMEOUT_DEFAULT, logfileDirectory=False):
+        self.mode = mode
+        self.coordinator_datadir = coordinator_datadir
+        self.pool = None
+        self.parallel = parallel
+        self.quiet = quiet
+        self.pid = 0
+        self.coordinatoronly = False
+        self.sighup = False
+        self.interactive = False
+        self.stopstandby = False
+        self.restart = False
+        self.hadFailures = False
+        self.timeout = timeout
+        self.logfileDirectory = logfileDirectory
+        self.onlyThisHost = None
+
+        # some variables that will be assigned during run()
+        self.gphome = None
+        self.port = None
+        self.dburl = None
+        self.conn = None
+        self.gparray = None
+        self.gpversion = None
+
+        logger.debug("Setting level of parallelism to: %d" % self.parallel)
+
+    def run(self):
+        logger.info('coordinator-HA: start')
+        success = True
+        try:
+            logger.info("coordinator-HA: gather information and validate the environment...")
+            self._prepare()
+
+            standby_hostname = self.gparray.standbyCoordinator.getSegmentHostName()
+
+            logger.info(f"coordinator-HA: check patroni standby agent on host={standby_hostname}")
+            if not pg.PatroniAgentsCheck.remote('[cmd patroni agents check standby]', standby_hostname):
+                raise ExceptionNoStackTraceNeeded("No standby patroni agent. Maybe the cluster is not in HA mode?..")
+            logger.info(f"coordinator-HA: stop patroni standby agent")
+            pg.PatroniAgentsStop.remote('[cmd patroni agents stop standby]', standby_hostname)
+            logger.info("coordinator-HA: standby patroni agent is stopped")
+
+            timeout = self.COORDINATOR_STOP_TIMEOUT_SEC
+            while pg.DbStatus.remote('standby instance', self.gparray.standbyCoordinator, standby_hostname):
+                time.sleep(1)
+                timeout = timeout - 1
+                if timeout <= 0:
+                    raise ExceptionNoStackTraceNeeded("Standby was not stopped")
+            logger.info("coordinator-HA: standby is stopped")
+
+
+            logger.info(f"coordinator-HA: check patroni local agent")
+            if not pg.PatroniAgentsCheck.local('[cmd patroni agents check local]'):
+                raise ExceptionNoStackTraceNeeded("No local patroni agent. Maybe the cluster is not in HA mode?..")
+            logger.info(f"coordinator-HA: stop patroni local agent")
+            pg.PatroniAgentsStop.local('[cmd patroni agents stop local]')
+            logger.info("coordinator-HA: local patroni agent is stopped")
+
+            timeout = self.COORDINATOR_STOP_TIMEOUT_SEC
+            while pg.DbStatus.local('coordinator instance', self.gparray.coordinator):
+                time.sleep(1)
+                timeout = timeout - 1
+                if timeout <= 0:
+                    raise ExceptionNoStackTraceNeeded("Coordinator was not stopped")
+            logger.info("coordinator-HA: coordinator is stopped")
+
+            logger.info(f"coordinator-HA: stop segments...")
+            segs = self.gparray.getSegDbList()
+            self._stop_segments(segs)
+            logger.info(f"coordinator-HA: segments are stopped")
+
+            logger.info('coordinator-HA: all done')
+
+        except Exception as e:
+            logger.error(f"coordinator-HA: {str(e)}")
+            success = False
+        return 0 if success else 1
+
     # ----------------------- Command line option parser ----------------------
     @staticmethod
     def createParser():
@@ -903,6 +990,9 @@ class GpStop:
         addTo.add_option('--skipvalidation', action='store_true', default=False,
                          help="<development testing only> DO NOT USE")
 
+        addTo.add_option('--HA', dest="high_availability_mode", action='store_true',
+                         help='Stop cluster in high-availability mode')
+
         parser.set_defaults(verbose=False, filters=[], slice=(None, None))
         return parser
 
@@ -941,6 +1031,24 @@ class GpStop:
         if options.force:
             options.mode = "fast"
 
+        if options.high_availability_mode:
+            msg_body = "Incompatible flags. Cannot mix '%s' option with '--HA' option"
+            if options.coordinator_only:
+                raise ProgramArgumentValidationException(msg_body % "--coordinator_only")
+            if options.restart:
+                raise ProgramArgumentValidationException(msg_body % "--restart")
+            if not options.stop_standby:
+                raise ProgramArgumentValidationException(msg_body % "-y")
+            if options.request_sighup:
+                raise ProgramArgumentValidationException(msg_body % "-u")
+            if options.only_this_host:
+                raise ProgramArgumentValidationException(msg_body % "--host")
+            if options.skipvalidation:
+                raise ProgramArgumentValidationException(msg_body % "--skipvalidation")
+            if options.mode != "fast":
+                logger.warning(f"coordinator-HA: forcing shutdown method to 'fast', as it is the only supported option currently")
+                options.mode = "fast"
+
         proccount = os.environ.get('GP_MGMT_PROCESS_COUNT')
         if options.parallel == 64 and proccount is not None:
             options.parallel = int(proccount)
@@ -958,18 +1066,26 @@ class GpStop:
             raise ProgramArgumentValidationException(
                 "Argument %s is invalid.  Is an option missing a parameter?" % args[-1])
 
-        return GpStop(options.mode,
-                      coordinator_datadir=options.coordinatorDataDirectory,
-                      parallel=options.parallel,
-                      quiet=options.quiet,
-                      coordinatoronly=options.coordinator_only,
-                      sighup=options.request_sighup,
-                      interactive=options.interactive,
-                      stopstandby=options.stop_standby,
-                      restart=options.restart,
-                      timeout=options.timeout,
-                      logfileDirectory=logfileDirectory,
-                      onlyThisHost=options.only_this_host)
+        if options.high_availability_mode:
+            return GpStopHA(options.mode,
+                            coordinator_datadir=options.coordinatorDataDirectory,
+                            parallel=options.parallel,
+                            quiet=options.quiet,
+                            timeout=options.timeout,
+                            logfileDirectory=logfileDirectory)
+        else:
+            return GpStop(options.mode,
+                            coordinator_datadir=options.coordinatorDataDirectory,
+                            parallel=options.parallel,
+                            quiet=options.quiet,
+                            coordinatoronly=options.coordinator_only,
+                            sighup=options.request_sighup,
+                            interactive=options.interactive,
+                            stopstandby=options.stop_standby,
+                            restart=options.restart,
+                            timeout=options.timeout,
+                            logfileDirectory=logfileDirectory,
+                            onlyThisHost=options.only_this_host)
 
     @staticmethod
     def mainOptions():
@@ -981,7 +1097,7 @@ class GpStop:
         return {'pidlockpath': 'gpstop.lock', 'parentpidvar': 'GPSTOPPID'}
 
 if __name__ == '__main__':
-    simple_main(GpStop.createParser, GpStop.createProgram, GpStop.mainOptions())
+    simple_main(GpStopHA.createParser, GpStopHA.createProgram, GpStopHA.mainOptions())
 
 
 
