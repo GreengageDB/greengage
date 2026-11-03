@@ -33,6 +33,13 @@ from gp_segment_configuration where role = 'p' and content = 0;
 select gp_inject_fault('backend_abort_handling', 'skip', dbid)
 from gp_segment_configuration where role = 'p' and content = 0;
 
+-- While seg0's primary is down and its postmaster sits in the reset state
+-- (waiting for the delayed bgwriter), FTS keeps retrying to probe it (see
+-- processRetry() in ftsprobe.c) and used to busy-spin that whole period
+-- away at 100% CPU.  Sample the ftsprobe worker's CPU time from now until
+-- the joins below complete, i.e. across seg0's whole reset period.
+!\retcode python ./script/check_fts_cpu.py start;
+
 -- Now bring down primary of seg0. There're a lot of ways to do that, in order
 -- to better emulate a real-world scnarios we're injecting a PANIC to do that.
 1:select gp_inject_fault('start_prepare', 'panic', dbid) 
@@ -54,6 +61,10 @@ from gp_segment_configuration where role = 'p' and content = 0;
 -- This should fail due to the seg0 in reset mode
 2&:create table fts_reset_t2(a int);
 
+-- Kick a probe round so that the FTS retry backoff for seg0 starts right
+-- away, inside the sampling window opened above.
+select gp_request_fts_probe_scan();
+
 -- Try another one but let the gang creation retry for longer.
 -- Default is 2000ms (gp_gang_creation_retry_timer) * 5 (gp_gang_creation_retry_count) = 10s.
 -- Now make it 50s which is well longer than the delay we inserted before, so it can succeed.
@@ -62,6 +73,10 @@ from gp_segment_configuration where role = 'p' and content = 0;
 
 1<:
 2<:
+
+-- By now seg0 is back up, so the sampling window above covered its whole
+-- reset period, which the ftsprobe worker must idle through.
+!\retcode python ./script/check_fts_cpu.py end --max-cpu-percent 30;
 
 -- We shouldn't see failover to mirror
 select gp_request_fts_probe_scan();

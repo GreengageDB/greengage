@@ -453,7 +453,17 @@ ftsPoll(fts_context *context)
 									 */
 	}
 	if (nfds == 0)
+	{
+		/*
+		 * Nothing to do for now: every segment is either done already
+		 * or in a 1-second delay until retryStartTime. To avoid
+		 * CPU-busy loop, sleep for a short while. We sleep only when we
+		 * would loop/poll otherwise, so no harm is done. 50ms is just
+		 * as good as any other short delay.
+		 */
+		pg_usleep(50 * 1000L); /* 50ms */
 		return;
+	}
 
 	nready = poll(PollFds, nfds, 50);
 	if (nready < 0)
