@@ -440,7 +440,7 @@ Hint-Leading-Multiple Hint-Leading-Directed Hint-Leading-NonDirected;
 
 CForeignPartTest:
 ForeignPartUniform PartForeignMixed PartForeignMixedSelectOverUnionAll PartForeignDifferentServer PartForeignDifferentExecLocation PartForeignMixedDPE PartForeignMixedSPE PartForeignUniformSPE ForeignScanExecLocAnySimpleScan ForeignScanExecLocAnyJoin ForeignPartOneTimeFilterDPE
-PartForeignMixedDPE2;
+PartForeignMixedDPE2 PartForeignMixedIndexScan;
 
 CCardinalityTest:
 SystemColCtidStats SystemColSegIdStats
