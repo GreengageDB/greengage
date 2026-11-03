@@ -813,112 +813,108 @@ class GpStartHA (GpStart):
 
     ######
     def run(self):
-            logger.info('coordinator-HA: start')
-            success = True
+        success = True
+        try:
+            logger.info("coordinator-HA: gather information and validate the environment...")
+            self._prepare()
 
-            try:
-                logger.info("coordinator-HA: gather information and validate the environment...")
-                self._prepare()
+            with open(self.config_file_coordinator) as f:
+                self.cluster_name = yaml.safe_load(f)['scope']
 
-                with open(self.config_file_coordinator) as f:
-                    self.cluster_name = yaml.safe_load(f)['scope']
+            logger.info("coordinator-HA: check if local Coordinator is already running...")
+            self._check_coordinator_running_local()
 
-                logger.info("coordinator-HA: check if local Coordinator is already running...")
-                self._check_coordinator_running_local()
+            logger.info("coordinator-HA: check if Coordinator on other peer is already running...")
+            self._check_coordinator_running_remote()
 
-                logger.info("coordinator-HA: check if Coordinator on other peer is already running...")
-                self._check_coordinator_running_remote()
+            logger.info("coordinator-HA: pause patroni")
+            pg.PatroniCtlPause.local('[cmd patronictl pause]', self.config_file_coordinator, self.cluster_name)
 
-                logger.info("coordinator-HA: pause patroni")
-                pg.PatroniCtlPause.local('[cmd patronictl pause]', self.config_file_coordinator, self.cluster_name)
+            logger.info("coordinator-HA: re-check if Coordinator on other peer is already running...")
+            self._check_coordinator_running_remote()
 
-                logger.info("coordinator-HA: re-check if Coordinator on other peer is already running...")
-                self._check_coordinator_running_remote()
+            logger.info("coordinator-HA: check and stop agents on other peers...")
+            self._stop_remote_running_agents()
 
-                logger.info("coordinator-HA: check and stop agents on other peers...")
-                self._stop_remote_running_agents()
+            logger.info("coordinator-HA: start local Coordinator in utility mode...")
+            self._prepare_cluster_for_segment_start()
 
-                logger.info("coordinator-HA: start local Coordinator in utility mode...")
-                self._prepare_cluster_for_segment_start()
+            if not self.gparray.hasStandbyCoordinator:
+                raise ExceptionNoStackTraceNeeded("Greengage cluster should be inited with standby before running it in HA mode")
 
-                if not self.gparray.hasStandbyCoordinator:
-                    raise ExceptionNoStackTraceNeeded("Greengage cluster should be inited with standby before running it in HA mode")
+            if pg.DbStatus.local('coordinator instance', self.gparray.coordinator):
+                raise ExceptionNoStackTraceNeeded("Coordinator in utility mode was not stopped")
+            logger.info("coordinator-HA: stopped local Coordinator")
 
-                if pg.DbStatus.local('coordinator instance', self.gparray.coordinator):
-                    raise ExceptionNoStackTraceNeeded("Coordinator in utility mode was not stopped")
-                logger.info("coordinator-HA: stopped local Coordinator")
+            logger.info("coordinator-HA: launch segments...")
+            (segmentsToStart, invalidSegments) = self._prepare_segment_start()
+            failedToStart = self._segments_start(segmentsToStart, invalidSegments)
+            if not self._check_final_result(False, failedToStart, invalidSegments, ''):
+                raise ExceptionNoStackTraceNeeded("Failed to start segments")
+            logger.info("coordinator-HA: segments are launched")
 
-                logger.info("coordinator-HA: launch segments...")
-                (segmentsToStart, invalidSegments) = self._prepare_segment_start()
-                failedToStart = self._segments_start(segmentsToStart, invalidSegments)
-                if not self._check_final_result(False, failedToStart, invalidSegments, ''):
-                    raise ExceptionNoStackTraceNeeded("Failed to start segments")
-                logger.info("coordinator-HA: segments are launched")
+            logger.info("coordinator-HA: start coordinator patroni agent...")
+            pg.PatroniAgentsStart.local('[cmd patroni agents coordinator start]', self.config_file_coordinator)
 
-                logger.info("coordinator-HA: start coordinator patroni agent...")
-                pg.PatroniAgentsStart.local('[cmd patroni agents coordinator start]', self.config_file_coordinator)
+            if not pg.PatroniAgentsCheck.local('[cmd patroni agents check coordinator]'):
+                raise ExceptionNoStackTraceNeeded("Failed to start coordinator patroni agent")
+            logger.info("coordinator-HA: coordinator patroni agent is started")
 
-                if not pg.PatroniAgentsCheck.local('[cmd patroni agents check coordinator]'):
-                    raise ExceptionNoStackTraceNeeded("Failed to start coordinator patroni agent")
-                logger.info("coordinator-HA: coordinator patroni agent is started")
+            logger.info("coordinator-HA: resume patroni...")
+            pg.PatroniCtlResume.local('[cmd patronictl resume]', self.config_file_coordinator, self.cluster_name)
 
-                logger.info("coordinator-HA: resume patroni...")
-                pg.PatroniCtlResume.local('[cmd patronictl resume]', self.config_file_coordinator, self.cluster_name)
+            if pg.PatroniCtlIsPaused.local('[cmd patronictl is paused]', self.config_file_coordinator, self.cluster_name):
+                raise ExceptionNoStackTraceNeeded("Couldn't resume patroni")
+            logger.info("coordinator-HA: patroni is resumed")
 
-                if pg.PatroniCtlIsPaused.local('[cmd patronictl is paused]', self.config_file_coordinator, self.cluster_name):
-                    raise ExceptionNoStackTraceNeeded("Couldn't resume patroni")
-                logger.info("coordinator-HA: patroni is resumed")
+            logger.info("coordinator-HA: check Coordinator is up...")
+            timeout = self.COORDINATOR_START_TIMEOUT_SEC
+            while not pg.DbStatus.local('coordinator instance', self.gparray.coordinator):
+                time.sleep(1)
+                timeout = timeout - 1
+                if timeout <= 0:
+                    raise ExceptionNoStackTraceNeeded("Coordinator could not be started")
+            logger.info("coordinator-HA: Coordinator is up")
 
-                logger.info("coordinator-HA: check Coordinator is up...")
-                timeout = self.COORDINATOR_START_TIMEOUT_SEC
-                while not pg.DbStatus.local('coordinator instance', self.gparray.coordinator):
-                    time.sleep(1)
-                    timeout = timeout - 1
-                    if timeout <= 0:
-                        raise ExceptionNoStackTraceNeeded("Coordinator could not be started")
-                logger.info("coordinator-HA: Coordinator is up")
+            logger.info("coordinator-HA: start standby patroni agent...")
+            # Note: for now we use the standby host from the gparray. It means that we
+            # need, prior to starting in HA-mode, start cluster in non-HA mode with
+            # standby on the same host.
+            standby_hostname = self.gparray.standbyCoordinator.getSegmentHostName()
+            pg.PatroniAgentsStart.remote('[cmd patroni agents standby start]', self.config_file_standby, standby_hostname)
+            if not pg.PatroniAgentsCheck.remote('[cmd patroni agents check standby]', standby_hostname):
+                raise ExceptionNoStackTraceNeeded("Failed to start standby patroni agent")
+            logger.info("coordinator-HA: standby patroni agent is started")
 
-                logger.info("coordinator-HA: start standby patroni agent...")
-                # Note: for now we use the standby host from the gparray. It means that we
-                # need, prior to starting in HA-mode, start cluster in non-HA mode with
-                # standby on the same host.
-                standby_hostname = self.gparray.standbyCoordinator.getSegmentHostName()
-                pg.PatroniAgentsStart.remote('[cmd patroni agents standby start]', self.config_file_standby, standby_hostname)
-                if not pg.PatroniAgentsCheck.remote('[cmd patroni agents check standby]', standby_hostname):
-                    raise ExceptionNoStackTraceNeeded("Failed to start standby patroni agent")
-                logger.info("coordinator-HA: standby patroni agent is started")
+            logger.info("coordinator-HA: validate leader...")
+            self._validate_patroni_cluster_leader()
+            logger.info("coordinator-HA: validate replicas...")
+            self._validate_patroni_cluster_replicas()
 
-                logger.info("coordinator-HA: validate leader...")
-                self._validate_patroni_cluster_leader()
-                logger.info("coordinator-HA: validate replicas...")
-                self._validate_patroni_cluster_replicas()
+            # do restarts - to clear any 'Pending restart' request
+            leader, replicas = self._patronictl_list_members()
 
-                # do restarts - to clear any 'Pending restart' request
-                leader, replicas = self._patronictl_list_members()
+            leader_member = leader['Member']
+            logger.info(f"coordinator-HA: restart leader member '{leader_member}' to clear any 'Pending restart' request...")
+            pg.PatroniCtlRestart.local('[cmd patronictl restart leader]', self.config_file_coordinator, self.cluster_name, leader_member)
+            logger.info("coordinator-HA: re-validate leader...")
+            self._validate_patroni_cluster_leader()
+            logger.info("coordinator-HA: re-validate replicas...")
+            self._validate_patroni_cluster_replicas()
 
-                leader_member = leader['Member']
-                logger.info(f"coordinator-HA: restart leader member '{leader_member}' to clear any 'Pending restart' request...")
-                pg.PatroniCtlRestart.local('[cmd patronictl restart leader]', self.config_file_coordinator, self.cluster_name, leader_member)
-                logger.info("coordinator-HA: re-validate leader...")
-                self._validate_patroni_cluster_leader()
-                logger.info("coordinator-HA: re-validate replicas...")
-                self._validate_patroni_cluster_replicas()
+            for replica in replicas:
+                replica_member = replica['Member']
+                logger.info(f"coordinator-HA: restart replica member '{replica_member}' to clear any 'Pending restart' request...")
+                pg.PatroniCtlRestart.local('[cmd patronictl restart leader]', self.config_file_standby, self.cluster_name, replica_member)
+            logger.info("coordinator-HA: re-validate replicas...")
+            self._validate_patroni_cluster_replicas()
 
-                for replica in replicas:
-                    replica_member = replica['Member']
-                    logger.info(f"coordinator-HA: restart replica member '{replica_member}' to clear any 'Pending restart' request...")
-                    pg.PatroniCtlRestart.local('[cmd patronictl restart leader]', self.config_file_standby, self.cluster_name, replica_member)
-                logger.info("coordinator-HA: re-validate replicas...")
-                self._validate_patroni_cluster_replicas()
+            logger.info('coordinator-HA: all done')
 
-                logger.info('coordinator-HA: all done')
-
-            except Exception as e:
-                logger.error(f"coordinator-HA: {str(e)}")
-                success = False
-            finally:
-                pass
-            return 0 if success else 1
+        except Exception as e:
+            logger.error(f"coordinator-HA: {str(e)}")
+            success = False
+        return 0 if success else 1
 
     def _prepare(self):
         self._basic_setup()
@@ -1069,23 +1065,24 @@ class GpStartHA (GpStart):
             options.parallel = int(proccount)
 
         if options.high_availability_mode:
-            msg_body = "option is not supported with --HA option"
+            msg_body = "option is not supported with '--HA' option"
+            msg_body = "Incompatible flags. Cannot mix '%s' option with '--HA' option"
             if options.coordinator_only:
-                raise ProgramArgumentValidationException("--coordinator_only " + msg_body)
+                raise ProgramArgumentValidationException(msg_body % "--coordinator_only")
             if options.specialMode:
-                raise ProgramArgumentValidationException("--specialMode " + msg_body)
+                raise ProgramArgumentValidationException(msg_body % "--specialMode")
             if not options.start_standby:
-                raise ProgramArgumentValidationException("--no_standby " + msg_body)
+                raise ProgramArgumentValidationException(msg_body % "--no_standby")
             if options.restricted:
-                raise ProgramArgumentValidationException("--restricted " + msg_body)
+                raise ProgramArgumentValidationException(msg_body % "--restricted")
             if options.wrapper:
-                raise ProgramArgumentValidationException("--wrapper " + msg_body)
+                raise ProgramArgumentValidationException(msg_body % "--wrapper")
             if options.wrapper_args:
-                raise ProgramArgumentValidationException("--wrapper-args " + msg_body)
+                raise ProgramArgumentValidationException(msg_body % "--wrapper-args")
             if options.skip_standby_check:
-                raise ProgramArgumentValidationException("--skip_standby_check " + msg_body)
+                raise ProgramArgumentValidationException(msg_body % "--skip_standby_check")
             if options.skip_heap_checksum_validation:
-                raise ProgramArgumentValidationException("--skip-heap-checksum-validation " + msg_body)
+                raise ProgramArgumentValidationException(msg_body % "--skip-heap-checksum-validation")
 
             if not options.config_file_coordinator:
                 raise ProgramArgumentValidationException("Coordinator YAML config file path should be supplied when gpstart is launched in HA mode")
@@ -1093,9 +1090,9 @@ class GpStartHA (GpStart):
                 raise ProgramArgumentValidationException("Standby YAML config file path should be supplied when gpstart is launched in HA mode")
         else:
             if options.config_file_coordinator:
-                raise ProgramArgumentValidationException("--config-file-coordinator option is nor supported in non-HA mode")
+                raise ProgramArgumentValidationException("'--config-file-coordinator' option is nor supported in non-HA mode")
             if options.config_file_standby:
-                raise ProgramArgumentValidationException("--config-file-standby option is nor supported in non-HA mode")
+                raise ProgramArgumentValidationException("'--config-file-standby' option is nor supported in non-HA mode")
 
         # -n sanity check
         if options.parallel > 128 or options.parallel < 1:
