@@ -147,6 +147,7 @@
 #include "gpopt/xforms/CXformSelect2Filter.h"
 #include "gpopt/xforms/CXformSelect2IndexGet.h"
 #include "gpopt/xforms/CXformSelect2IndexOnlyGet.h"
+#include "gpopt/xforms/CXformSelectOverUnionAll2UnionAllOverSelect.h"
 #include "gpopt/xforms/CXformSemiJoinAntiSemiJoinNotInSwap.h"
 #include "gpopt/xforms/CXformSemiJoinAntiSemiJoinSwap.h"
 #include "gpopt/xforms/CXformSemiJoinInnerJoinSwap.h"
