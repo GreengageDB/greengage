@@ -334,7 +334,6 @@ dist_prof : gccVersionCheck GPROOTDEP RECONFIG $(ISCONFIG)
 endif
 	$(BUILD_STEPS)
 
-dist_faultinj : INSTLOC=$(DESTDIR)$(DISTPATH)
 dist_faultinj : INSTPREFIX=$(DISTPATH)
 dist_faultinj : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDISTPATH)
 ifdef ENABLE_VPATH_BUILD
@@ -764,8 +763,7 @@ distclean :
 	@if [ -d ../.git ] ; then rm -f ../VERSION; fi
 	@rm -f env.sh
 
-distprep : INSTPREFIX=$(DEVPATH)
-distprep : HOMEDEP $(ISCONFIG)
+distprep : $(ISCONFIG)
 	@cd $(BUILDDIR) && $(MAKE) distprep
 
 #---------------------------------------------------------------------
