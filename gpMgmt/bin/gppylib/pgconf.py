@@ -215,8 +215,15 @@ class setting(object):
         """
         try:
             return int(self.value, 0)
-        except ValueError:
-            raise self.ConfigurationError('Value should be integer.')
+        except (TypeError, ValueError):
+            # Tolerate values written with surrounding quotes, e.g. port = '7000'
+            s = str(self.value).strip()
+            if len(s) >= 2 and s[0] == s[-1] and s[0] in ("'", '"'):
+                s = s[1:-1].strip()
+            try:
+                return int(s, 0)
+            except (TypeError, ValueError):
+                raise self.ConfigurationError('Value should be integer.')
 
     def float(self):
         """
