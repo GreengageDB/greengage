@@ -200,6 +200,9 @@ public:
 	// text mdid
 	static CMDIdGPDB m_mdid_text;
 
+	// bytea mdid
+	static CMDIdGPDB m_mdid_bytea;
+
 	// name mdid
 	static CMDIdGPDB m_mdid_name;
 
