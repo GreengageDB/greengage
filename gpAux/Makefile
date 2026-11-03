@@ -763,6 +763,7 @@ distclean :
 	@if [ -d ../.git ] ; then rm -f ../VERSION; fi
 	@rm -f env.sh
 
+distprep : INSTPREFIX=$(DISTPATH)
 distprep : $(ISCONFIG)
 	@cd $(BUILDDIR) && $(MAKE) distprep
 
