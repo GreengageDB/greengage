@@ -1,6 +1,6 @@
 //---------------------------------------------------------------------------
 //	Greengage Database
-//	Copyright (C) 2014 VMware, Inc. or its affiliates.
+//	Copyright (C) 2026 Greengage Community
 //
 //	@filename:
 //		CXformSelectOverUnionAll2UnionAllOverSelect.h
