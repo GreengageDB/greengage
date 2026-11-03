@@ -11253,6 +11253,41 @@ fi
 fi
 
 if test "$with_zstd" = yes; then
+  if test "$PORTNAME" = darwin; then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for static zstd library" >&5
+$as_echo_n "checking for static zstd library... " >&6; }
+    zstd_static_lib=
+    for pgac_option in $LDFLAGS; do
+      case $pgac_option in
+        -L*)
+          pgac_dir=`echo "$pgac_option" | sed -e 's/^-L//'`
+          if test -f "$pgac_dir/libzstd.a"; then
+            zstd_static_lib="$pgac_dir/libzstd.a"
+            break
+          fi
+          ;;
+      esac
+    done
+    if test -z "$zstd_static_lib"; then
+      { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+      as_fn_error $? "static zstd library libzstd.a not found
+Add its directory with --with-libraries, or use --without-zstd to disable
+zstd support." "$LINENO" 5
+    fi
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: $zstd_static_lib" >&5
+$as_echo "$zstd_static_lib" >&6; }
+    LIBS="$zstd_static_lib $LIBS"
+    ac_fn_c_check_func "$LINENO" "ZSTD_compressCCtx" "ac_cv_func_ZSTD_compressCCtx"
+if test "x$ac_cv_func_ZSTD_compressCCtx" = xyes; then :
+
+$as_echo "#define HAVE_LIBZSTD 1" >>confdefs.h
+
+else
+  as_fn_error $? "static zstd library $zstd_static_lib cannot be linked" "$LINENO" 5
+fi
+
+  else
         { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ZSTD_compressCCtx in -l:libzstd.a" >&5
 $as_echo_n "checking for ZSTD_compressCCtx in -l:libzstd.a... " >&6; }
 if ${ac_cv_lib__libzstd_a_ZSTD_compressCCtx+:} false; then :
@@ -11301,6 +11336,7 @@ failure.  It is possible the compiler isn't looking in the proper directory.
 Use --without-zstd to disable zstd support." "$LINENO" 5
 fi
 
+  fi
 fi
 
 if test "$with_quicklz" = yes; then
@@ -19720,8 +19756,10 @@ _ACEOF
 # literally, so that it's possible to override it at build time using
 # a command like "make ... PG_SYSROOT=path".  This has to be done after
 # we've finished all configure checks that depend on CPPFLAGS.
+# The same for LDFLAGS, too.
 if test x"$PG_SYSROOT" != x; then
   CPPFLAGS=`echo "$CPPFLAGS" | sed -e "s| $PG_SYSROOT | \\\$(PG_SYSROOT) |"`
+  LDFLAGS=`echo "$LDFLAGS" | sed -e "s| $PG_SYSROOT | \\\$(PG_SYSROOT) |"`
 fi
 
 

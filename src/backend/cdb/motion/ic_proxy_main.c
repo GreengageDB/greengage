@@ -332,7 +332,7 @@ ic_proxy_server_client_listener_init(uv_loop_t *loop)
 		stat(path, &st);
 		elogif(gp_log_interconnect >= GPVARS_VERBOSITY_VERBOSE, LOG,
 			   "ic-proxy: dev=%lu, inode=%lu, path=%s",
-					 st.st_dev, st.st_ino, path);
+			   (unsigned long) st.st_dev, (unsigned long) st.st_ino, path);
 	}
 
 	ic_proxy_client_listening = true;
