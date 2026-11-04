@@ -59,6 +59,7 @@ enum Edxltoken
 	EdxltokenSegmentsForCosting,
 	EdxltokenHint,
 	EdxltokenJoinArityForAssociativityCommutativity,
+	EdxltokenJoinArityForAssociativity,
 	EdxltokenArrayExpansionThreshold,
 	EdxltokenJoinOrderDPThreshold,
 	EdxltokenBroadcastThreshold,

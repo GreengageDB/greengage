@@ -55,13 +55,15 @@ private:
 	CHint(const CHint &);
 	ULONG m_ulSkewFactor;
 
+	ULONG m_ulJoinArityForAssociativity;
+
 public:
 	// ctor
 	CHint(ULONG join_arity_for_associativity_commutativity,
 		  ULONG array_expansion_threshold, ULONG ulJoinOrderDPLimit,
 		  ULONG broadcast_threshold, BOOL enforce_constraint_on_dml,
 		  ULONG push_group_by_below_setop_threshold, ULONG xform_bind_threshold,
-		  ULONG skew_factor)
+		  ULONG skew_factor, ULONG join_arity_for_associativity)
 		: m_ulJoinArityForAssociativityCommutativity(
 			  join_arity_for_associativity_commutativity),
 		  m_ulArrayExpansionThreshold(array_expansion_threshold),
@@ -71,7 +73,8 @@ public:
 		  m_ulPushGroupByBelowSetopThreshold(
 			  push_group_by_below_setop_threshold),
 		  m_ulXform_bind_threshold(xform_bind_threshold),
-		  m_ulSkewFactor(skew_factor)
+		  m_ulSkewFactor(skew_factor),
+		  m_ulJoinArityForAssociativity(join_arity_for_associativity)
 	{
 	}
 
@@ -143,6 +146,16 @@ public:
 		return m_ulSkewFactor;
 	}
 
+	// Maximum total number of relations in the n-ary join operators of a
+	// query with at least three relations each where ORCA will explore the
+	// JoinAssociativity transformation. The limit returned by
+	// UlJoinArityForAssociativityCommutativity() applies as well.
+	ULONG
+	UlJoinArityForAssociativity() const
+	{
+		return m_ulJoinArityForAssociativity;
+	}
+
 	// generate default hint configurations, which disables sort during insert on
 	// append only row-oriented partitioned tables by default
 	static CHint *
@@ -156,7 +169,8 @@ public:
 			true,								 /* enforce_constraint_on_dml */
 			PUSH_GROUP_BY_BELOW_SETOP_THRESHOLD, /* push_group_by_below_setop_threshold */
 			XFORM_BIND_THRESHOLD,				 /* xform_bind_threshold */
-			SKEW_FACTOR							 /* skew_factor */
+			SKEW_FACTOR,						 /* skew_factor */
+			gpos::int_max /* join_arity_for_associativity */
 		);
 	}
 

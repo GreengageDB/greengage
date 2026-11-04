@@ -532,6 +532,7 @@ extern int optimizer_array_expansion_threshold;
 extern int optimizer_join_order_threshold;
 extern int optimizer_join_order;
 extern int optimizer_join_arity_for_associativity_commutativity;
+extern int optimizer_join_arity_for_associativity;
 extern int optimizer_cte_inlining_bound;
 extern int optimizer_push_group_by_below_setop_threshold;
 extern int optimizer_xform_bind_threshold;

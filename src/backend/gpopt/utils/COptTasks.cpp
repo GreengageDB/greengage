@@ -388,6 +388,12 @@ COptTasks::CreateOptimizerConfig(CMemoryPool *mp, ICostModel *cost_model)
 		(ULONG) optimizer_push_group_by_below_setop_threshold;
 	ULONG xform_bind_threshold = (ULONG) optimizer_xform_bind_threshold;
 	ULONG skew_factor = (ULONG) optimizer_skew_factor;
+	// with associativity enabled, only the limit on commutativity and
+	// associativity applies
+	ULONG join_arity_for_associativity =
+		optimizer_enable_associativity
+			? (ULONG) gpos::int_max
+			: (ULONG) optimizer_join_arity_for_associativity;
 
 	return GPOS_NEW(mp) COptimizerConfig(
 		GPOS_NEW(mp)
@@ -403,7 +409,7 @@ COptTasks::CreateOptimizerConfig(CMemoryPool *mp, ICostModel *cost_model)
 				  false, /* don't create Assert nodes for constraints, we'll
 								      * enforce them ourselves in the executor */
 				  push_group_by_below_setop_threshold, xform_bind_threshold,
-				  skew_factor),
+				  skew_factor, join_arity_for_associativity),
 		GPOS_NEW(mp) CWindowOids(OID(F_WINDOW_ROW_NUMBER), OID(F_WINDOW_RANK)));
 }
 
