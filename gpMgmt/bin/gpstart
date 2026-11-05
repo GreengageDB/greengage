@@ -109,6 +109,8 @@ class GpStart:
             # Disable Ctrl-C
             signal.signal(signal.SIGINT, signal.SIG_IGN)
             self._prepare_cluster_for_segment_start()
+            if self.coordinatoronly:
+                return 0
 
         finally:
             # Reenable Ctrl-C
@@ -314,7 +316,7 @@ class GpStart:
         logger.info("Coordinator Started...")
 
         if self.coordinatoronly:
-            return 0
+            return
 
         num_workers = min(len(self.gparray.get_hostlist()), self.parallel)
         hosts = set(self.gparray.get_hostlist(includeCoordinator=False))
