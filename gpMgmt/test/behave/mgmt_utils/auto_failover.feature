@@ -54,6 +54,13 @@ Feature: auto failover behave tests
         When Patroni test cluster state is cleared
          And the user runs "gpstart --HA --config-file-coordinator /home/gpadmin/gpdb_src/ci/patroni/configs/mdw.yml --config-file-standby /home/gpadmin/gpdb_src/ci/patroni/configs/smdw.yml"
         Then gpstart should return a return code of 0
+         And Patroni has leader "mdw" and streaming replica "smdw"
+        When the user runs psql with "-c 'SELECT 1'" against database "postgres"
+        When the user runs command "patronictl -c /home/gpadmin/gpdb_src/ci/patroni/configs/mdw.yml switchover test-cluster --leader mdw --candidate smdw --force"
+        Then Patroni has leader "smdw" and streaming replica "mdw"
+        When the user runs psql with "-h scdw -p 7001 -c 'SELECT 1'" against database "postgres"
+        When the user runs command "patronictl -c /home/gpadmin/gpdb_src/ci/patroni/configs/mdw.yml switchover test-cluster --leader smdw --candidate mdw --force"
+        Then Patroni has leader "mdw" and streaming replica "smdw"
         When the user runs psql with "-c 'SELECT 1'" against database "postgres"
         When the user runs "gpstop --HA"
         Then gpstop should return a return code of 0

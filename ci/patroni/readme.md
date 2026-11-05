@@ -53,3 +53,10 @@ patronictl -c /home/gpadmin/gpdb_src/ci/patroni/configs/mdw.yml list
 # And we can stop cluster
 gpstop --HA
 ```
+
+To run behave test in container (be sure to remove `@skip` tag before running):
+```
+cd ~/gpdb_src/
+./configure
+make -C ./gpMgmt -f Makefile.behave behave tags=auto_failover
+```
