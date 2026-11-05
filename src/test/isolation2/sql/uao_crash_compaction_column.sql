@@ -106,6 +106,8 @@
 4:UPDATE crash_coordinator_before_cleanup_phase SET b = b+10 WHERE a=25;
 4:SELECT * FROM crash_coordinator_before_cleanup_phase ORDER BY a,b;
 4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
+-- use second VACUUM to ensure no segfiles are left in AOSEG_STATE_AWAITING_DROP
+4:VACUUM crash_coordinator_before_cleanup_phase;
 4:VACUUM crash_coordinator_before_cleanup_phase;
 4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
 4:INSERT INTO crash_coordinator_before_cleanup_phase VALUES(21, 1, 'c'), (26, 1, 'c');
