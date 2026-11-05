@@ -8,6 +8,22 @@
 from gppylib.commands.base import Command, LOCAL, REMOTE
 
 
+class PatroniCtlVersion(Command):
+    def __init__(self, name):
+        Command.__init__(self, name, "patronictl version")
+
+    @staticmethod
+    def local(name):
+        cmd = PatroniCtlVersion(name)
+        cmd.run(validateAfter=False)
+        if cmd.get_return_code() != 0:
+            raise RuntimeError(
+                "Cannot run 'patronictl version'. Ensure Patroni is installed and "
+                "add the directory containing 'patronictl' to your PATH before "
+                "running the tool.")
+        return cmd.get_results().stdout.strip()
+
+
 class PatroniCtlList(Command):
     def __init__(self, name, config_file, cluster_name, ctxt=LOCAL, remoteHost=None):
         Command.__init__(self, name, "patronictl -c %s list %s -f json" % (config_file, cluster_name), ctxt, remoteHost)

@@ -894,6 +894,9 @@ class GpStopHA (GpStop):
         logger.info('coordinator-HA: start')
         success = True
         try:
+            logger.info("coordinator-HA: check patronictl is available...")
+            patroni.PatroniCtlVersion.local('[cmd patronictl version]')
+
             logger.info("coordinator-HA: gather information and validate the environment...")
             self._prepare()
 
