@@ -9,7 +9,7 @@ Feature: auto failover behave tests
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /home/gpadmin/.data/primary /home/gpadmin/.data/mirror'"
          And the user runs command "gpssh -h scdw -e 'rm -rf /home/gpadmin/.data/standby'"
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'mkdir -p /home/gpadmin/.data/primary /home/gpadmin/.data/mirror'"
-         And the user runs command "gpssh -h scdw -e 'mkdir -p /home/gpadmin/.data'"
+         And the user runs command "gpssh -h scdw -e 'mkdir -p /home/gpadmin/.data /home/gpadmin/gpAdminLogs'"
          And the temporary file "/tmp/auto_failover_cluster_cfg" is created with content
          """
          TRUSTED_SHELL=ssh
@@ -19,14 +19,14 @@ Feature: auto failover behave tests
          HBA_HOSTNAMES=0
          QD_PRIMARY_ARRAY=cdw~cdw~7000~/home/gpadmin/.data/gpseg-1~1~-1~0
          declare -a PRIMARY_ARRAY=(
-             sdw1~sdw1~10100~/home/gpadmin/.data/primary/gpseg0~2~0
-             sdw2~sdw2~10110~/home/gpadmin/.data/primary/gpseg1~3~1
-             sdw3~sdw3~10120~/home/gpadmin/.data/primary/gpseg2~4~2
+             sdw1~sdw1~7100~/home/gpadmin/.data/primary/gpseg0~2~0
+             sdw2~sdw2~7101~/home/gpadmin/.data/primary/gpseg1~3~1
+             sdw3~sdw3~7102~/home/gpadmin/.data/primary/gpseg2~4~2
          )
          declare -a MIRROR_ARRAY=(
-             sdw2~sdw2~50130~/home/gpadmin/.data/mirror/gpseg0~5~0
-             sdw3~sdw3~50140~/home/gpadmin/.data/mirror/gpseg1~6~1
-             sdw1~sdw1~50150~/home/gpadmin/.data/mirror/gpseg2~7~2
+             sdw2~sdw2~7200~/home/gpadmin/.data/mirror/gpseg0~5~0
+             sdw3~sdw3~7201~/home/gpadmin/.data/mirror/gpseg1~6~1
+             sdw1~sdw1~7202~/home/gpadmin/.data/mirror/gpseg2~7~2
          )
          """
         When initialize a cluster using "/tmp/auto_failover_cluster_cfg" with standby on scdw, port 7001, data directory '/home/gpadmin/.data/standby'

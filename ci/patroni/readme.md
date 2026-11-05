@@ -58,5 +58,7 @@ To run behave test in container (be sure to remove `@skip` tag before running):
 ```
 cd ~/gpdb_src/
 ./configure
+source /usr/local/greengage-db-devel/greengage_path.sh
+export PATH=$PATH:/home/gpadmin/.local/bin/
 make -C ./gpMgmt -f Makefile.behave behave tags=auto_failover
 ```
