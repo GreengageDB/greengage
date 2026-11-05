@@ -1,6 +1,10 @@
 create extension if not exists gp_debug_numsegments;
 select gp_debug_set_create_table_default_numsegments(1);
 
+drop schema if exists test_partial_table;
+create schema test_partial_table;
+set search_path=test_partial_table,public;
+
 --only partition table can be expanded partition prepare
 drop table if exists t_hash_expand_prepare;
 create table t_hash_expand_prepare (c1 int, c2 int, c3 int, c4 int) distributed by (c1, c2);
@@ -66,6 +70,7 @@ select count(*) from t_hash_partition_1_prt_2;
 select count(*) from t_hash_partition_1_prt_2 where a=2;
 insert into t_hash_partition_1_prt_2 values(8,1,1);
 select count(*) from t_hash_partition_1_prt_2;
+analyze t_hash_partition;
 select count(*) from t_hash_partition;
 
 drop table t_hash_partition;
@@ -250,6 +255,7 @@ select * from t_hash_subpartition_1_prt_region1_2_prt_china;
 insert into t_hash_subpartition_1_prt_region1_2_prt_china values(1,'CHINA');
 select count(*) from t_hash_subpartition_1_prt_region1_2_prt_china;
 select count(*) from t_hash_subpartition_1_prt_region1;
+analyze t_hash_subpartition;
 select count(*) from t_hash_subpartition;
 
 drop table t_hash_subpartition;
@@ -532,4 +538,4 @@ abort;
 
 --cleanup
 select gp_debug_reset_create_table_default_numsegments();
-drop extension gp_debug_numsegments;
+drop schema test_partial_table cascade;

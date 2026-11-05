@@ -64,6 +64,7 @@
 #include "postmaster/postmaster.h"
 #include "postmaster/syslogger.h"
 #include "postmaster/walwriter.h"
+#include "replication/logical.h"
 #include "replication/slot.h"
 #include "replication/syncrep.h"
 #include "replication/walreceiver.h"
@@ -3373,6 +3374,17 @@ static struct config_string ConfigureNamesString[] =
 		&external_pid_file,
 		NULL,
 		check_canonical_path, NULL, NULL
+	},
+
+	{
+		{"output_plugin_libraries", PGC_SUSET, REPLICATION_SENDING,
+			gettext_noop("Lists libraries that may be named as logical decoding output plugins."),
+			gettext_noop("Users with REPLICATION privileges may only use plugins in this list when creating logical replication slots."),
+			GUC_LIST_INPUT | GUC_LIST_QUOTE | GUC_SUPERUSER_ONLY
+		},
+		&output_plugin_libraries_string,
+		"test_decoding",
+		NULL, NULL, NULL
 	},
 
 	/* End-of-list marker */

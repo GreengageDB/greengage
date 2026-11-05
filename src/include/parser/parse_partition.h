@@ -19,7 +19,11 @@
 extern void transformPartitionBy(CreateStmtContext *cxt,
 					 CreateStmt *stmt, Node *partitionBy);
 extern void PartitionRangeItemIsValid(ParseState *pstate, PartitionRangeItem *pri);
+/* Kept for ABI compatibility; use coerce_partition_value_to_collated_const() */
 extern Node *coerce_partition_value_to_const(ParseState *pstate, Node *node, Oid typid, int32 typmod,
 											 PartitionByType partype);
+extern Node *coerce_partition_value_to_collated_const(ParseState *pstate, Node *node,
+													  Oid typid, int32 typmod,
+													  PartitionByType partype, Oid collation);
 
 #endif   /* PARSE_PARTITION_H */

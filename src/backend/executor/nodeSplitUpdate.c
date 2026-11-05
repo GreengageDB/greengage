@@ -34,6 +34,40 @@ static void SplitTupleTableSlot(TupleTableSlot *slot,
 #define SPLITUPDATE_MEM 1
 
 /*
+ * Evaluate the hash keys, and compute the target segment ID for the new row.
+ */
+static uint32
+evalHashKey(SplitUpdateState *node, Datum *values, bool *isnulls)
+{
+	SplitUpdate *plannode = (SplitUpdate *) node->ps.plan;
+	ExprContext *econtext = node->ps.ps_ExprContext;
+	MemoryContext oldContext;
+	unsigned int target_seg;
+	CdbHash	   *h = node->cdbhash;
+
+	ResetExprContext(econtext);
+
+	oldContext = MemoryContextSwitchTo(econtext->ecxt_per_tuple_memory);
+
+	cdbhashinit(h);
+
+	for (int i = 0; i < plannode->numHashAttrs; i++)
+	{
+		AttrNumber	keyattno = plannode->hashAttnos[i];
+
+		/*
+		 * Compute the hash function
+		 */
+		cdbhash(h, i + 1, values[keyattno - 1], isnulls[keyattno - 1]);
+	}
+	target_seg = cdbhashreduce(h);
+
+	MemoryContextSwitchTo(oldContext);
+
+	return target_seg;
+}
+
+/*
  * Estimated Memory Usage of Split DML Node.
  * */
 void
@@ -97,6 +131,15 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 			deleteAtt = lnext(deleteAtt);
 			insertAtt = lnext(insertAtt);
 		}
+		else if (resno + 1 == node->output_segid_attno)
+		{
+			Assert(!nulls[node->input_segid_attno - 1]);
+
+			delete_values[resno] = values[node->input_segid_attno - 1];
+			delete_nulls[resno] = false;
+
+			/* compute the new value later, after we have processed all the other columns */
+		}
 		else
 		{
 			/*
@@ -114,6 +157,17 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 				Assert(exprType((Node *) tle->expr) == slot->tts_tupleDescriptor->attrs[((Var *)tle->expr)->varattno-1]->atttypid);
 			}
 		}
+	}
+
+	/* Compute segment ID for the new row */
+	if (node->output_segid_attno > 0)
+	{
+		int32		target_seg;
+
+		target_seg = evalHashKey(node, insert_values, insert_nulls);
+
+		insert_values[node->output_segid_attno - 1] = Int32GetDatum(target_seg);
+		insert_nulls[node->output_segid_attno - 1] = false;
 	}
 }
 
@@ -190,6 +244,8 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 	Plan *outerPlan = outerPlan(node);
 	outerPlanState(splitupdatestate) = ExecInitNode(outerPlan, estate, eflags);
 
+	ExecAssignExprContext(estate, &splitupdatestate->ps);
+
 	ExecInitResultTupleSlot(estate, &splitupdatestate->ps);
 
 	splitupdatestate->insertTuple = ExecInitExtraTupleSlot(estate);
@@ -208,6 +264,40 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 	 */
 	ExecAssignResultTypeFromTL(&splitupdatestate->ps);
 	ExecAssignProjectionInfo(&splitupdatestate->ps, NULL);
+
+	/*
+	 * Initialize for computing hash key
+	 *
+	 * GPDB 6: unlike upstream GPDB 7, the planner still puts a Redistribute
+	 * Motion on top of the SplitUpdate and leaves numHashAttrs at 0, while
+	 * its output does contain a junk "gp_segment_id" column. So look up the
+	 * segment id columns only when the target segment has to be computed
+	 * here, otherwise the old behaviour is kept.
+	 */
+	if (node->numHashAttrs > 0)
+	{
+		/*
+		 * Look up the positions of the gp_segment_id in the subplan's target
+		 * list, and in the result.
+		 */
+		splitupdatestate->input_segid_attno =
+			ExecFindJunkAttributeInTlist(outerPlan->targetlist, "gp_segment_id");
+		splitupdatestate->output_segid_attno =
+			ExecFindJunkAttributeInTlist(node->plan.targetlist, "gp_segment_id");
+
+		if (!AttributeNumberIsValid(splitupdatestate->input_segid_attno) ||
+			!AttributeNumberIsValid(splitupdatestate->output_segid_attno))
+			elog(ERROR, "could not find junk gp_segment_id column for SplitUpdate");
+
+		splitupdatestate->cdbhash = makeCdbHash(node->numHashSegments,
+												node->numHashAttrs,
+												node->hashFuncs);
+	}
+	else
+	{
+		splitupdatestate->input_segid_attno = InvalidAttrNumber;
+		splitupdatestate->output_segid_attno = InvalidAttrNumber;
+	}
 
 	if (estate->es_instrument && (estate->es_instrument & INSTRUMENT_CDB))
 	{

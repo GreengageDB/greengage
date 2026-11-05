@@ -41,9 +41,9 @@ import queue
 import time
 from gppylib import gpsubprocess
 
-if sys.version_info[0] == 3:
+try:
     from shlex import quote
-else:
+except ImportError:
     from pipes import quote
 
 class ReplicaCheck(threading.Thread):

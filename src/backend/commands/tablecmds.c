@@ -5034,15 +5034,18 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 									rel->rd_att->attrs[attnum - 1]->atttypid;
 							int32 typmod =
 									rel->rd_att->attrs[attnum - 1]->atttypmod;
+							Oid collation =
+									rel->rd_att->attrs[attnum - 1]->attcollation;
 							char parkind = prule1->pNode->part->parkind;
 							PartitionByType t = (parkind == 'r') ?
 												 PARTTYP_RANGE : PARTTYP_LIST;
 
-							n = coerce_partition_value_to_const(NULL,
-																n,
-																typid,
-																typmod,
-																t);
+							n = coerce_partition_value_to_collated_const(NULL,
+																		 n,
+																		 typid,
+																		 typmod,
+																		 t,
+																		 collation);
 
 							lfirst(lc2) = n;
 
@@ -5236,7 +5239,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 						{
 							Insist(exprType((Node *)n) == exprType((Node *)start));
 							res = OidFunctionCall2Coll(funcid,
-													   atval->constcollid,
+													   start->constcollid,
 													   start->constvalue,
 													   atval->constvalue);
 
@@ -5263,7 +5266,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 							{
 								end = linitial((List *)prule1->topRule->parrangeend);
 								res = OidFunctionCall2Coll(funcid,
-														   atval->constcollid,
+														   end->constcollid,
 														   atval->constvalue,
 														   end->constvalue);
 

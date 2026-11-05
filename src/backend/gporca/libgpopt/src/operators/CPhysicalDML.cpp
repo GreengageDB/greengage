@@ -72,44 +72,18 @@ CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 	{
 		// The "convert hash to random" flag indicates that we have a table that was hash-partitioned
 		// originally but then we either entered phase 1 of a gpexpand or we altered some of the partitions
-		// to be randomly distributed (works on GPDB 5X only).
+		// to be randomly distributed.
 		// If this is the case, we want to handle DMLs in the following way:
 		//
 		// Insert: Use a hash redistribution for the insert, that means that we insert the data into
 		//         the random partitions using a hash function, which can still be considered "random"
 		// Delete: Use a "strict random" distribution, which will use a routed repartition operator,
 		//         based on the gp_segment_id of the row, which will work for both hash and random partitions
-		// Update without updating the distribution key: Same method as for delete
-		// Update of the distribution key: This will be handled with a Split node below the DML node,
-		//         with the split deleting the existing rows and this DML node inserting the new rows,
-		//         so this is handled here like an insert, using hash distribution for all partitions.
-		BOOL is_update_without_changing_distribution_key = false;
+		// Update: With and without updating the distribution key uses same logic as delete. The rows
+		//         are routed by gp_segment_id, and the Split node below computes it for the new rows
+		//         using the hash distribution of the table (see CXformUpdate2DML).
 
-		if (CLogicalDML::EdmlUpdate == edmlop)
-		{
-			CDistributionSpecHashed *hashDistSpec =
-				CDistributionSpecHashed::PdsConvert(m_pds);
-			CColRefSet *updatedCols = GPOS_NEW(mp) CColRefSet(mp);
-			CColRefSet *distributionCols = hashDistSpec->PcrsUsed(mp);
-
-			// compute a ColRefSet of the updated columns
-			for (ULONG c = 0; c < pdrgpcrSource->Size(); c++)
-			{
-				if (pbsModified->Get(c))
-				{
-					updatedCols->Include((*pdrgpcrSource)[c]);
-				}
-			}
-
-			is_update_without_changing_distribution_key =
-				!updatedCols->FIntersects(distributionCols);
-
-			updatedCols->Release();
-			distributionCols->Release();
-		}
-
-		if (CLogicalDML::EdmlDelete == edmlop ||
-			is_update_without_changing_distribution_key)
+		if (CLogicalDML::EdmlInsert != edmlop)
 		{
 			m_pds->Release();
 			m_pds = GPOS_NEW(mp) CDistributionSpecRandom();

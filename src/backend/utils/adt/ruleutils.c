@@ -10430,7 +10430,18 @@ deparse_part_param(deparse_context *c, List *dat)
 		 * FuncExpr's (vs Consts)
 		 */
 		if (IsA(lfirst(lc), Const))
-			get_const_expr(lfirst(lc), c, 0);
+		{
+			/*
+			 * The partition boundary syntax has no COLLATE clause, so print
+			 * the value as if it had the default collation of its type.
+			 * Boundaries are always compared using the collation of the
+			 * partitioning key column anyway.
+			 */
+			Const		con = *(Const *) lfirst(lc);
+
+			con.constcollid = get_typcollation(con.consttype);
+			get_const_expr(&con, c, 0);
+		}
 		else
 			get_rule_expr(lfirst(lc), c, false);
 	}

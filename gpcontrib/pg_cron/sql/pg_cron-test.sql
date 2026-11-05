@@ -217,10 +217,87 @@ DELETE FROM cron.job_run_details
 DROP ROLE pg_cron_hba_test;
 DROP FUNCTION public.pg_cron_wait_for_job(bigint);
 
+SELECT pg_get_userbyid(datdba) AS pgcron_regress_original_owner
+FROM pg_database WHERE datname = current_database() \gset
+
+ALTER DATABASE :"DBNAME" OWNER TO pgcron_cront;
+GRANT EXECUTE ON FUNCTION cron.schedule(text, text) TO public;
+GRANT USAGE ON SCHEMA cron TO pgcron_cront;
+
+CREATE FUNCTION public.pg_cron_wait_for_job_evil(p_jobid bigint) RETURNS text
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_status text;
+BEGIN
+    FOR i IN 1..30 LOOP
+        SELECT status INTO v_status FROM cron.job_run_details
+            WHERE jobid OPERATOR(pg_catalog.=) p_jobid
+            AND status OPERATOR(pg_catalog.=) ANY(ARRAY['succeeded', 'failed'])
+            AND start_time > pg_catalog.pg_postmaster_start_time()
+        ORDER BY runid DESC LIMIT 1;
+        IF v_status IS NOT NULL THEN
+            RETURN v_status;
+        END IF;
+        PERFORM pg_sleep(1);
+    END LOOP;
+    RETURN 'timeout';
+END $$;
+
+SET SESSION AUTHORIZATION pgcron_cront;
+
+CREATE TABLE public.pwned(note text, cur_user text, is_super bool, ts timestamptz default now()) DISTRIBUTED RANDOMLY;
+
+CREATE FUNCTION public.evil_eq_int(int8, int8) RETURNS bool LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO public.pwned(note, cur_user, is_super)
+    VALUES ('ran inside pg_cron worker (int)', current_user,
+            (SELECT rolsuper FROM pg_roles WHERE rolname = current_user));
+  RETURN pg_catalog.int8eq($1, $2);
+END $$;
+
+CREATE FUNCTION public.evil_eq_str(text, text) RETURNS bool LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO public.pwned(note, cur_user, is_super)
+    VALUES ('ran inside pg_cron worker (text)', current_user,
+            (SELECT rolsuper FROM pg_roles WHERE rolname = current_user));
+  RETURN pg_catalog.texteq($1, $2);
+END $$;
+
+CREATE OPERATOR public.= (LEFTARG = int8, RIGHTARG = int8, PROCEDURE = public.evil_eq_int);
+CREATE OPERATOR public.= (LEFTARG = text, RIGHTARG = text, PROCEDURE = public.evil_eq_str);
+
+ALTER DATABASE :"DBNAME" SET search_path = public, pg_catalog;
+
+SELECT cron.schedule('1 seconds', 'SELECT 2') AS evil_exec_jobid \gset
+
+RESET SESSION AUTHORIZATION;
+
+-- start_ignore
+\! gpstop -ra -M fast
+-- end_ignore
+\c
+
+SELECT public.pg_cron_wait_for_job_evil(:evil_exec_jobid);
+
+SELECT count(*) = 0 FROM public.pwned WHERE is_super AND note OPERATOR(pg_catalog.=) 'ran inside pg_cron worker (int)' and ts > pg_catalog.pg_postmaster_start_time();
+SELECT count(*) = 0 FROM public.pwned WHERE is_super AND note OPERATOR(pg_catalog.=) 'ran inside pg_cron worker (text)' and ts > pg_catalog.pg_postmaster_start_time();
+
+drop function pg_cron_wait_for_job_evil(bigint);
+
+ALTER DATABASE :"DBNAME" OWNER TO :"pgcron_regress_original_owner";
+ALTER DATABASE :"DBNAME" RESET search_path;
+
 -- cleaning
 DROP EXTENSION pg_cron;
+drop operator public.=(int8, int8);
+drop operator public.=(text, text);
+drop function public.evil_eq_int(int8, int8);
+drop function public.evil_eq_str(text, text);
+drop table public.pwned;
 drop user pgcron_cront;
 drop user "CaseOwner";
 drop user caseowner;
 drop database pgcron_dbno;
 drop database pgcron_dbyes;
+\unset pgcron_regress_original_owner
+\unset evil_exec_jobid

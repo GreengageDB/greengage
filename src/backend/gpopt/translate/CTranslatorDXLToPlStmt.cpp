@@ -4392,6 +4392,122 @@ CTranslatorDXLToPlStmt::GetDXLDatumGPDBHash(CDXLDatumArray *dxl_datum_array)
 }
 
 //---------------------------------------------------------------------------
+//	@function: set_resjunk_flag
+//
+//	@doc: Set resjunk flag to true for TargetEntry from given context on given
+//		  id.
+//
+//---------------------------------------------------------------------------
+static void
+set_resjunk_flag(const CDXLTranslateContext *context, const ULONG id)
+{
+	TargetEntry *te = const_cast<TargetEntry *>(context->GetTargetEntry(id));
+	if (NULL == te)
+	{
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtAttributeNotFound, id);
+	}
+	te->resjunk = true;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo
+//
+//	@doc:
+//		Set hash info in split node, so that it computes the target segment
+//		of the INSERT rows using the distribution policy of the result
+//		relation.
+//
+//---------------------------------------------------------------------------
+void
+CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(
+	SplitUpdate *split, const CDXLTranslateContext *output_context,
+	ULongPtrArray *delete_colids)
+{
+	// List of result relations shouldn't be null, as we could get here only
+	// with DML query.
+	GPOS_ASSERT(NULL != m_result_rel_list);
+	Index id = static_cast<Index>(gpdb::ListLastInt(m_result_rel_list));
+	RangeTblEntry *rte = (RangeTblEntry *) gpdb::ListNth(
+		m_dxl_to_plstmt_context->GetRTableEntriesList(), id - 1);
+	Oid target_relid = rte->relid;
+
+	if (InvalidOid == target_relid)
+	{
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+				   GPOS_WSZ_LIT("Couldn't fetch target relation of Split"));
+	}
+
+	Relation target_rel = gpdb::GetRelation(target_relid);
+
+	GPOS_TRY
+	{
+		GpPolicy *policy = target_rel->rd_cdbpolicy;
+
+		// If we're here, relation must have hash distribution.
+		if (NULL == policy || !GpPolicyIsHashPartitioned(policy))
+		{
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+					   GPOS_WSZ_LIT(
+						   "Target relation of Split is not hash distributed"));
+		}
+
+		int policy_nattrs = policy->nattrs;
+		TupleDesc resultDesc = RelationGetDescr(target_rel);
+
+		split->numHashAttrs = policy_nattrs;
+		split->numHashSegments = policy->numsegments;
+		split->hashAttnos =
+			(AttrNumber *) gpdb::GPDBAlloc(policy_nattrs * sizeof(AttrNumber));
+		split->hashFuncs = (Oid *) gpdb::GPDBAlloc(policy_nattrs * sizeof(Oid));
+
+		for (int i = 0; i < policy_nattrs; i++)
+		{
+			// Position of the column among non-dropped columns
+			ULONG pos = 0;
+			for (AttrNumber a = 1; a < policy->attrs[i]; a++)
+			{
+				if (!resultDesc->attrs[a - 1]->attisdropped)
+					pos++;
+			}
+			if (pos >= delete_colids->Size())
+			{
+				GPOS_RAISE(
+					gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+					GPOS_WSZ_LIT(
+						"Distribution key column of Split is out of range"));
+			}
+			ULONG colid = *(*delete_colids)[pos];
+
+			const TargetEntry *te = output_context->GetTargetEntry(colid);
+			if (NULL == te)
+			{
+				GPOS_RAISE(gpdxl::ExmaDXL,
+						   gpdxl::ExmiDXL2PlStmtAttributeNotFound, colid);
+			}
+
+			const Form_pg_attribute att =
+				resultDesc->attrs[policy->attrs[i] - 1];
+
+			Oid typeoid = att->atttypid;
+			Oid opfamily = gpdb::GetOpclassFamily(policy->opclasses[i]);
+
+			split->hashAttnos[i] = te->resno;
+			split->hashFuncs[i] =
+				gpdb::GetHashProcInOpfamily(opfamily, typeoid);
+		}
+
+		gpdb::CloseRelation(target_rel);
+	}
+	GPOS_CATCH_EX(ex)
+	{
+		gpdb::CloseRelation(target_rel);
+		GPOS_RETHROW(ex);
+	}
+	GPOS_CATCH_END;
+}
+
+//---------------------------------------------------------------------------
 //	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLSplit
 //
@@ -4473,6 +4589,53 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	plan->lefttree = child_plan;
 	plan->nMotionNodes = child_plan->nMotionNodes;
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
+
+	// If we're updating hash-distributed table we need to fill hash-related
+	// fields.
+	if (phy_split_dxlop->GetNeedsResJunk())
+	{
+		SetSplitUpdateHashInfo(split, output_context, deletion_colid_array);
+		// Junk flag setting for child and output plans.
+		ULONG split_ctid_colid = phy_split_dxlop->GetCtIdColId();
+		ULONG split_segid_colid = phy_split_dxlop->GetSegmentIdColId();
+
+		// Set junk attributes to target list entries of output plan.
+		set_resjunk_flag(output_context, split_ctid_colid);
+		set_resjunk_flag(output_context, split_segid_colid);
+
+		// Iterate through projection list to get gp_segment_id and ctid
+		const ULONG proj_arity = project_list_dxlnode->Arity();
+		for (ULONG ul = 0; ul < proj_arity; ++ul)
+		{
+			CDXLNode *proj_elem_dxlnode = (*project_list_dxlnode)[ul];
+			CDXLScalarProjElem *proj_elem =
+				CDXLScalarProjElem::Cast(proj_elem_dxlnode->GetOperator());
+
+			// Check if this projection element is ctid or gp_segment_id for output plan
+			if (proj_elem->IsColDefined(split_ctid_colid) ||
+				proj_elem->IsColDefined(split_segid_colid))
+			{
+				CDXLNode *expr_dxlnode = (*proj_elem_dxlnode)[0];
+
+				if (EdxlopScalarIdent !=
+					expr_dxlnode->GetOperator()->GetDXLOperator())
+				{
+					GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+							   GPOS_WSZ_LIT("Unexpected ctid or gp_segment_id "
+											"expression in Split"));
+				}
+
+				// Extract the child node's ColId
+				ULONG child_colid =
+					CDXLScalarIdent::Cast(expr_dxlnode->GetOperator())
+						->GetDXLColRef()
+						->Id();
+
+				// Look up the TargetEntry in the child's translation context
+				set_resjunk_flag(&child_context, child_colid);
+			}
+		}
+	}
 
 	SetParamIds(plan);
 

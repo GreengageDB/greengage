@@ -25,7 +25,12 @@ import fnmatch
 import tempfile
 import time
 from datetime import datetime, timedelta
-import pipes  # for shell-quoting, pipes.quote()
+
+try:
+    from shlex import quote
+except ImportError:
+    from pipes import quote
+
 import fcntl
 import itertools
 
@@ -964,7 +969,7 @@ class AnalyzeDb(Operation):
 
 # Create a Command object that executes a query using psql.
 def create_psql_command(dbname, query):
-    psql_cmd = """psql %s -c %s""" % (pipes.quote(dbname), pipes.quote(query))
+    psql_cmd = """psql %s -c %s""" % (quote(dbname), quote(query))
     return Command(query, psql_cmd)
 
 

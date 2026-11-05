@@ -98,4 +98,7 @@ extern void LogicalIncreaseRestartDecodingForSlot(XLogRecPtr current_lsn,
 									  XLogRecPtr restart_lsn);
 extern void LogicalConfirmReceivedLocation(XLogRecPtr lsn);
 
+/* GUCs */
+extern PGDLLIMPORT char *output_plugin_libraries_string;
+
 #endif

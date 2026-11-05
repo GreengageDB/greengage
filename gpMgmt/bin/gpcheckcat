@@ -648,6 +648,197 @@ def checkReplicatedDistribPolicy():
         myprint('  Execution error: ' + str(e))
 
 #############
+def getStaleRangePartitionLevels(db):
+    """
+    Return the range partitioning levels, with their tables, whose boundaries
+    are stored with a collation that sorts differently from the collation of
+    the partitioning key.
+    """
+    # Earlier versions stored range partition boundaries with the database
+    # default collation, even if the partitioning key has another collation.
+    # Collations are compared by their locale, so that e.g. a "C" key in a C
+    # database is not reported.
+    qry = '''
+    WITH colls AS (
+        SELECT oid, CASE WHEN locale = 'posix' THEN 'c' ELSE locale END AS locale
+        FROM (
+            SELECT c.oid,
+                   replace(lower(CASE WHEN c.collname = 'default' AND n.nspname = 'pg_catalog'
+                                      THEN d.datcollate ELSE c.collcollate END), '-', '') AS locale
+            FROM pg_collation c
+                JOIN pg_namespace n ON n.oid = c.collnamespace,
+                pg_database d
+            WHERE d.datname = current_database()
+        ) l
+    ),
+    bounds AS (
+        SELECT p.oid AS paroid, p.parrelid, a.atttypid, a.atttypmod, a.attcollation AS keycoll,
+               unnest(array[r.parrangestart::text, r.parrangeend::text]) AS bound
+        FROM pg_partition p
+            JOIN pg_partition_rule r ON r.paroid = p.oid
+            JOIN pg_attribute a ON a.attrelid = p.parrelid AND a.attnum = p.paratts[0]
+        WHERE p.parkind = 'r'
+            AND NOT p.paristemplate
+            AND NOT r.parisdefault
+    )
+    SELECT DISTINCT quote_ident(n.nspname) || '.' || quote_ident(t.relname) AS tablename,
+           b.paroid,
+           format_type(b.atttypid, b.atttypmod) AS keytype,
+           quote_ident(cn.nspname) || '.' || quote_ident(c.collname) AS keycoll
+    FROM bounds b
+        JOIN colls bc ON bc.oid = substring(b.bound from ':constcollid ([0-9]+)')::oid
+        JOIN colls kc ON kc.oid = b.keycoll
+        JOIN pg_collation c ON c.oid = b.keycoll
+        JOIN pg_namespace cn ON cn.oid = c.collnamespace
+        JOIN pg_class t ON t.oid = b.parrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE bc.oid <> kc.oid
+        AND bc.locale <> kc.locale
+    ORDER BY 1, 2;
+    '''
+
+    return db.query(qry).dictresult()
+
+
+def checkPartitionBoundCollation():
+    logger.info('-----------------------------------')
+    logger.info('Checking collation of range partition boundaries')
+
+    # Tables whose boundaries are stored with a collation other than the key's
+    # keep comparing their boundaries using the stored collation, so if the
+    # two collations sort differently, rows are routed differently than the
+    # key's collation implies. This is reported as a warning, since the tables
+    # behave as they did before.
+    try:
+        db = connect2(GV.cfg[GV.master_dbid])
+        levels = getStaleRangePartitionLevels(db)
+
+        tables = sorted(set(level['tablename'] for level in levels))
+        if not tables:
+            logger.info('[OK] range partition boundary collation')
+            return
+
+        logger.info('[WARN] range partition boundary collation')
+        myprint(
+                '[WARNING]: %d range partitioned table(s) compare partition boundaries '
+                'using the database default collation instead of the partitioning key\'s '
+                'collation. Check the gpcheckcat log for details.' % len(tables)
+            )
+        logger.warning('Recreate these tables to compare their partition boundaries '
+                       'using the partitioning key\'s collation:')
+        for table in tables:
+            logger.warning('  table %s' % table)
+    except Exception as e:
+        GV.checkStatus = False
+        setError(ERROR_NOREPAIR)
+        myprint('[ERROR] executing test: checkPartitionBoundCollation')
+        myprint('  Execution error: ' + str(e))
+
+
+def checkPartitionBoundOrder():
+    logger.info('-----------------------------------')
+    logger.info('Checking order of range partition boundaries under the key collation')
+
+    # A table whose boundaries are stored with a collation other than the
+    # key's may have ranges that are reversed or overlapping under the key's
+    # collation. Such a table cannot be recreated as it is, for example by
+    # restoring a dump, since its definition is then checked using the key's
+    # collation.
+    try:
+        db = connect2(GV.cfg[GV.master_dbid])
+
+        invalid = {}
+        failed = False
+        for level in getStaleRangePartitionLevels(db):
+            # check the other levels even if one of them fails
+            try:
+                partitions = findInvalidRangesForKeyCollation(db, level)
+            except Exception as e:
+                failed = True
+                GV.checkStatus = False
+                setError(ERROR_NOREPAIR)
+                myprint('[ERROR] executing test: checkPartitionBoundOrder for table %s'
+                        % level['tablename'])
+                myprint('  Execution error: ' + str(e))
+                continue
+            if partitions:
+                invalid.setdefault(level['tablename'], []).extend(partitions)
+
+        if not invalid:
+            logger.info('[FAIL] range partition boundary order' if failed
+                        else '[OK] range partition boundary order')
+            return
+
+        GV.checkStatus = False
+        setError(ERROR_NOREPAIR)
+        logger.info('[FAIL] range partition boundary order')
+        myprint(
+                '[ERROR]: %d range partitioned table(s) have partition ranges that are '
+                'reversed or overlapping under the partitioning key\'s collation, so they '
+                'cannot be recreated as they are, for example by restoring a dump. '
+                'Check the gpcheckcat log for details.' % len(invalid)
+            )
+        logger.error('range partition boundary order has %d issue(s)' % len(invalid))
+        logger.error('Change the partitions of these tables to ranges that are valid '
+                     'under the partitioning key\'s collation before recreating them:')
+        for table in sorted(invalid):
+            logger.error('  table %s, partitions %s' % (table, ', '.join(invalid[table])))
+    except Exception as e:
+        GV.checkStatus = False
+        setError(ERROR_NOREPAIR)
+        myprint('[ERROR] executing test: checkPartitionBoundOrder')
+        myprint('  Execution error: ' + str(e))
+
+
+def findInvalidRangesForKeyCollation(db, level):
+    """
+    Return the partitions of a range partitioning level whose ranges are
+    reversed, or overlap a range of the same parent that starts before them,
+    when the boundaries are compared using the collation of the partitioning
+    key.
+    """
+    rules = db.query('''
+        SELECT quote_literal(coalesce(r.parname, c.relname)) AS name,
+               r.parparentrule,
+               nullif(pg_get_expr(r.parrangestart, r.parchildrelid), '') AS startexpr,
+               nullif(pg_get_expr(r.parrangeend, r.parchildrelid), '') AS endexpr,
+               r.parrangestartincl::text AS startincl,
+               r.parrangeendincl::text AS endincl
+        FROM pg_partition_rule r
+            JOIN pg_class c ON c.oid = r.parchildrelid
+        WHERE r.paroid = %d AND NOT r.parisdefault
+    ''' % int(level['paroid'])).dictresult()
+    if not rules:
+        return []
+
+    def bound(expr):
+        return 'CAST(%s AS %s) COLLATE %s' % (expr or 'NULL', level['keytype'], level['keycoll'])
+
+    values = ',\n'.join('(%s, %s, %s, %s, %s, %s)' % (
+        rule['parparentrule'], rule['name'], bound(rule['startexpr']), bound(rule['endexpr']),
+        rule['startincl'], rule['endincl']) for rule in rules)
+
+    curs = db.query('''
+        WITH r(parent, name, s, e, sincl, eincl) AS (VALUES %s),
+        o AS (
+            SELECT r.*,
+                   row_number() OVER w AS n,
+                   bool_or(e IS NULL) OVER prev AS prev_open,
+                   max(e) OVER prev AS prev_e,
+                   max(CASE WHEN eincl THEN e END) OVER prev AS prev_incl_e
+            FROM r
+            WINDOW w AS (PARTITION BY parent ORDER BY s NULLS FIRST),
+                   prev AS (w ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)
+        )
+        SELECT name FROM o
+        WHERE s > e
+            OR (n > 1 AND (prev_open OR s IS NULL OR prev_e > s
+                           OR (prev_incl_e = s AND sincl)))
+        ORDER BY name
+    ''' % values)
+    return [row['name'] for row in curs.dictresult()]
+
+#############
 def checkPartitionIntegrity():
     #
     # MPP-8558: look for data in branch (not leaf) partitions
@@ -3460,6 +3651,22 @@ all_checks = {
             "order": 18,
             "online": True,
             "defaultSkip": True
+        },
+    "part_bound_collation":
+        {
+            "description": "Check collation of range partition boundaries",
+            "fn": lambda: checkPartitionBoundCollation(),
+            "version": 'main',
+            "order": 19,
+            "online": True
+        },
+    "part_bound_order":
+        {
+            "description": "Check order of range partition boundaries under the partitioning key's collation",
+            "fn": lambda: checkPartitionBoundOrder(),
+            "version": 'main',
+            "order": 20,
+            "online": True
         }
 
 }
