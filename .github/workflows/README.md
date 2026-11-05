@@ -35,9 +35,8 @@ systems:
   - Resource group tests
   - Coverage
 - **Upload**: Retags and pushes final Docker images to GHCR and optionally
-  DockerHub. Runs for push to `6.x` (retags to `latest`) and tags (uses
-  tag like `6.28.2`) after build.
-- **Package**: Builds Debian packages and tests deployment.
+  DockerHub. Runs for push to `6.x` (retags to `latest`) and tags after build.
+- **Package**: Builds Debian packages optionally and tests deployment.
 
 ## Greengage CI (No Tests)
 
@@ -180,7 +179,7 @@ of the `greengagedb/greengage-ci` repository:
 - Build process:
   [README/REUSABLE-BUILD.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-BUILD.md)
 - Package process:
-  [README/REUSABLE-PACKAGE.md](https://github.com/greengagedb/greengage-ci/blob/main/README/README/REUSABLE-PACKAGE.md)
+  [README/REUSABLE-PACKAGE.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-PACKAGE.md)
 - Behave tests:
   [README/REUSABLE-TESTS-BEHAVE.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-BEHAVE.md)
 - Orca tests:
@@ -199,9 +198,10 @@ of the `greengagedb/greengage-ci` repository:
 - Tests run only for pull requests.
 - Upload runs only for push events to `6.x` or tags (`6.*`).
 - Package job in `Greengage CI` rebuilds production-ready version without
-  debug extensions and creates Debian packages. The RPM package is built by
-  the `Greengage CI (No Tests)` workflow. The release workflow uploads only
-  Debian packages; the RPM package is not uploaded to GitHub releases.
+  debug extensions and creates Debian packages.
+- The RPM package is built by the `Greengage CI (No Tests)` workflow.
+- The release workflow uploads only Debian packages;
+  the RPM package is not uploaded to GitHub releases.
 - The `Greengage CI (No Tests)` workflow is not a required check, so its
   failures do not block pull request merges.
 - For `greengagedb/greengage`, DockerHub credentials (`DOCKERHUB_TOKEN`,
