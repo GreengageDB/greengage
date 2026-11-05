@@ -381,6 +381,9 @@ UPDATE 1
  2     | 2          | 258            | 1        | 1        | 1     
  2     | 2          | 258            | 3        | 0        | 1     
 (15 rows)
+-- use second VACUUM to ensure no segfiles are left in AOSEG_STATE_AWAITING_DROP
+4:VACUUM crash_coordinator_before_cleanup_phase;
+VACUUM
 4:VACUUM crash_coordinator_before_cleanup_phase;
 VACUUM
 4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
