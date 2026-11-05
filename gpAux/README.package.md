@@ -21,7 +21,7 @@ The main components are:
 - `debian/compat` - Debhelper compatibility level
 - `debian/control` - Package metadata and dependencies
 - `debian/copyright` - Copyright information
-- `debian/dbgsym-lintian-overrides` - Lintian warning overrides for the `-dbgsym`
+- `debian/dbgsym-lintian-overrides` - Lintian warning overrides for the `-dbgsym` package
 - `debian/lintian-overrides` - Lintian warning overrides
 - `rpm/greengage6.spec` - RPM spec file defining package metadata and build steps
 - `rpm/greengage6.rpmlintrc` - rpmlint warning overrides, analogous to
