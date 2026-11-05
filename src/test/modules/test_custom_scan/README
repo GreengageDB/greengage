@@ -1,0 +1,18 @@
+test_custom_scan
+================
+
+A custom scan provider for tests. It wraps every subquery in FROM whose
+alias is "cscan" in a custom scan that passes the rows of its children
+through: the subquery's plan is its one child, or each branch of a
+UNION ALL is a child. A test can so put any plan under a custom scan,
+such as a Motion, a shared scan of a CTE or a SubPlan, and check that
+the planner, the dispatcher and the executor reach the custom scan's
+children as they reach those of any other plan node.
+
+The plan of a query with the scan reaches the segments, so the library
+must be loaded in every backend of the cluster. The setup test adds it
+to session_preload_libraries with gpconfig and reloads the cluster; the
+teardown test removes it. Run the tests against a running cluster:
+
+    make install
+    make installcheck
