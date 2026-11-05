@@ -29,6 +29,7 @@ try:
     from gppylib.commands.gp import SEGMENT_STOP_TIMEOUT_DEFAULT, SegmentStop, GpSegStopCmd
     from gppylib.commands import base
     from gppylib.commands import pg
+    from gppylib.commands import patroni
     from gppylib.commands import dca
     from gppylib.utils import TableLogger
     from gppylib.gp_era import GpEraFile
@@ -899,10 +900,10 @@ class GpStopHA (GpStop):
             standby_hostname = self.gparray.standbyCoordinator.getSegmentHostName()
 
             logger.info(f"coordinator-HA: check patroni standby agent on host={standby_hostname}")
-            if not pg.PatroniAgentsCheck.remote('[cmd patroni agents check standby]', standby_hostname):
+            if not patroni.PatroniAgentsCheck.remote('[cmd patroni agents check standby]', standby_hostname):
                 raise ExceptionNoStackTraceNeeded("No standby patroni agent. Maybe the cluster is not in HA mode?..")
             logger.info(f"coordinator-HA: stop patroni standby agent")
-            pg.PatroniAgentsStop.remote('[cmd patroni agents stop standby]', standby_hostname)
+            patroni.PatroniAgentsStop.remote('[cmd patroni agents stop standby]', standby_hostname)
             logger.info("coordinator-HA: standby patroni agent is stopped")
 
             timeout = self.COORDINATOR_STOP_TIMEOUT_SEC
@@ -915,10 +916,10 @@ class GpStopHA (GpStop):
 
 
             logger.info(f"coordinator-HA: check patroni local agent")
-            if not pg.PatroniAgentsCheck.local('[cmd patroni agents check local]'):
+            if not patroni.PatroniAgentsCheck.local('[cmd patroni agents check local]'):
                 raise ExceptionNoStackTraceNeeded("No local patroni agent. Maybe the cluster is not in HA mode?..")
             logger.info(f"coordinator-HA: stop patroni local agent")
-            pg.PatroniAgentsStop.local('[cmd patroni agents stop local]')
+            patroni.PatroniAgentsStop.local('[cmd patroni agents stop local]')
             logger.info("coordinator-HA: local patroni agent is stopped")
 
             timeout = self.COORDINATOR_STOP_TIMEOUT_SEC

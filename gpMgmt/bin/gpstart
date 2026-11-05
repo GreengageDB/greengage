@@ -29,6 +29,7 @@ try:
     from gppylib.commands.gp import SEGMENT_TIMEOUT_DEFAULT
     from gppylib.commands import base
     from gppylib.commands import pg
+    from gppylib.commands import patroni
     from gppylib.commands import dca
     from gppylib import pgconf
     from gppylib.heapchecksum import HeapChecksum
@@ -830,7 +831,7 @@ class GpStartHA (GpStart):
             self._check_coordinator_running_remote()
 
             logger.info("coordinator-HA: pause patroni")
-            pg.PatroniCtlPause.local('[cmd patronictl pause]', self.config_file_coordinator, self.cluster_name)
+            patroni.PatroniCtlPause.local('[cmd patronictl pause]', self.config_file_coordinator, self.cluster_name)
 
             logger.info("coordinator-HA: re-check if Coordinator on other peer is already running...")
             self._check_coordinator_running_remote()
@@ -856,16 +857,16 @@ class GpStartHA (GpStart):
             logger.info("coordinator-HA: segments are launched")
 
             logger.info("coordinator-HA: start coordinator patroni agent...")
-            pg.PatroniAgentsStart.local('[cmd patroni agents coordinator start]', self.config_file_coordinator)
+            patroni.PatroniAgentsStart.local('[cmd patroni agents coordinator start]', self.config_file_coordinator)
 
-            if not pg.PatroniAgentsCheck.local('[cmd patroni agents check coordinator]'):
+            if not patroni.PatroniAgentsCheck.local('[cmd patroni agents check coordinator]'):
                 raise ExceptionNoStackTraceNeeded("Failed to start coordinator patroni agent")
             logger.info("coordinator-HA: coordinator patroni agent is started")
 
             logger.info("coordinator-HA: resume patroni...")
-            pg.PatroniCtlResume.local('[cmd patronictl resume]', self.config_file_coordinator, self.cluster_name)
+            patroni.PatroniCtlResume.local('[cmd patronictl resume]', self.config_file_coordinator, self.cluster_name)
 
-            if pg.PatroniCtlIsPaused.local('[cmd patronictl is paused]', self.config_file_coordinator, self.cluster_name):
+            if patroni.PatroniCtlIsPaused.local('[cmd patronictl is paused]', self.config_file_coordinator, self.cluster_name):
                 raise ExceptionNoStackTraceNeeded("Couldn't resume patroni")
             logger.info("coordinator-HA: patroni is resumed")
 
@@ -883,8 +884,8 @@ class GpStartHA (GpStart):
             # need, prior to starting in HA-mode, start cluster in non-HA mode with
             # standby on the same host.
             standby_hostname = self.gparray.standbyCoordinator.getSegmentHostName()
-            pg.PatroniAgentsStart.remote('[cmd patroni agents standby start]', self.config_file_standby, standby_hostname)
-            if not pg.PatroniAgentsCheck.remote('[cmd patroni agents check standby]', standby_hostname):
+            patroni.PatroniAgentsStart.remote('[cmd patroni agents standby start]', self.config_file_standby, standby_hostname)
+            if not patroni.PatroniAgentsCheck.remote('[cmd patroni agents check standby]', standby_hostname):
                 raise ExceptionNoStackTraceNeeded("Failed to start standby patroni agent")
             logger.info("coordinator-HA: standby patroni agent is started")
 
@@ -898,7 +899,7 @@ class GpStartHA (GpStart):
 
             leader_member = leader['Member']
             logger.info(f"coordinator-HA: restart leader member '{leader_member}' to clear any 'Pending restart' request...")
-            pg.PatroniCtlRestart.local('[cmd patronictl restart leader]', self.config_file_coordinator, self.cluster_name, leader_member)
+            patroni.PatroniCtlRestart.local('[cmd patronictl restart leader]', self.config_file_coordinator, self.cluster_name, leader_member)
             logger.info("coordinator-HA: re-validate leader...")
             self._validate_patroni_cluster_leader()
             logger.info("coordinator-HA: re-validate replicas...")
@@ -907,7 +908,7 @@ class GpStartHA (GpStart):
             for replica in replicas:
                 replica_member = replica['Member']
                 logger.info(f"coordinator-HA: restart replica member '{replica_member}' to clear any 'Pending restart' request...")
-                pg.PatroniCtlRestart.local('[cmd patronictl restart leader]', self.config_file_standby, self.cluster_name, replica_member)
+                patroni.PatroniCtlRestart.local('[cmd patronictl restart leader]', self.config_file_standby, self.cluster_name, replica_member)
             logger.info("coordinator-HA: re-validate replicas...")
             self._validate_patroni_cluster_replicas()
 
@@ -928,7 +929,7 @@ class GpStartHA (GpStart):
 
     def _patronictl_list_members(self):
         """Return (leader, replicas) parsed from `patronictl list` JSON output."""
-        raw = pg.PatroniCtlList.local('[cmd patronictl list]', self.config_file_coordinator, self.cluster_name)
+        raw = patroni.PatroniCtlList.local('[cmd patronictl list]', self.config_file_coordinator, self.cluster_name)
 
         m = re.search(r"\[.*\]", raw, re.S)
         if not m:
@@ -954,11 +955,11 @@ class GpStartHA (GpStart):
 
         for replica in replicas:
             hostname = replica["Host"].rsplit(':', 1)[0]
-            if pg.PatroniAgentsCheck.remote('[cmd patroni agents check remote]', hostname):
+            if patroni.PatroniAgentsCheck.remote('[cmd patroni agents check remote]', hostname):
                 logger.info(f"coordinator-HA: found agent on host={hostname}")
-                pg.PatroniAgentsStop.remote('[cmd patroni agents stop]', hostname)
+                patroni.PatroniAgentsStop.remote('[cmd patroni agents stop]', hostname)
                 timeout = self.PATRONI_AGENT_STOP_TIMEOUT_SEC
-                while pg.PatroniAgentsCheck.remote('[cmd patroni agents check]', hostname):
+                while patroni.PatroniAgentsCheck.remote('[cmd patroni agents check]', hostname):
                     time.sleep(1)
                     timeout = timeout - 1
                     if (timeout <= 0):
