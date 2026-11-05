@@ -25,3 +25,18 @@ SELECT A FROM simple_distributed_table UNION ALL SELECT a FROM multilocation_ext
 
 EXPLAIN SELECT * FROM one_external_table UNION ALL SELECT a FROM simple_replicated_table;
 SELECT * FROM one_external_table UNION ALL SELECT a FROM simple_replicated_table;
+
+-- A filter on a coordinator-only external table under UNION ALL is evaluated
+-- before the motion that moves the rows to the segments: ORCA can enforce the
+-- motion on the output of the filter instead of on the scan below it.
+CREATE TABLE filter_below_motion_heap(a int, b int, c text) DISTRIBUTED BY (a);
+INSERT INTO filter_below_motion_heap SELECT i, i, 'row' || i FROM generate_series(1, 10000) i;
+ANALYZE filter_below_motion_heap;
+CREATE EXTERNAL WEB TABLE filter_below_motion_ext(a int, b int, c text)
+EXECUTE 'seq 1 100000 | awk ''{print $1","$1",row"$1}''' ON COORDINATOR FORMAT 'csv';
+
+EXPLAIN (COSTS OFF) SELECT * FROM (SELECT a, b, c FROM filter_below_motion_heap UNION ALL SELECT a, b, c FROM filter_below_motion_ext) u WHERE a = 5;
+SELECT * FROM (SELECT a, b, c FROM filter_below_motion_heap UNION ALL SELECT a, b, c FROM filter_below_motion_ext) u WHERE a = 5;
+
+EXPLAIN (COSTS OFF) SELECT * FROM (SELECT a, b, c FROM filter_below_motion_heap UNION ALL SELECT a, b, c FROM filter_below_motion_ext) u WHERE a BETWEEN 9998 AND 10002;
+SELECT * FROM (SELECT a, b, c FROM filter_below_motion_heap UNION ALL SELECT a, b, c FROM filter_below_motion_ext) u WHERE a BETWEEN 9998 AND 10002 ORDER BY a;
