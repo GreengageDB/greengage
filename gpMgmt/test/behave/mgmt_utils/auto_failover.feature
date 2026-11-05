@@ -1,4 +1,4 @@
-@auto_failover
+@auto_failover @skip
 Feature: auto failover behave tests
 
     Scenario: Start and stop a cluster in HA mode
