@@ -229,7 +229,7 @@ define BUILD_STEPS
 	cd $(BUILDDIR)/src/pl/plpython && $(MAKE) clean && $(MAKE) $(PARALLEL_MAKE_OPTS) install && cd $(BUILDDIR)
 	cd $(BUILDDIR)/src/pl/plperl && $(MAKE) clean && echo "LDFLAGS += -Wl,-rpath,$(perl_archlibexp)/CORE -Wl,--enable-new-dtags" >> GNUmakefile && echo "LDFLAGS_SL += -Wl,-rpath,$(perl_archlibexp)/CORE -Wl,--enable-new-dtags" >> GNUmakefile && $(MAKE) $(PARALLEL_MAKE_OPTS) install && cd $(BUILDDIR)
 	#@$(MAKE) mgmtcopy INSTLOC=$(INSTLOC)
-	@$(MAKE) mkpgbouncer INSTLOC=$(INSTLOC) BUILDDIR=$(BUILDDIR)
+	@$(MAKE) mkpgbouncer INSTLOC=$(INSTLOC) INSTPREFIX=$(INSTPREFIX) BUILDDIR=$(BUILDDIR)
 	@$(MAKE) copydocs INSTLOC=$(INSTLOC)
 	@$(MAKE) copylibs INSTLOC=$(INSTLOC)
 	@$(MAKE) greengage_path INSTLOC=$(INSTLOC) BUILDDIR=$(BUILDDIR)
@@ -622,7 +622,7 @@ ifeq "$(shell uname -s)" "Darwin"
 	echo "pgbouncer can't build on Mac"
 else
 	@if [ ! -f extensions/pgbouncer/source/configure ]; then cd extensions/pgbouncer/source && ./autogen.sh ;fi
-	@cd extensions/pgbouncer/source && ./configure --with-libevent=$(BLD_TOP)/ext/$(BLD_ARCH) --prefix=$(DISTPATH) --enable-evdns --with-pam --with-ldap
+	@cd extensions/pgbouncer/source && ./configure --with-libevent=$(BLD_TOP)/ext/$(BLD_ARCH) --prefix=$(INSTPREFIX) --enable-evdns --with-pam --with-ldap
 	$(MAKE) -C extensions/pgbouncer/source install
 endif
 
