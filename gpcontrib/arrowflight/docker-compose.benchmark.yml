@@ -1,0 +1,258 @@
+services:
+  clickhouse1:
+    image: clickhouse/clickhouse-server:26.4.4.38-alpine
+    hostname: clickhouse1
+    cpus: 2
+    mem_limit: 3g
+    volumes:
+      - ./tools/clickhouse_flightsql/arrowflight.xml:/etc/clickhouse-server/config.d/arrowflight.xml:ro
+      - ./tools/clickhouse_flightsql/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./tools/clickhouse_flightsql/distributed.xml:/etc/clickhouse-server/users.d/distributed.xml:ro
+    environment:
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+    healthcheck:
+      test:
+        - CMD
+        - clickhouse-client
+        - --query
+        - SELECT 1
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
+
+  clickhouse2:
+    image: clickhouse/clickhouse-server:26.4.4.38-alpine
+    hostname: clickhouse2
+    cpus: 2
+    mem_limit: 3g
+    volumes:
+      - ./tools/clickhouse_flightsql/arrowflight.xml:/etc/clickhouse-server/config.d/arrowflight.xml:ro
+      - ./tools/clickhouse_flightsql/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./tools/clickhouse_flightsql/distributed.xml:/etc/clickhouse-server/users.d/distributed.xml:ro
+    environment:
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+    healthcheck:
+      test:
+        - CMD
+        - clickhouse-client
+        - --query
+        - SELECT 1
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
+
+  flightsql_synthetic: &flightsql-synthetic
+    image: ${ARROWFLIGHT_PERF_FLIGHTSQL_SYNTHETIC_IMAGE:-greengage-u22-arm64-flightsql-synthetic-perf:latest}
+    platform: ${ARROWFLIGHT_PERF_GG_PLATFORM:-linux/arm64}
+    build:
+      context: ../..
+      args:
+        ARROWFLIGHT_PERF_GG_IMAGE: ${ARROWFLIGHT_PERF_GG_IMAGE:-greengage-u22-arm64-arrowflight-benchmark:latest}
+      dockerfile_inline: |
+        ARG ARROWFLIGHT_PERF_GG_IMAGE=greengage-u22-arm64-arrowflight-benchmark:latest
+        FROM $${ARROWFLIGHT_PERF_GG_IMAGE}
+        COPY gpcontrib/arrowflight/tools/flightsql_benchmark_server.cpp /tmp/flightsql_benchmark_server.cpp
+        COPY gpcontrib/arrowflight/src/proto/flightsql_mpp.proto /tmp/flightsql_mpp.proto
+        RUN mkdir -p /tmp/flightsql-mpp-generated && \
+            protoc \
+              --proto_path=/tmp \
+              --cpp_out=/tmp/flightsql-mpp-generated \
+              /tmp/flightsql_mpp.proto && \
+            g++ -std=c++20 -O3 \
+              -I/tmp/flightsql-mpp-generated \
+              /tmp/flightsql_benchmark_server.cpp \
+              /tmp/flightsql-mpp-generated/flightsql_mpp.pb.cc \
+              -o /usr/local/bin/flightsql-benchmark-server \
+              $$(pkg-config --cflags --libs \
+                arrow arrow-flight arrow-flight-sql protobuf) && \
+            rm -rf \
+              /tmp/flightsql_benchmark_server.cpp \
+              /tmp/flightsql_mpp.proto \
+              /tmp/flightsql-mpp-generated
+    hostname: flightsql-synthetic
+    cpus: 4
+    mem_limit: 6g
+    working_dir: /workspace
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: ${ARROWFLIGHT_PERF_SEGMENTS:-3}
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: ${ARROWFLIGHT_PERF_ROWS_PER_SEGMENT:-1000000}
+      ARROWFLIGHT_BENCH_BATCH_ROWS: ${ARROWFLIGHT_PERF_BATCH_ROWS:-8192}
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: ${ARROWFLIGHT_PERF_LABEL_WIDTH:-32}
+      ARROWFLIGHT_BENCH_IPC_DIR: /benchmark-data/ipc
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      FLIGHTSQL_SYNTHETIC_PORT: "9015"
+    volumes:
+      - ../..:/workspace:ro
+      - ${ARROWFLIGHT_PERF_DATA_DIR:-/tmp/flightsql_benchmark/data}:/benchmark-data
+    entrypoint:
+      - bash
+      - -lc
+    command:
+      - |
+        set -euo pipefail
+        mkdir -p /benchmark-data/ipc
+        if [ ! -f /benchmark-data/ipc/bench_0.arrow ]; then
+          /usr/local/bin/flightsql-benchmark-server \
+            --write-bench-ipc /benchmark-data/ipc
+        fi
+        exec /usr/local/bin/flightsql-benchmark-server \
+          "$${FLIGHTSQL_SYNTHETIC_PORT}"
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -lc
+        - exec 3<>/dev/tcp/127.0.0.1/$${FLIGHTSQL_SYNTHETIC_PORT}
+      interval: 2s
+      timeout: 3s
+      retries: 120
+      start_period: 20s
+
+  flightsql_mpp_control:
+    <<: *flightsql-synthetic
+    hostname: flightsql-mpp-control
+    cpus: 1
+    mem_limit: 1g
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: ${ARROWFLIGHT_PERF_SEGMENTS:-3}
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: ${ARROWFLIGHT_PERF_ROWS_PER_SEGMENT:-1000000}
+      ARROWFLIGHT_BENCH_BATCH_ROWS: ${ARROWFLIGHT_PERF_BATCH_ROWS:-8192}
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: ${ARROWFLIGHT_PERF_LABEL_WIDTH:-32}
+      ARROWFLIGHT_BENCH_IPC_DIR: /benchmark-data/ipc
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
+      ARROWFLIGHT_MPP_WORKERS: "grpc+tcp://flightsql-mpp-worker-0:9021,grpc+tcp://flightsql-mpp-worker-1:9022,grpc+tcp://flightsql-mpp-worker-2:9023"
+      FLIGHTSQL_SYNTHETIC_PORT: "9020"
+    volumes:
+      - ../..:/workspace:ro
+      - ${ARROWFLIGHT_PERF_DATA_DIR:-/tmp/flightsql_benchmark/data}:/benchmark-data
+      - flightsql-mpp-state:/var/lib/flightsql-mpp
+
+  flightsql_mpp_worker_0:
+    <<: *flightsql-synthetic
+    hostname: flightsql-mpp-worker-0
+    cpus: 1
+    mem_limit: 1666m
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: ${ARROWFLIGHT_PERF_SEGMENTS:-3}
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: ${ARROWFLIGHT_PERF_ROWS_PER_SEGMENT:-1000000}
+      ARROWFLIGHT_BENCH_BATCH_ROWS: ${ARROWFLIGHT_PERF_BATCH_ROWS:-8192}
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: ${ARROWFLIGHT_PERF_LABEL_WIDTH:-32}
+      ARROWFLIGHT_BENCH_IPC_DIR: /benchmark-data/ipc
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
+      ARROWFLIGHT_MPP_WORKER_ID: worker-0
+      FLIGHTSQL_SYNTHETIC_PORT: "9021"
+    volumes:
+      - ../..:/workspace:ro
+      - ${ARROWFLIGHT_PERF_DATA_DIR:-/tmp/flightsql_benchmark/data}:/benchmark-data
+      - flightsql-mpp-state:/var/lib/flightsql-mpp
+
+  flightsql_mpp_worker_1:
+    <<: *flightsql-synthetic
+    hostname: flightsql-mpp-worker-1
+    cpus: 1
+    mem_limit: 1666m
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: ${ARROWFLIGHT_PERF_SEGMENTS:-3}
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: ${ARROWFLIGHT_PERF_ROWS_PER_SEGMENT:-1000000}
+      ARROWFLIGHT_BENCH_BATCH_ROWS: ${ARROWFLIGHT_PERF_BATCH_ROWS:-8192}
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: ${ARROWFLIGHT_PERF_LABEL_WIDTH:-32}
+      ARROWFLIGHT_BENCH_IPC_DIR: /benchmark-data/ipc
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
+      ARROWFLIGHT_MPP_WORKER_ID: worker-1
+      FLIGHTSQL_SYNTHETIC_PORT: "9022"
+    volumes:
+      - ../..:/workspace:ro
+      - ${ARROWFLIGHT_PERF_DATA_DIR:-/tmp/flightsql_benchmark/data}:/benchmark-data
+      - flightsql-mpp-state:/var/lib/flightsql-mpp
+
+  flightsql_mpp_worker_2:
+    <<: *flightsql-synthetic
+    hostname: flightsql-mpp-worker-2
+    cpus: 1
+    mem_limit: 1666m
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: ${ARROWFLIGHT_PERF_SEGMENTS:-3}
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: ${ARROWFLIGHT_PERF_ROWS_PER_SEGMENT:-1000000}
+      ARROWFLIGHT_BENCH_BATCH_ROWS: ${ARROWFLIGHT_PERF_BATCH_ROWS:-8192}
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: ${ARROWFLIGHT_PERF_LABEL_WIDTH:-32}
+      ARROWFLIGHT_BENCH_IPC_DIR: /benchmark-data/ipc
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
+      ARROWFLIGHT_MPP_WORKER_ID: worker-2
+      FLIGHTSQL_SYNTHETIC_PORT: "9023"
+    volumes:
+      - ../..:/workspace:ro
+      - ${ARROWFLIGHT_PERF_DATA_DIR:-/tmp/flightsql_benchmark/data}:/benchmark-data
+      - flightsql-mpp-state:/var/lib/flightsql-mpp
+
+  gpfdist:
+    image: ${ARROWFLIGHT_PERF_GPFDIST_IMAGE:-greengage7-u22-arm64-dev:latest}
+    hostname: gpfdist
+    cpus: 4
+    mem_limit: 6g
+    volumes:
+      - ${ARROWFLIGHT_PERF_DATA_DIR:-/tmp/flightsql_benchmark/data}:/benchmark-data
+    entrypoint:
+      - bash
+      - -lc
+    command:
+      - |
+        set -euo pipefail
+        source /home/gpadmin/greengage-db-devel/greengage_path.sh
+        exec gpfdist -d /benchmark-data -p 8081 -m 67108864
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -lc
+        - exec 3<>/dev/tcp/127.0.0.1/8081
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
+
+  greengage:
+    image: ${ARROWFLIGHT_PERF_GG_IMAGE:-greengage-u22-arm64-arrowflight-benchmark:latest}
+    platform: ${ARROWFLIGHT_PERF_GG_PLATFORM:-linux/arm64}
+    build:
+      context: ../..
+      args:
+        GREENGAGE_BASE_IMAGE: ${ARROWFLIGHT_PERF_GG_BASE_IMAGE:-greengage7-u22-arm64-dev:latest}
+      dockerfile_inline: |
+        ARG GREENGAGE_BASE_IMAGE=greengage7-u22-arm64-dev:latest
+        FROM $${GREENGAGE_BASE_IMAGE}
+        USER root
+        COPY ci/scripts/install_arrow_flight_deps.bash /tmp/install_arrow_flight_deps.bash
+        RUN bash /tmp/install_arrow_flight_deps.bash && \
+            rm -f /tmp/install_arrow_flight_deps.bash
+    hostname: greengage
+    cpus: 8
+    mem_limit: 8g
+    privileged: true
+    init: true
+    user: root
+    working_dir: /home/gpadmin
+    volumes:
+      - ../..:/workspace:ro
+      - ${ARROWFLIGHT_PERF_ROOT:-/tmp/flightsql_benchmark}:/benchmark
+    depends_on:
+      clickhouse1:
+        condition: service_healthy
+      clickhouse2:
+        condition: service_healthy
+      flightsql_synthetic:
+        condition: service_healthy
+      gpfdist:
+        condition: service_healthy
+    entrypoint:
+      - sleep
+    command:
+      - infinity
+
+volumes:
+  flightsql-mpp-state:
