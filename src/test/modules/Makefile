@@ -10,6 +10,7 @@ SUBDIRS = \
 		  dummy_seclabel \
 		  snapshot_too_old \
 		  test_bloomfilter \
+		  test_custom_scan \
 		  test_ddl_deparse \
 		  test_extensions \
 		  test_integerset \
