@@ -964,24 +964,25 @@ class GpStartHA (GpStart):
                 logger.info(f"coordinator-HA: stopped patroni agents on host={hostname}")
 
     def _validate_patroni_cluster_leader(self):
-        leader, _ = self._patronictl_list_members()
         coord_host = f"{self.gparray.coordinator.getSegmentHostName()}:{self.gparray.coordinator.getSegmentPort()}"
-        leader_host = leader["Host"]
-        if leader_host!= coord_host:
-            raise ExceptionNoStackTraceNeeded(f"Patroni leader ('{leader_host}') doesn't match coordinator ('{coord_host}')")
-
         timeout = GpStartHA.PATRONI_MEMBER_STATE_TIMEOUT_SEC
         expected_state = "running"
+        leader_state = "missing"
         while timeout > 0:
             leader, _ = self._patronictl_list_members()
-            leader_state = leader["State"]
-            if leader_state == expected_state:
-                break
+            if leader is not None:
+                leader_host = leader["Host"]
+                if leader_host != coord_host:
+                    raise ExceptionNoStackTraceNeeded(
+                        f"Patroni leader ('{leader_host}') doesn't match coordinator ('{coord_host}')")
+                leader_state = leader["State"]
+                if leader_state == expected_state:
+                    return
             time.sleep(1)
             timeout = timeout - 1
 
-        if (timeout <= 0):
-            raise ExceptionNoStackTraceNeeded(f"Patroni leader is not in state '{expected_state}', actual is '{leader_state}'")
+        raise ExceptionNoStackTraceNeeded(
+            f"Patroni leader is not in state '{expected_state}', actual is '{leader_state}'")
 
     def _validate_patroni_cluster_replicas(self):
         timeout = GpStartHA.PATRONI_MEMBER_STATE_TIMEOUT_SEC
