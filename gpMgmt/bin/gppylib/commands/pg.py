@@ -483,7 +483,7 @@ class PatroniCtlRestart(Command):
 
 class PatroniAgentsCheck(Command):
     def __init__(self, name, ctxt=LOCAL, remoteHost=None):
-        Command.__init__(self, name, "pgrep -f 'python.*patroni'", ctxt, remoteHost)
+        Command.__init__(self, name, "pgrep -f 'python3 -m [p]atroni'", ctxt, remoteHost)
 
     @staticmethod
     def local(name):
@@ -499,7 +499,7 @@ class PatroniAgentsCheck(Command):
 
 class PatroniAgentsStop(Command):
     def __init__(self, name, ctxt=LOCAL, remoteHost=None):
-        Command.__init__(self, name, "pkill -TERM -f 'python.*patroni'", ctxt, remoteHost)
+        Command.__init__(self, name, "pkill -TERM -f 'python3 -m [p]atroni'", ctxt, remoteHost)
 
     @staticmethod
     def local(name):
@@ -513,6 +513,9 @@ class PatroniAgentsStop(Command):
 
 class PatroniAgentsStart(Command):
     def __init__(self, name, config_file, ctxt=LOCAL, remoteHost=None):
+        # Note: if one changes the way patroni agent is started,
+        # also take a look at PatroniAgentsCheck and PatroniAgentsStop -
+        # they need to be aligned.
         Command.__init__(self, name, "python3 -m patroni %s > /home/gpadmin/gpAdminLogs/patroni_agent.log 2>&1 &" % (config_file), ctxt, remoteHost)
 
     @staticmethod

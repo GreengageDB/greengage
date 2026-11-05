@@ -1,0 +1,73 @@
+x-common-service: &common-service
+  image: "${IMAGE}"
+  privileged: true
+  sysctls:
+    kernel.sem: 500 1024000 200 4096
+  init: true
+  ulimits:
+    nofile: 65535
+  entrypoint: >
+    sleep infinity
+
+services:
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.7.2
+    container_name: etcd
+    # no TLS and no authentication -- local development only
+    command:
+      - etcd
+      # listen on all interfaces, so that both greengage and the host can reach it
+      - --listen-client-urls=http://0.0.0.0:2379
+      # Patroni discovers the endpoints from the member list, hence not localhost
+      - --advertise-client-urls=http://etcd:2379
+    ports:
+      # expose etcd to the host as well (Patroni outside the container: etcd3.host 127.0.0.1:2379)
+      - "2379:2379"
+    healthcheck:
+      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  cdw:
+    <<: *common-service
+    working_dir: /home/gpadmin
+    hostname: cdw
+    volumes:
+      - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
+      - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
+      - ${PATRONI_DIR}:/home/gpadmin/patroni
+    depends_on:
+      etcd:
+        condition: service_healthy
+  scdw:
+    <<: *common-service
+    working_dir: /home/gpadmin
+    hostname: scdw
+    volumes:
+      - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
+      - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
+      - ${PATRONI_DIR}:/home/gpadmin/patroni
+    depends_on:
+      etcd:
+        condition: service_healthy
+  sdw1:
+    <<: *common-service
+    hostname: sdw1
+    volumes:
+      - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
+      - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
+  sdw2:
+    <<: *common-service
+    hostname: sdw2
+    volumes:
+      - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
+      - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
+  sdw3:
+    <<: *common-service
+    hostname: sdw3
+    volumes:
+      - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
+      - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
