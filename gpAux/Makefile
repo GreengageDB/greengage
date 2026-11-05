@@ -90,7 +90,7 @@ ISCONFIG=$(GPPGDIR)/GNUmakefile
 ## On these platforms, we do the full build including the server. On other
 ## platforms, we do a client-only build.
 ##
-SERVER_PLATFORMS=rhel7_x86_64 rhel6_x86_64 rhel8_x86_64 rocky8_x86_64 ol8_x86_64 linux_x86_64
+SERVER_PLATFORMS=rhel7_x86_64 rhel6_x86_64 rhel8_x86_64 rocky8_x86_64 rocky9_x86_64 ol8_x86_64 linux_x86_64
 
 #---------------------------------------------------------------------
 # Compiler options
@@ -174,8 +174,8 @@ $(GPPGDIR)/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	cd $(GPPGDIR) && \
                      CFLAGS=$(INSTCFLAGS) 					  \
                      ./configure $(CONFIGFLAGS)               \
-                         --prefix=$(DISTPATH)                  \
-                         --mandir=$(DISTPATH)/man
+                         --prefix=$(INSTPREFIX)                  \
+                         --mandir=$(INSTPREFIX)/man
 
 Debug/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	rm -rf $(INSTLOC)
@@ -184,8 +184,8 @@ Debug/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	cd Debug && \
                 CFLAGS=$(INSTCFLAGS) 						 \
                 ./configure $(CONFIGFLAGS)                   \
-                    --prefix=$(DISTPATH)                      \
-                    --mandir=$(DISTPATH)/man
+                    --prefix=$(INSTPREFIX)                      \
+                    --mandir=$(INSTPREFIX)/man
 
 Release/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	rm -rf $(INSTLOC)
@@ -194,8 +194,8 @@ Release/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	cd Release && \
                   CFLAGS=$(INSTCFLAGS) 					    \
                   ./configure $(CONFIGFLAGS)                \
-                      --prefix=$(DISTPATH)                   \
-                      --mandir=$(DISTPATH)/man
+                      --prefix=$(INSTPREFIX)                   \
+                      --mandir=$(INSTPREFIX)/man
 
 #---------------------------------------------------------------------
 # autoconf
@@ -286,6 +286,7 @@ endif
 
 devel : INSTCFLAGS=$(DEBUGFLAGS)
 devel : INSTLOC=$(DESTDIR)$(DEVPATH)
+devel : INSTPREFIX=$(DEVPATH)
 devel : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDEVPATH)
 devel : CONFIGFLAGS+= --enable-cassert --enable-debug --enable-depend
 ifdef ENABLE_VPATH_BUILD
@@ -303,6 +304,7 @@ endif
 
 dist : INSTCFLAGS=$(OPTFLAGS)
 dist : INSTLOC=$(DESTDIR)$(DISTPATH)
+dist : INSTPREFIX=$(DISTPATH)
 dist : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDISTPATH)
 ifdef ENABLE_VPATH_BUILD
 dist : BUILDDIR=Release
@@ -315,6 +317,7 @@ endif
 
 dist_prof : INSTCFLAGS=$(PROFFLAGS)
 dist_prof : INSTLOC=$(DESTDIR)$(DISTPATH)
+dist_prof : INSTPREFIX=$(DISTPATH)
 dist_prof : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDISTPATH)
 ifdef ENABLE_VPATH_BUILD
 dist_prof : BUILDDIR=Release
@@ -326,6 +329,7 @@ dist_prof : GPROOTDEP RECONFIG $(ISCONFIG)
 endif
 	$(BUILD_STEPS)
 
+dist_faultinj : INSTPREFIX=$(DISTPATH)
 dist_faultinj : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDISTPATH)
 ifdef ENABLE_VPATH_BUILD
 dist_faultinj : BUILDDIR=Release
@@ -341,11 +345,12 @@ endif
 # Packaging targets with changelog options
 #---------------------------------------------------------------------
 
-# Metadata vars
-PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print $$2}')
-MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
-DATE_RFC := $(shell date -R)
+# Common metadata vars
 ARTIFACTS_DIR := $(CURDIR)/../Package
+DATE_RFC := $(shell date -R)
+
+# Debian package name (used by debian/changelog, debian/install, pkg-deb)
+PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print $$2}')
 
 ../VERSION :
 	@echo "Update $@"
@@ -354,24 +359,22 @@ ARTIFACTS_DIR := $(CURDIR)/../Package
 
 version-vars : ../VERSION
 	$(eval FULL_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION))
-	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g' ../VERSION))
-	$(eval DISTRO_CODENAME := $(shell lsb_release -sc))
+	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g; s,-(?=\w),~,' ../VERSION))
+	$(eval VERSION_CODENAME := $(shell . /etc/os-release && echo $$VERSION_CODENAME))
 	$(eval IS_RELEASE := $(if $(findstring +dev,$(PACKAGE_VERSION)),no,yes))
-	$(eval STABILITY := $(if $(filter yes,$(IS_RELEASE)),stable,unstable))
 	$(eval BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build))
 
 version-info : version-vars
 	@echo "PACKAGE_VERSION: $(PACKAGE_VERSION)"
 	@echo "FULL_VERSION: $(FULL_VERSION)"
-	@echo "DISTRO_CODENAME: $(DISTRO_CODENAME)"
+	@echo "VERSION_CODENAME: $(VERSION_CODENAME)"
 	@echo "IS_RELEASE: $(IS_RELEASE)"
-	@echo "STABILITY: $(STABILITY)"
 	@echo "BUILD_TYPE: $(BUILD_TYPE)"
 
 # Generate package control files
-changelog : debian/changelog
+debian/changelog : MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
 debian/changelog : version-vars
-	@echo "$(PACKAGE_NAME) ($(PACKAGE_VERSION)) $(DISTRO_CODENAME); urgency=low" > $@
+	@echo "$(PACKAGE_NAME) ($(PACKAGE_VERSION)) $(VERSION_CODENAME); urgency=low" > $@
 	@echo "" >> $@
 	@echo "  * $(BUILD_TYPE)" >> $@
 	@echo "" >> $@
@@ -380,16 +383,27 @@ debian/changelog : version-vars
 debian/install:
 	@echo "$(PACKAGE_NAME)/* /" > $@
 
-
-# Default packaging target
-pkg : pkg-deb
+# Default packaging target: detect the platform
+pkg:
+	@case "$(BLD_ARCH)" in \
+		rhel*|rocky*|ol*|fedora*|redos*|alt*) \
+			echo "Detected RPM-based platform ($(BLD_ARCH))"; \
+			$(MAKE) pkg-rpm ;; \
+		ubuntu*|debian*|astra*) \
+			echo "Detected DEB-based platform ($(BLD_ARCH))"; \
+			$(MAKE) pkg-deb ;; \
+		*) \
+			echo "Error: Unsupported platform '$(BLD_ARCH)' for packaging." >&2; \
+			exit 1 ;; \
+	esac
 
 # Build Debian package
 pkg-deb : GPROOT = /opt/greengagedb
 pkg-deb : GPDIR  = $(PACKAGE_NAME)
 pkg-deb : debian/changelog debian/install
 	@echo "Building with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
-	@GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" PACKAGE_NAME="$(PACKAGE_NAME)" debuild --preserve-env -us -uc -b
+	@if [ "$(IS_RELEASE)" = "yes" ]; then unset CONFIGURE_FLAGS; fi; \
+	GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" PACKAGE_NAME="$(PACKAGE_NAME)" debuild --preserve-env -us -uc -b
 	@mkdir -p $(ARTIFACTS_DIR)
 	@find $(CURDIR)/../ -maxdepth 1 -type f \( -name "*.deb" \
 											-o -name "*.ddeb" \
@@ -398,7 +412,28 @@ pkg-deb : debian/changelog debian/install
 											-o -name "*.changes" \) \
 											-exec mv -f {} $(ARTIFACTS_DIR)/ \;
 
-.PHONY: pkg pkg-deb changelog version-vars version-info
+# Build RPM package
+pkg-rpm : GPROOT = /opt/greengagedb
+pkg-rpm : GPDIR_DEFINE = $(if $(filter command line environment,$(origin GPDIR)),--define "gpdir $(GPDIR)")
+pkg-rpm : RPM_ARCH = $(shell rpm --eval '%{_arch}')
+pkg-rpm : RPM_TEMPDIR := $(CURDIR)/../RPM
+pkg-rpm : version-vars
+	@echo "Building RPM with GPROOT=$(GPROOT), ARCH=$(RPM_ARCH)"
+	@rm -rf $(RPM_TEMPDIR)
+	@mkdir -p $(addprefix $(RPM_TEMPDIR)/,BUILD BUILDROOT RPMS SOURCES SPECS SRPMS)
+	@if [ "$(IS_RELEASE)" = "yes" ]; then unset CONFIGURE_FLAGS; fi; \
+	rpmbuild -bb \
+		--define "_topdir $(RPM_TEMPDIR)" \
+		--define "gpdb_version $(subst +,^,$(subst -,.,$(PACKAGE_VERSION)))" \
+		--define "gpdb_release 1" \
+		--define "gproot $(GPROOT)" $(GPDIR_DEFINE) \
+		--define "sourcedir $(CURDIR)/.." \
+		rpm/greengage7.spec
+	@rpmlint -f rpm/greengage7.rpmlintrc $(RPM_TEMPDIR)/RPMS/$(RPM_ARCH)/*.rpm
+	@mkdir -p $(ARTIFACTS_DIR)
+	@mv -f $(RPM_TEMPDIR)/RPMS/$(RPM_ARCH)/*.rpm $(ARTIFACTS_DIR)/
+
+.PHONY: pkg pkg-deb pkg-rpm version-vars version-info
 
 #---------------------------------------------------------------------
 # clientTools
@@ -453,6 +488,7 @@ rhel6_x86_64_MPP_ARCH=RHEL6-x86_64
 rhel7_x86_64_MPP_ARCH=RHEL7-x86_64
 rhel8_x86_64_MPP_ARCH=RHEL8-x86_64
 rocky8_x86_64_MPP_ARCH=ROCKY8-x86_64
+rocky9_x86_64_MPP_ARCH=ROCKY9-x86_64
 ol8_x86_64_MPP_ARCH=OL8-x86_64
 ifneq "$($(BLD_ARCH)_MPP_ARCH)" ""
 export MPP_ARCH=$($(BLD_ARCH)_MPP_ARCH)
@@ -657,8 +693,9 @@ distclean :
 	@if [ -d Release -a -f Release/GNUmakefile ]; then cd Release; $(MAKE) distclean; fi
 	@if [ -d $(GPPGDIR) -a -f $(GPPGDIR)/GNUmakefile ]; then cd $(GPPGDIR); $(MAKE) distclean; fi
 	@if [ -d $(GPMGMT)/bin ]; then cd $(GPMGMT)/bin; $(MAKE) distclean; fi
-	@if [ -d .git ] ; then rm -f VERSION; fi
+	@if [ -d ../.git ] ; then rm -f ../VERSION; fi
 	@rm -f env.sh
 
+distprep : INSTPREFIX=$(DISTPATH)
 distprep : $(ISCONFIG)
 	@cd $(BUILDDIR) && $(MAKE) distprep

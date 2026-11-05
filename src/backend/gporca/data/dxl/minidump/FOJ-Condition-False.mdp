@@ -177,7 +177,7 @@ select * from foo a full join foo b on false;
     <dxl:Plan Id="0" SpaceSize="168">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="3017.005429" Rows="80.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="3017.005687" Rows="80.000000" Width="8"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -191,7 +191,7 @@ select * from foo a full join foo b on false;
         <dxl:SortingColumnList/>
         <dxl:Sequence>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="3017.003044" Rows="80.000000" Width="8"/>
+            <dxl:Cost StartupCost="0" TotalCost="3017.003302" Rows="80.000000" Width="8"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -203,7 +203,7 @@ select * from foo a full join foo b on false;
           </dxl:ProjList>
           <dxl:CTEProducer CTEId="0" Columns="16,17,18,19,20,21,22,23">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="431.000241" Rows="8.000000" Width="1"/>
+              <dxl:Cost StartupCost="0" TotalCost="431.000370" Rows="8.000000" Width="1"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="16" Alias="a">
@@ -233,7 +233,7 @@ select * from foo a full join foo b on false;
             </dxl:ProjList>
             <dxl:TableScan>
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="431.000050" Rows="8.000000" Width="38"/>
+                <dxl:Cost StartupCost="0" TotalCost="431.000050" Rows="8.000000" Width="64"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="16" Alias="a">
@@ -278,7 +278,7 @@ select * from foo a full join foo b on false;
           </dxl:CTEProducer>
           <dxl:Sequence>
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="2586.002589" Rows="80.000000" Width="8"/>
+              <dxl:Cost StartupCost="0" TotalCost="2586.002718" Rows="80.000000" Width="8"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">
@@ -290,7 +290,7 @@ select * from foo a full join foo b on false;
             </dxl:ProjList>
             <dxl:CTEProducer CTEId="1" Columns="24,25,26,27,28,29,30,31">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="431.000241" Rows="8.000000" Width="1"/>
+                <dxl:Cost StartupCost="0" TotalCost="431.000370" Rows="8.000000" Width="1"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="24" Alias="a">
@@ -320,7 +320,7 @@ select * from foo a full join foo b on false;
               </dxl:ProjList>
               <dxl:TableScan>
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="431.000050" Rows="8.000000" Width="38"/>
+                  <dxl:Cost StartupCost="0" TotalCost="431.000050" Rows="8.000000" Width="64"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="24" Alias="a">

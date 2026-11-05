@@ -13,6 +13,7 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/base/COptCtxt.h"
 #include "gpopt/operators/CExpression.h"
 #include "gpopt/operators/CExpressionHandle.h"
 
@@ -141,6 +142,62 @@ CLogicalCTEProducer::DeriveTableDescriptor(CMemoryPool *,
 		exprhdl.DeriveTableDescriptor(0);
 	child_table_descriptor_set->AddRef();
 	return child_table_descriptor_set;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CLogicalCTEProducer::PstatsDerive
+//
+//	@doc:
+//		Pass the statistics of the body through, and in the memo publish them
+//		for the consumers
+//
+//---------------------------------------------------------------------------
+IStatistics *
+CLogicalCTEProducer::PstatsDerive(CMemoryPool *, CExpressionHandle &exprhdl,
+								  IStatisticsArray *  // stats_ctxt
+) const
+{
+	IStatistics *stats = PstatsPassThruOuter(exprhdl);
+
+	if (nullptr != exprhdl.Pgexpr())
+	{
+		COptCtxt::PoctxtFromTLS()->Pcteinfo()->SetProducerMemoStats(m_id,
+																	stats);
+	}
+
+	return stats;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CLogicalCTEProducer::Esp
+//
+//	@doc:
+//		Promise level for stat derivation. Producer statistics are derived
+//		from its body, so when the producer is a standalone expression its
+//		promise is that of the body's root operator (e.g. low if it has a
+//		subquery predicate). In the memo the producer is alone in its group,
+//		so its promise is irrelevant.
+//
+//---------------------------------------------------------------------------
+CLogical::EStatPromise
+CLogicalCTEProducer::Esp(CExpressionHandle &exprhdl) const
+{
+	CExpression *pexpr = exprhdl.Pexpr();
+	if (nullptr == pexpr)
+	{
+		return CLogical::EspHigh;
+	}
+
+	CMemoryPool *mp = COptCtxt::PoctxtFromTLS()->Pmp();
+	CExpression *pexprBody = (*pexpr)[0];
+
+	CExpressionHandle exprhdlBody(mp);
+	exprhdlBody.Attach(pexprBody);
+	exprhdlBody.DeriveProps(nullptr /*pdpctxt*/);
+
+	return CLogical::PopConvert(pexprBody->Pop())->Esp(exprhdlBody);
 }
 
 //---------------------------------------------------------------------------
