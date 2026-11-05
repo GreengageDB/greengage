@@ -8,11 +8,11 @@
 
 static jmp_buf fatal_tag;
 
-FILE *fopen (const char *__restrict __filename,
+FILE *__wrap_fopen (const char *__restrict __filename,
 			 const char *__restrict __modes);
-char *fgets (char *__restrict __s, int __n, FILE *__restrict __stream);
-int ferror (FILE *__stream);
-int fclose (FILE *__stream);
+char *__wrap_fgets (char *__restrict __s, int __n, FILE *__restrict __stream);
+int __wrap_ferror (FILE *__stream);
+int __wrap_fclose (FILE *__stream);
 void __wrap_pg_fatal (const char* fmt, ...);
 
 ClusterInfo old_cluster,
@@ -31,14 +31,14 @@ char	   *output_files[] = {
 };
 
 FILE
-*fopen (const char *__restrict __filename,
+*__wrap_fopen (const char *__restrict __filename,
 					const char *__restrict __modes)
 {
 	return (FILE *) mock();
 }
 
 char
-*fgets (char *__restrict __s, int __n, FILE *__restrict __stream)
+*__wrap_fgets (char *__restrict __s, int __n, FILE *__restrict __stream)
 {
 	char *mock_text = (char*) mock();
 	if (mock_text == NULL)
@@ -51,13 +51,13 @@ char
 }
 
 int
-ferror (FILE *__stream)
+__wrap_ferror (FILE *__stream)
 {
 	return mock();
 }
 
 int
-fclose (FILE *__stream)
+__wrap_fclose (FILE *__stream)
 {
 	check_expected(__stream);
 	return 0;
@@ -77,32 +77,32 @@ test__get_dbid (void **state)
 	clusterInfo.pgdata = "/tmp/pgdata";
 
 	// Find a gp_dbid in the first line.
-	will_return(fopen, 0x10);
-	will_return(fgets, "gp_dbid=1");
-	will_return(ferror, 0);
-	expect_value(fclose, __stream, 0x10);
+	will_return(__wrap_fopen, 0x10);
+	will_return(__wrap_fgets, "gp_dbid=1");
+	will_return(__wrap_ferror, 0);
+	expect_value(__wrap_fclose, __stream, 0x10);
 
 	assert_int_equal(get_dbid(&clusterInfo), 1);
 
 	// The gp_dbid line with spaces
-	will_return(fopen, 0x10);
-	will_return(fgets, "gp_dbid = 1");
-	will_return(ferror, 0);
-	expect_value(fclose, __stream, 0x10);
+	will_return(__wrap_fopen, 0x10);
+	will_return(__wrap_fgets, "gp_dbid = 1");
+	will_return(__wrap_ferror, 0);
+	expect_value(__wrap_fclose, __stream, 0x10);
 	
 	assert_int_equal(get_dbid(&clusterInfo), 1);
 	
 	// Find a gp_dbid in the second line.
-	will_return(fopen, 0x10);
-	will_return(fgets, "test=1");
-	will_return(fgets, "gp_dbid=10");
-	will_return(ferror, 0);
-	expect_value(fclose, __stream, 0x10);
+	will_return(__wrap_fopen, 0x10);
+	will_return(__wrap_fgets, "test=1");
+	will_return(__wrap_fgets, "gp_dbid=10");
+	will_return(__wrap_ferror, 0);
+	expect_value(__wrap_fclose, __stream, 0x10);
 
 	assert_int_equal(get_dbid(&clusterInfo), 10);
 	
-	// The fopen fail with "No such file or directory"
-	will_return(fopen, NULL);
+	// The fopen fail
+	will_return(__wrap_fopen, NULL);
 	expect_string(__wrap_pg_fatal, fmt,
 				  "could not open file \"%s\": %m\n");
 	if (setjmp(fatal_tag) == 0)
@@ -112,9 +112,9 @@ test__get_dbid (void **state)
 	}
 
 	// The fgets fail with I/O error
-	will_return(fopen, 0x10);
-	will_return(fgets, NULL);
-	will_return(ferror, EIO);
+	will_return(__wrap_fopen, 0x10);
+	will_return(__wrap_fgets, NULL);
+	will_return(__wrap_ferror, EIO);
 	expect_string(__wrap_pg_fatal, fmt,
 				  "An error occurred during %s file read: %m\n");
 	if (setjmp(fatal_tag) == 0)
@@ -124,11 +124,11 @@ test__get_dbid (void **state)
 	}
 	
 	// Could not find a dbid in the file
-	will_return(fopen, 0x10);
-	will_return(fgets, "test=1");
-	will_return(fgets, NULL);
-	will_return(ferror, 0);
-	expect_value(fclose, __stream, 0x10);
+	will_return(__wrap_fopen, 0x10);
+	will_return(__wrap_fgets, "test=1");
+	will_return(__wrap_fgets, NULL);
+	will_return(__wrap_ferror, 0);
+	expect_value(__wrap_fclose, __stream, 0x10);
 	expect_string(__wrap_pg_fatal, fmt, "could not find dbid in %s\n");
 	if (setjmp(fatal_tag) == 0)
 	{

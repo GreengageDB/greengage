@@ -5,7 +5,7 @@ include $(top_builddir)/src/Makefile.global
 TARGETS=tablespace
 
 override CPPFLAGS+= -I../ -I$(top_srcdir)/src/interfaces/libpq 
-override LDFLAGS+= -Wl,--wrap=pg_fatal
+override LDFLAGS+= -Wl,--wrap=pg_fatal,--wrap=fopen,--wrap=fgets,--wrap=ferror,--wrap=fclose
 
 include $(top_srcdir)/src/Makefile.mock
 
