@@ -158,6 +158,19 @@ static TempcatSnapshot PendingPreparedSnapshot = NULL;
 static bool TempcatDirtyFlag = false;
 
 /*
+ * Set when this transaction changed virtual catalog rows.  A QE reports it
+ * to the dispatcher with the ReadyForQuery 'x' message, so that a
+ * transaction which changed in-memory catalog rows is committed in two
+ * phases: with a one-phase commit, a failure at commit on one segment (a
+ * deferred constraint, for instance) cannot undo catalog changes already
+ * committed on the other segments, and the session ends up with some
+ * segments having applied the DDL and some not.  Like a WAL write, the
+ * flag survives subtransaction rollback and is cleared only when the next
+ * transaction starts.
+ */
+static bool TempcatXactModified = false;
+
+/*
  * Set when the session's set of dependency edges changed and must be
  * re-published to the shared-memory registry at the next commit.  Readers
  * that received their rows via deserialization never set it.
@@ -690,8 +703,25 @@ TempcatSnapshotPushFront(TempcatSnapshot tempcat_snapshot)
 }
 
 /*****************************************************************************
-							 MAIN PROCEDURES
+						MAIN PROCEDURES
  *****************************************************************************/
+
+/*
+ * Whether the current transaction changed virtual catalog rows (see
+ * TempcatXactModified).  Reported by a QE in the ReadyForQuery 'x'
+ * message next to TransactionWroteWalForPermanentRel().
+ */
+bool
+tempcat_xact_modified(void)
+{
+	return TempcatXactModified;
+}
+
+void
+tempcat_reset_xact_modified(void)
+{
+	TempcatXactModified = false;
+}
 
 /*
  * Make preparations related to virtual catalog on transaction begin.
@@ -1108,6 +1138,7 @@ tempcat_insert(Relation relation, HeapTuple htup)
 	CacheInvalidateHeapTuple(relation, dlist_tup->tup, NULL);
 	tempcat_mark_command_id_used();
 	TempcatDirtyFlag = true;
+	TempcatXactModified = true;
 
 	TempcatDescCacheInsert(relation);
 
@@ -1163,6 +1194,7 @@ tempcat_delete(Relation relation, ItemPointer tid)
 #endif
 
 			TempcatDirtyFlag = true;
+			TempcatXactModified = true;
 			if (RelationGetRelid(relation) == DependRelationId ||
 				RelationGetRelid(relation) == SharedDependRelationId ||
 				RelationGetRelid(relation) == InheritsRelationId)
@@ -1230,6 +1262,7 @@ tempcat_update(Relation relation, ItemPointer otid, HeapTuple newtup)
 				 relation_entry->tuples_num);
 #endif
 			TempcatDirtyFlag = true;
+			TempcatXactModified = true;
 			return;
 		}
 	}

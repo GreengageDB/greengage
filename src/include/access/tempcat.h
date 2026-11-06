@@ -69,6 +69,8 @@ extern bool      tempcat_relation_is_virtual(Oid relid);
 extern bool      tempcat_type_is_virtual(Oid typoid);
 
 /* Transaction support */
+extern bool      tempcat_xact_modified(void);
+extern void      tempcat_reset_xact_modified(void);
 extern void      tempcat_begin_transaction(void);
 extern void      tempcat_end_transaction(void);
 extern void      tempcat_abort_transaction(void);

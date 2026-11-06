@@ -2464,6 +2464,7 @@ StartTransaction(void)
 	s->didLogXid = false;
 	TopXactexecutorDidWriteXLog = false;
 	xactWroteWalForPermanentRel = false;
+	tempcat_reset_xact_modified();
 
 	/*
 	 * must initialize resource-management stuff first
