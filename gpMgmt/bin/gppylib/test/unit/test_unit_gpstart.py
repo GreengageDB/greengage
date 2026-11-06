@@ -79,9 +79,9 @@ class GpStart(GpTestCase):
         super(GpStart, self).tearDown()
 
     def setup_gpstart(self):
-        parser = self.subject.GpStart.createParser()
+        parser = self.subject.GpStartHA.createParser()
         options, args = parser.parse_args()
-        gpstart = self.subject.GpStart.createProgram(options, args)
+        gpstart = self.subject.GpStartHA.createProgram(options, args)
         return gpstart
 
     def test_option_coordinator_success_without_auto_accept(self):
@@ -358,9 +358,9 @@ class GpStart(GpTestCase):
 
     def test_prepare_segment_start_returns_up_and_down_segments(self):
         # Boilerplate: create a gpstart object
-        parser = self.subject.GpStart.createParser()
+        parser = self.subject.GpStartHA.createParser()
         options, args = parser.parse_args([])
-        gpstart = self.subject.GpStart.createProgram(options, args)
+        gpstart = self.subject.GpStartHA.createProgram(options, args)
 
         # Up segments
         coordinator = Segment.initFromString("1|-1|p|p|n|u|cdw|cdw|5432|/data/coordinator")
