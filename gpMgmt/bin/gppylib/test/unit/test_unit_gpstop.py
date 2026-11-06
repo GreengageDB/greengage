@@ -100,6 +100,31 @@ class GpStop(GpTestCase):
     def get_error_messages(self):
         return [args[0][0] for args in self.subject.logger.error.call_args_list]
 
+    @patch('gpstop.patroni')
+    @patch('gpstop.pg.DbStatus')
+    def test_ha_shutdown_returns_segment_stop_status(self, mock_db_status, mock_patroni):
+        mock_db_status.local.return_value = False
+        mock_db_status.remote.return_value = False
+        mock_patroni.PatroniAgentsCheck.local.return_value = True
+        mock_patroni.PatroniAgentsCheck.remote.return_value = True
+
+        for had_failures, expected_rc in ((True, 2), (False, 0)):
+            with self.subTest(had_failures=had_failures):
+                self.subject.logger.reset_mock()
+                program = self.subject.GpStopHA('fast')
+                program._prepare = Mock()
+                program.gparray = Mock()
+
+                def stop_segments(segs):
+                    program.hadFailures = had_failures
+
+                program._stop_segments = Mock(side_effect=stop_segments)
+                self.assertEqual(program.run(), expected_rc)
+                program._stop_segments.assert_called_once_with(program.gparray.getSegDbList())
+                if had_failures:
+                    self.assertNotIn('coordinator-HA: segments are stopped', self.get_info_messages())
+                    self.assertNotIn('coordinator-HA: all done', self.get_info_messages())
+
     @patch('gpstop.userinput', return_value=Mock(spec=['ask_yesno']))
     def test_option_coordinator_success_without_auto_accept(self, mock_userinput):
         sys.argv = ["gpstop", "-m"]

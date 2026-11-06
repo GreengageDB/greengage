@@ -936,6 +936,9 @@ class GpStopHA (GpStop):
             logger.info(f"coordinator-HA: stop segments...")
             segs = self.gparray.getSegDbList()
             self._stop_segments(segs)
+            if self.hadFailures:
+                logger.error("coordinator-HA: failed to stop one or more segments")
+                return 2
             logger.info(f"coordinator-HA: segments are stopped")
 
             logger.info('coordinator-HA: all done')
