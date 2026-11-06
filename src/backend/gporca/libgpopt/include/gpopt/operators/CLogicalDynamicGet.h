@@ -45,8 +45,6 @@ protected:
 	// relation has row level security enabled and has security quals
 	BOOL m_has_security_quals{false};
 
-	CBitSet *m_selected_parts{nullptr};
-
 public:
 	CLogicalDynamicGet(const CLogicalDynamicGet &) = delete;
 
@@ -105,12 +103,6 @@ public:
 	HasSecurityQuals() const
 	{
 		return m_has_security_quals;
-	}
-
-	CBitSet *
-	GetSelectedParts() const
-	{
-		return m_selected_parts;
 	}
 
 	// operator specific hash function

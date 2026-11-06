@@ -801,6 +801,7 @@ _outDynamicIndexScan(StringInfo str, const DynamicIndexScan *node)
 	WRITE_NODE_FIELD(partOids);
 	WRITE_NODE_FIELD(part_prune_info);
 	WRITE_NODE_FIELD(join_prune_paramids);
+	WRITE_BITMAPSET_FIELD(selected_parts);
 }
 
 static void
@@ -812,6 +813,7 @@ _outDynamicIndexOnlyScan(StringInfo str, const DynamicIndexOnlyScan *node)
 	WRITE_NODE_FIELD(partOids);
 	WRITE_NODE_FIELD(part_prune_info);
 	WRITE_NODE_FIELD(join_prune_paramids);
+	WRITE_BITMAPSET_FIELD(selected_parts);
 }
 
 static void
@@ -866,6 +868,7 @@ _outDynamicBitmapHeapScan(StringInfo str, const DynamicBitmapHeapScan *node)
 	WRITE_NODE_FIELD(partOids);
 	WRITE_NODE_FIELD(part_prune_info);
 	WRITE_NODE_FIELD(join_prune_paramids);
+	WRITE_BITMAPSET_FIELD(selected_parts);
 }
 
 static void

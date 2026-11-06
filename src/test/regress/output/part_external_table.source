@@ -490,9 +490,10 @@ select * from part_mixed pm join filter_table ft on pm.b = ft.a;
  15 | 15 | 15
 (1 row)
 
--- the moment, ORCA cannot generate a dynamic index scan on a table with mixed 
--- partitions, so executors don't fully support it either.
--- This test is needed to catch when ORCA starts generating such plans. 
+-- With the select pushed below the union all of the heap and foreign branches,
+-- ORCA generates a dynamic index scan on the heap branch of a table with mixed
+-- partitions. The index scan must cover the heap partitions only; the foreign
+-- partition has no index and is scanned by the foreign branch.
 create index on part_mixed(a);
 explain (costs off) select * from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
                             QUERY PLAN                            
@@ -514,6 +515,47 @@ explain (costs off) select * from part_mixed pm join filter_table ft on pm.b = f
  Optimizer: Postgres-based planner
 (15 rows)
 
+select * from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
+ a  | b  | a  
+----+----+----
+ 15 | 15 | 15
+(1 row)
+
+-- Dynamic partition elimination over the dynamic index only scan of the heap
+-- branch. The partition selector refers to positions in the full partition
+-- list, so the scan keeps that list and applies its own set of partitions on
+-- top of the partitions chosen by the selector.
+create index on part_mixed(a, b);
+set optimizer_enable_dynamictablescan = off;
+set optimizer_enable_dynamicindexscan = off;
+explain (costs off) select pm.a, pm.b from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (ft.a = pm.b)
+         ->  Seq Scan on filter_table ft
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: pm.b
+                     ->  Append
+                           ->  Foreign Scan on p_e1 pm
+                                 Filter: (a = 15)
+                           ->  Seq Scan on p_1 pm_1
+                                 Filter: (a = 15)
+                           ->  Seq Scan on p_2 pm_2
+                                 Filter: (a = 15)
+ Optimizer: Postgres-based planner
+(15 rows)
+
+select pm.a, pm.b from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
+ a  | b  
+----+----
+ 15 | 15
+(1 row)
+
+reset optimizer_enable_dynamictablescan;
+reset optimizer_enable_dynamicindexscan;
 drop table part_mixed cascade;
 -- Find a value in the last external partition
 CREATE TABLE part_mixed (a int, b int) PARTITION BY RANGE (b);
@@ -579,6 +621,102 @@ select * from part_mixed;
  17 | 18
 (10 rows)
 
+-- Dynamic index scan over the heap branch of a table whose foreign partitions
+-- sit in the middle of the partition list: the selected heap partitions are
+-- not a single range of positions.
+analyse part_mixed;
+WARNING:  skipping "p_e2" --- cannot analyze this foreign table
+WARNING:  skipping "p_e1" --- cannot analyze this foreign table
+create index on part_mixed(a);
+explain (costs off) select * from part_mixed pm where pm.a = 35;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Seq Scan on p_0 pm
+               Filter: (a = 35)
+         ->  Foreign Scan on p_e1 pm_1
+               Filter: (a = 35)
+         ->  Foreign Scan on p_e2 pm_2
+               Filter: (a = 35)
+         ->  Seq Scan on p_3 pm_3
+               Filter: (a = 35)
+ Optimizer: Postgres-based planner
+(11 rows)
+
+select * from part_mixed pm where pm.a = 35;
+ a  | b  
+----+----
+ 35 | 35
+(1 row)
+
+-- Dynamic bitmap heap scan over the heap branch of the same table.
+set optimizer_enable_dynamictablescan = off;
+set optimizer_enable_dynamicindexscan = off;
+set optimizer_enable_dynamicindexonlyscan = off;
+explain (costs off) select * from part_mixed pm where pm.a = 35 or pm.a = -5;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Seq Scan on p_0 pm
+               Filter: ((a = 35) OR (a = '-5'::integer))
+         ->  Foreign Scan on p_e1 pm_1
+               Filter: ((a = 35) OR (a = '-5'::integer))
+         ->  Foreign Scan on p_e2 pm_2
+               Filter: ((a = 35) OR (a = '-5'::integer))
+         ->  Seq Scan on p_3 pm_3
+               Filter: ((a = 35) OR (a = '-5'::integer))
+ Optimizer: Postgres-based planner
+(11 rows)
+
+select * from part_mixed pm where pm.a = 35 or pm.a = -5;
+ a  | b  
+----+----
+ -5 | -5
+ 35 | 35
+(2 rows)
+
+reset optimizer_enable_dynamictablescan;
+reset optimizer_enable_dynamicindexscan;
+reset optimizer_enable_dynamicindexonlyscan;
+insert into filter_table values (35);
+-- Dynamic partition elimination over the dynamic index only scan of the same
+-- table: the partition selector picks the partitions holding 15 and 35, and
+-- the scan intersects them with its own set of heap partitions.
+create index on part_mixed(a, b);
+set optimizer_enable_dynamictablescan = off;
+set optimizer_enable_dynamicindexscan = off;
+explain (costs off) select pm.a, pm.b from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 35;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (ft.a = pm.b)
+         ->  Seq Scan on filter_table ft
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: pm.b
+                     ->  Append
+                           ->  Seq Scan on p_0 pm
+                                 Filter: (a = 35)
+                           ->  Foreign Scan on p_e1 pm_1
+                                 Filter: (a = 35)
+                           ->  Foreign Scan on p_e2 pm_2
+                                 Filter: (a = 35)
+                           ->  Seq Scan on p_3 pm_3
+                                 Filter: (a = 35)
+ Optimizer: Postgres-based planner
+(17 rows)
+
+select pm.a, pm.b from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 35;
+ a  | b  
+----+----
+ 35 | 35
+(1 row)
+
+reset optimizer_enable_dynamictablescan;
+reset optimizer_enable_dynamicindexscan;
 drop table if exists filter_table;
 drop table if exists part_mixed cascade;
 drop external table if exists p_e1;

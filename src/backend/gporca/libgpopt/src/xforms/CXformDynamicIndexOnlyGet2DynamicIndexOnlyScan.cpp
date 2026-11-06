@@ -118,6 +118,11 @@ CXformDynamicIndexOnlyGet2DynamicIndexOnlyScan::Transform(
 
 	popIndexGet->GetPartitionMdids()->AddRef();
 	popIndexGet->GetRootColMappingPerPart()->AddRef();
+	CBitSet *selected_parts = popIndexGet->GetSelectedParts();
+	if (nullptr != selected_parts)
+	{
+		selected_parts->AddRef();
+	}
 
 	// create alternative expression
 	pxfres->Add(GPOS_NEW(mp) CExpression(
@@ -126,7 +131,7 @@ CXformDynamicIndexOnlyGet2DynamicIndexOnlyScan::Transform(
 			mp, pindexdesc, ptabdesc, pexpr->Pop()->UlOpId(),
 			GPOS_NEW(mp) CName(mp, popIndexGet->Name()), pdrgpcrOutput,
 			popIndexGet->ScanId(), pdrgpdrgpcrPart, pos,
-			popIndexGet->GetPartitionMdids(),
+			popIndexGet->GetPartitionMdids(), selected_parts,
 			popIndexGet->GetRootColMappingPerPart()),
 		pexprIndexCond));
 }

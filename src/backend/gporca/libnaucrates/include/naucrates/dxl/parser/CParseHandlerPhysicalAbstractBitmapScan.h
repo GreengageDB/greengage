@@ -13,6 +13,7 @@
 #define GPDXL_CParseHandlerPhysicalAbstractBitmapScan_H
 
 #include "gpos/base.h"
+#include "gpos/common/CBitSet.h"
 
 #include "naucrates/dxl/parser/CParseHandlerPhysicalOp.h"
 #include "naucrates/dxl/xml/dxltokens.h"
@@ -42,7 +43,8 @@ protected:
 	// common EndElement functionality for child classes
 	void EndElementHelper(const XMLCh *const element_local_name,
 						  Edxltoken token_type,
-						  ULongPtrArray *selector_ids = nullptr);
+						  ULongPtrArray *selector_ids = nullptr,
+						  CBitSet *selected_parts = nullptr);
 
 public:
 	CParseHandlerPhysicalAbstractBitmapScan(

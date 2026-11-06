@@ -55,10 +55,10 @@ CLogicalDynamicForeignGet::CLogicalDynamicForeignGet(
 
 
 	: CLogicalDynamicGetBase(mp, pnameAlias, ptabdesc, ulPartIndex,
-							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids),
+							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids,
+							 selected_parts),
 	  m_foreign_server_oid(foreign_server_oid),
-	  m_exec_location(exec_location),
-	  m_selected_parts(selected_parts)
+	  m_exec_location(exec_location)
 {
 	GPOS_ASSERT(nullptr != selected_parts);
 }
@@ -122,11 +122,6 @@ CLogicalDynamicForeignGet::PopCopyWithRemappedColumns(
 		mp, pnameAlias, Ptabdesc(), m_scan_id, pdrgpcrOutput, pdrgpdrgpcrPart,
 		m_partition_mdids, m_selected_parts, m_foreign_server_oid,
 		m_exec_location);
-}
-
-CLogicalDynamicForeignGet::~CLogicalDynamicForeignGet()
-{
-	CRefCount::SafeRelease(m_selected_parts);
 }
 
 //---------------------------------------------------------------------------
