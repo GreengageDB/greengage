@@ -116,7 +116,7 @@ class PatroniAgentsStart(Command):
         # Note: if one changes the way patroni agent is started,
         # also take a look at PatroniAgentsCheck and PatroniAgentsStop -
         # they need to be aligned.
-        Command.__init__(self, name, "python3 -m patroni %s > /home/gpadmin/gpAdminLogs/patroni_agent.log 2>&1 &" % (config_file), ctxt, remoteHost)
+        Command.__init__(self, name, "python3 -m patroni %s > ~/gpAdminLogs/patroni_agent.log 2>&1 &" % (config_file), ctxt, remoteHost)
 
     @staticmethod
     def local(name, config_file):
