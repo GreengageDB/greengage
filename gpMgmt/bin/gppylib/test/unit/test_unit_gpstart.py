@@ -84,6 +84,39 @@ class GpStart(GpTestCase):
         gpstart = self.subject.GpStartHA.createProgram(options, args)
         return gpstart
 
+    @patch('gpstart.time.sleep')
+    @patch('gpstart.GpStartHA.PATRONI_MEMBER_STATE_TIMEOUT_SEC', 3)
+    def test_ha_replica_validation_rejects_missing_or_non_streaming_replica(self, mock_sleep):
+        starting = {'Host': 'scdw:7001', 'State': 'starting'}
+        cases = (
+            ('missing', [[], [], []], 'replica was not found'),
+            ('disappeared', [[starting], [], []], 'replica was not found'),
+            ('not streaming', [[starting]] * 3, "actual is 'starting'"),
+        )
+        for name, snapshots, message in cases:
+            with self.subTest(case=name):
+                program = self.subject.GpStartHA('/tmp/cdd', '/tmp/mdw.yml', '/tmp/smdw.yml')
+                program._patronictl_list_members = Mock(
+                    side_effect=[(None, replicas) for replicas in snapshots])
+                with self.assertRaisesRegex(ExceptionNoStackTraceNeeded, message):
+                    program._validate_patroni_cluster_replicas()
+                self.assertEqual(program._patronictl_list_members.call_count, 3)
+
+    @patch('gpstart.time.sleep')
+    @patch('gpstart.GpStartHA.PATRONI_MEMBER_STATE_TIMEOUT_SEC', 3)
+    def test_ha_replica_validation_waits_for_streaming_replica(self, mock_sleep):
+        starting = {'Host': 'scdw:7001', 'State': 'starting'}
+        streaming = {'Host': 'scdw:7001', 'State': 'streaming'}
+        for snapshots in ([[streaming]], [[], [starting], [streaming]]):
+            with self.subTest(snapshots=snapshots):
+                mock_sleep.reset_mock()
+                program = self.subject.GpStartHA('/tmp/cdd', '/tmp/mdw.yml', '/tmp/smdw.yml')
+                program._patronictl_list_members = Mock(
+                    side_effect=[(None, replicas) for replicas in snapshots])
+                program._validate_patroni_cluster_replicas()
+                self.assertEqual(program._patronictl_list_members.call_count, len(snapshots))
+                self.assertEqual(mock_sleep.call_count, len(snapshots) - 1)
+
     def test_option_coordinator_success_without_auto_accept(self):
         sys.argv = ["gpstart", "-m"]
         self.mock_userinput.ask_yesno.return_value = True

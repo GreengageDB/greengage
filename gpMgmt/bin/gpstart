@@ -1001,10 +1001,13 @@ class GpStartHA (GpStart):
                 replica_state = replica["State"]
                 if replica_state != expected_state:
                     non_streaming_replicas.append(replica)
-            if not non_streaming_replicas:
+            if replicas and not non_streaming_replicas:
                 break
             time.sleep(1)
             timeout = timeout - 1
+
+        if not replicas:
+            raise ExceptionNoStackTraceNeeded("Patroni standby replica was not found")
 
         if (non_streaming_replicas):
             msg = ""
