@@ -304,6 +304,16 @@ analyse part_mixed;
 create index on part_mixed(a);
 explain (costs off) select * from part_mixed pm where pm.a = 35;
 select * from part_mixed pm where pm.a = 35;
+
+-- Dynamic bitmap heap scan over the heap branch of the same table.
+set optimizer_enable_dynamictablescan = off;
+set optimizer_enable_dynamicindexscan = off;
+set optimizer_enable_dynamicindexonlyscan = off;
+explain (costs off) select * from part_mixed pm where pm.a = 35 or pm.a = -5;
+select * from part_mixed pm where pm.a = 35 or pm.a = -5;
+reset optimizer_enable_dynamictablescan;
+reset optimizer_enable_dynamicindexscan;
+reset optimizer_enable_dynamicindexonlyscan;
 insert into filter_table values (35);
 
 -- Dynamic partition elimination over the dynamic index only scan of the same

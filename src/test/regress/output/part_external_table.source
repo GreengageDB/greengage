@@ -727,6 +727,36 @@ select * from part_mixed pm where pm.a = 35;
  35 | 35
 (1 row)
 
+-- Dynamic bitmap heap scan over the heap branch of the same table.
+set optimizer_enable_dynamictablescan = off;
+set optimizer_enable_dynamicindexscan = off;
+set optimizer_enable_dynamicindexonlyscan = off;
+explain (costs off) select * from part_mixed pm where pm.a = 35 or pm.a = -5;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Seq Scan on p_0 pm
+               Filter: ((a = 35) OR (a = '-5'::integer))
+         ->  Foreign Scan on p_e1 pm_1
+               Filter: ((a = 35) OR (a = '-5'::integer))
+         ->  Foreign Scan on p_e2 pm_2
+               Filter: ((a = 35) OR (a = '-5'::integer))
+         ->  Seq Scan on p_3 pm_3
+               Filter: ((a = 35) OR (a = '-5'::integer))
+ Optimizer: Postgres-based planner
+(11 rows)
+
+select * from part_mixed pm where pm.a = 35 or pm.a = -5;
+ a  | b  
+----+----
+ -5 | -5
+ 35 | 35
+(2 rows)
+
+reset optimizer_enable_dynamictablescan;
+reset optimizer_enable_dynamicindexscan;
+reset optimizer_enable_dynamicindexonlyscan;
 insert into filter_table values (35);
 -- Dynamic partition elimination over the dynamic index only scan of the same
 -- table: the partition selector picks the partitions holding 15 and 35, and
