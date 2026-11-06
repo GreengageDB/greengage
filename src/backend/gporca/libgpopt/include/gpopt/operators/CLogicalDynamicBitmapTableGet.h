@@ -43,10 +43,6 @@ private:
 	// origin operator id -- gpos::ulong_max if operator was not generated via a transformation
 	ULONG m_ulOriginOpId;
 
-	// positions in the partition list that belong to this operator; null
-	// when the operator covers every partition of the list
-	CBitSet *m_selected_parts{nullptr};
-
 public:
 	CLogicalDynamicBitmapTableGet(const CLogicalDynamicBitmapTableGet &) =
 		delete;
@@ -60,14 +56,8 @@ public:
 
 	explicit CLogicalDynamicBitmapTableGet(CMemoryPool *mp);
 
-	CBitSet *
-	GetSelectedParts() const
-	{
-		return m_selected_parts;
-	}
-
 	// dtor
-	~CLogicalDynamicBitmapTableGet() override;
+	~CLogicalDynamicBitmapTableGet() override = default;
 
 	// identifier
 	EOperatorId

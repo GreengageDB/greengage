@@ -61,16 +61,15 @@ CLogicalDynamicGet::CLogicalDynamicGet(
 	IMdIdArray *foreign_server_mdids, CBitSet *selected_parts,
 	BOOL hasSecurityQuals)
 	: CLogicalDynamicGetBase(mp, pnameAlias, ptabdesc, ulPartIndex,
-							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids),
+							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids,
+							 selected_parts),
 	  m_partition_cnstrs_disj(partition_cnstrs_disj),
 	  m_static_pruned(static_pruned),
 	  m_foreign_server_mdids(foreign_server_mdids),
-	  m_has_security_quals(hasSecurityQuals),
-	  m_selected_parts(selected_parts)
+	  m_has_security_quals(hasSecurityQuals)
 {
 	GPOS_ASSERT(static_pruned || (nullptr == partition_cnstrs_disj));
 	GPOS_ASSERT(nullptr != foreign_server_mdids);
-	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
 }
 
 
@@ -90,13 +89,11 @@ CLogicalDynamicGet::CLogicalDynamicGet(CMemoryPool *mp, const CName *pnameAlias,
 									   CBitSet *selected_parts,
 									   BOOL hasSecurityQuals)
 	: CLogicalDynamicGetBase(mp, pnameAlias, ptabdesc, ulPartIndex,
-							 partition_mdids),
+							 partition_mdids, selected_parts),
 	  m_foreign_server_mdids(foreign_server_mdids),
-	  m_has_security_quals(hasSecurityQuals),
-	  m_selected_parts(selected_parts)
+	  m_has_security_quals(hasSecurityQuals)
 {
 	GPOS_ASSERT(nullptr != foreign_server_mdids);
-	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
 }
 
 //---------------------------------------------------------------------------
@@ -111,7 +108,6 @@ CLogicalDynamicGet::~CLogicalDynamicGet()
 {
 	CRefCount::SafeRelease(m_partition_cnstrs_disj);
 	CRefCount::SafeRelease(m_foreign_server_mdids);
-	CRefCount::SafeRelease(m_selected_parts);
 }
 
 //---------------------------------------------------------------------------
@@ -157,12 +153,6 @@ CLogicalDynamicGet::Matches(COperator *pop) const
 	}
 
 	CLogicalDynamicGet *popGet = CLogicalDynamicGet::PopConvert(pop);
-
-	if (!CUtils::FMatchSelectedParts(m_selected_parts,
-									 popGet->m_selected_parts))
-	{
-		return false;
-	}
 
 	return CUtils::FMatchDynamicScan(this, pop) &&
 		   this->HasSecurityQuals() == popGet->HasSecurityQuals();

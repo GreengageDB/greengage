@@ -42,14 +42,12 @@ CPhysicalDynamicIndexScan::CPhysicalDynamicIndexScan(
 	ULONG ulUnindexedPredColCount)
 	: CPhysicalDynamicScan(mp, ptabdesc, ulOriginOpId, pnameAlias, scan_id,
 						   pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids,
-						   root_col_mapping_per_part),
+						   selected_parts, root_col_mapping_per_part),
 	  m_pindexdesc(pindexdesc),
-	  m_pos(pos),
-	  m_selected_parts(selected_parts)
+	  m_pos(pos)
 {
 	GPOS_ASSERT(nullptr != pindexdesc);
 	GPOS_ASSERT(nullptr != pos);
-	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
 
 	m_ulUnindexedPredColCount = ulUnindexedPredColCount;
 }
@@ -67,7 +65,6 @@ CPhysicalDynamicIndexScan::~CPhysicalDynamicIndexScan()
 {
 	m_pindexdesc->Release();
 	m_pos->Release();
-	CRefCount::SafeRelease(m_selected_parts);
 }
 
 //---------------------------------------------------------------------------
@@ -110,9 +107,10 @@ CPhysicalDynamicIndexScan::HashValue() const
 		COperator::HashValue(),
 		gpos::CombineHashes(gpos::HashValue(&scan_id),
 							m_pindexdesc->MDId()->HashValue()));
-	if (m_selected_parts)
+	CBitSet *selected_parts = GetSelectedParts();
+	if (nullptr != selected_parts)
 	{
-		ulHash = gpos::CombineHashes(ulHash, m_selected_parts->HashValue());
+		ulHash = gpos::CombineHashes(ulHash, selected_parts->HashValue());
 	}
 	return ulHash;
 }

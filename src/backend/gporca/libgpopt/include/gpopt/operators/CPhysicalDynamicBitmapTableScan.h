@@ -40,10 +40,6 @@ class CName;
 class CPhysicalDynamicBitmapTableScan : public CPhysicalDynamicScan
 {
 private:
-	// positions in the partition list that belong to this operator; null
-	// when the operator covers every partition of the list
-	CBitSet *m_selected_parts;
-
 public:
 	CPhysicalDynamicBitmapTableScan(const CPhysicalDynamicBitmapTableScan &) =
 		delete;
@@ -57,13 +53,7 @@ public:
 		ColRefToUlongMapArray *root_col_mapping_per_part);
 
 	// dtor
-	~CPhysicalDynamicBitmapTableScan() override;
-
-	CBitSet *
-	GetSelectedParts() const
-	{
-		return m_selected_parts;
-	}
+	~CPhysicalDynamicBitmapTableScan() override = default;
 
 	// ident accessors
 	EOperatorId

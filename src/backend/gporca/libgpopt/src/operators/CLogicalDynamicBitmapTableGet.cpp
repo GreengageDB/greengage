@@ -40,12 +40,10 @@ CLogicalDynamicBitmapTableGet::CLogicalDynamicBitmapTableGet(
 	CColRefArray *pdrgpcrOutput, CColRef2dArray *pdrgpdrgpcrPart,
 	IMdIdArray *partition_mdids, CBitSet *selected_parts)
 	: CLogicalDynamicGetBase(mp, pnameTableAlias, ptabdesc, ulPartIndex,
-							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids),
-	  m_ulOriginOpId(ulOriginOpId),
-	  m_selected_parts(selected_parts)
-
+							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids,
+							 selected_parts),
+	  m_ulOriginOpId(ulOriginOpId)
 {
-	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
 }
 
 //---------------------------------------------------------------------------
@@ -59,19 +57,6 @@ CLogicalDynamicBitmapTableGet::CLogicalDynamicBitmapTableGet(
 CLogicalDynamicBitmapTableGet::CLogicalDynamicBitmapTableGet(CMemoryPool *mp)
 	: CLogicalDynamicGetBase(mp), m_ulOriginOpId(gpos::ulong_max)
 {
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CLogicalDynamicBitmapTableGet::~CLogicalDynamicBitmapTableGet
-//
-//	@doc:
-//		Dtor
-//
-//---------------------------------------------------------------------------
-CLogicalDynamicBitmapTableGet::~CLogicalDynamicBitmapTableGet()
-{
-	CRefCount::SafeRelease(m_selected_parts);
 }
 
 //---------------------------------------------------------------------------

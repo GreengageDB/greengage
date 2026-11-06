@@ -44,10 +44,6 @@ private:
 	// Number of predicate not applicable on the index
 	ULONG m_ulUnindexedPredColCount;
 
-	// positions in the partition list that belong to this operator; null
-	// when the operator covers every partition of the list
-	CBitSet *m_selected_parts;
-
 public:
 	CPhysicalDynamicIndexScan(const CPhysicalDynamicIndexScan &) = delete;
 
@@ -64,13 +60,6 @@ public:
 
 	// dtor
 	~CPhysicalDynamicIndexScan() override;
-
-	CBitSet *
-	GetSelectedParts() const
-	{
-		return m_selected_parts;
-	}
-
 
 	// ident accessors
 	EOperatorId

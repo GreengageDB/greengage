@@ -43,15 +43,8 @@ CPhysicalDynamicBitmapTableScan::CPhysicalDynamicBitmapTableScan(
 	CBitSet *selected_parts, ColRefToUlongMapArray *root_col_mapping_per_part)
 	: CPhysicalDynamicScan(mp, ptabdesc, ulOriginOpId, pnameAlias, scan_id,
 						   pdrgpcrOutput, pdrgpdrgpcrParts, partition_mdids,
-						   root_col_mapping_per_part),
-	  m_selected_parts(selected_parts)
+						   selected_parts, root_col_mapping_per_part)
 {
-	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
-}
-
-CPhysicalDynamicBitmapTableScan::~CPhysicalDynamicBitmapTableScan()
-{
-	CRefCount::SafeRelease(m_selected_parts);
 }
 
 //---------------------------------------------------------------------------

@@ -58,13 +58,12 @@ CLogicalDynamicIndexGet::CLogicalDynamicIndexGet(
 	IMdIdArray *partition_mdids, CBitSet *selected_parts,
 	ULONG ulUnindexedPredColCount)
 	: CLogicalDynamicGetBase(mp, pnameAlias, ptabdesc, part_idx_id,
-							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids),
+							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids,
+							 selected_parts),
 	  m_pindexdesc(nullptr),
-	  m_ulOriginOpId(ulOriginOpId),
-	  m_selected_parts(selected_parts)
+	  m_ulOriginOpId(ulOriginOpId)
 {
 	GPOS_ASSERT(nullptr != pmdindex);
-	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
 
 	// create the index descriptor
 	m_pindexdesc = CIndexDescriptor::Pindexdesc(mp, ptabdesc, pmdindex);
@@ -88,7 +87,6 @@ CLogicalDynamicIndexGet::~CLogicalDynamicIndexGet()
 {
 	CRefCount::SafeRelease(m_pindexdesc);
 	CRefCount::SafeRelease(m_pos);
-	CRefCount::SafeRelease(m_selected_parts);
 }
 
 //---------------------------------------------------------------------------
