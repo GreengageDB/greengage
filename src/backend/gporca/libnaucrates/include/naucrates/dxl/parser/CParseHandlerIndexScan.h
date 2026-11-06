@@ -13,6 +13,7 @@
 #define GPDXL_CParseHandlerIndexScan_H
 
 #include "gpos/base.h"
+#include "gpos/common/CBitSet.h"
 
 #include "naucrates/dxl/operators/CDXLPhysicalIndexScan.h"
 #include "naucrates/dxl/parser/CParseHandlerPhysicalOp.h"
@@ -61,7 +62,8 @@ protected:
 	// common EndElement functionality for IndexScan and IndexOnlyScan
 	void EndElementHelper(const XMLCh *const element_local_name,
 						  Edxltoken token_type,
-						  ULongPtrArray *selector_ids = nullptr);
+						  ULongPtrArray *selector_ids = nullptr,
+						  CBitSet *selected_parts = nullptr);
 
 public:
 	CParseHandlerIndexScan(const CParseHandlerIndexScan &) = delete;

@@ -2259,7 +2259,8 @@ ExplainNode(PlanState *planstate, List *ancestors,
 				buf = psprintf("(out of %d)",  countLeafPartTables(relid));
 				ExplainPropertyInteger(
 						"Number of partitions to scan", buf,
-						list_length(((DynamicIndexScan *)plan)->partOids),
+						bms_num_members(
+							((DynamicIndexScan *)plan)->selected_parts),
 						es);
 			}
 			break;
@@ -2288,7 +2289,8 @@ ExplainNode(PlanState *planstate, List *ancestors,
 				buf = psprintf("(out of %d)",  countLeafPartTables(relid));
 				ExplainPropertyInteger(
 						"Number of partitions to scan", buf,
-						list_length(((DynamicIndexOnlyScan *)plan)->partOids),
+						bms_num_members(
+							((DynamicIndexOnlyScan *)plan)->selected_parts),
 						es);
 			}
 			break;
@@ -2311,8 +2313,8 @@ ExplainNode(PlanState *planstate, List *ancestors,
 				buf = psprintf("(out of %d)",  countLeafPartTables(relid));
 				ExplainPropertyInteger(
 						"Number of partitions to scan", buf,
-						list_length(
-							((DynamicBitmapHeapScan *)plan)->partOids),
+						bms_num_members(
+							((DynamicBitmapHeapScan *)plan)->selected_parts),
 						es);
 			}
 			bitmapqualorig = ((BitmapHeapScan *) plan)->bitmapqualorig;

@@ -4393,6 +4393,12 @@ CTranslatorDXLToPlStmt::TranslateDXLDynIdxOnlyScan(
 
 	dyn_idx_only_scan->partOids = TranslatePartOids(
 		dyn_index_only_scan_dxlop->GetParts(), table_desc->LockMode());
+	if (nullptr != dyn_index_only_scan_dxlop->GetSelectedParts())
+		dyn_idx_only_scan->selected_parts =
+			TranslateCBitSet(dyn_index_only_scan_dxlop->GetSelectedParts());
+	else
+		dyn_idx_only_scan->selected_parts = gpdb::BmsAddRange(
+			nullptr, 0, dyn_index_only_scan_dxlop->GetParts()->Size() - 1);
 
 	OID oid_type =
 		CMDIdGPDB::CastMdid(m_md_accessor->PtMDType<IMDTypeInt4>()->MDId())
@@ -4478,6 +4484,12 @@ CTranslatorDXLToPlStmt::TranslateDXLDynIdxScan(
 
 	dyn_idx_only_scan->partOids = TranslatePartOids(
 		dyn_index_scan_dxlop->GetParts(), table_desc->LockMode());
+	if (nullptr != dyn_index_scan_dxlop->GetSelectedParts())
+		dyn_idx_only_scan->selected_parts =
+			TranslateCBitSet(dyn_index_scan_dxlop->GetSelectedParts());
+	else
+		dyn_idx_only_scan->selected_parts = gpdb::BmsAddRange(
+			nullptr, 0, dyn_index_scan_dxlop->GetParts()->Size() - 1);
 
 	OID oid_type =
 		CMDIdGPDB::CastMdid(m_md_accessor->PtMDType<IMDTypeInt4>()->MDId())
@@ -6689,6 +6701,12 @@ CTranslatorDXLToPlStmt::TranslateDXLBitmapTblScan(
 		}
 
 		dscan->partOids = oids_list;
+		if (nullptr != phy_dyn_bitmap_tblscan_dxlop->GetSelectedParts())
+			dscan->selected_parts = TranslateCBitSet(
+				phy_dyn_bitmap_tblscan_dxlop->GetSelectedParts());
+		else
+			dscan->selected_parts =
+				gpdb::BmsAddRange(nullptr, 0, parts->Size() - 1);
 
 		OID oid_type =
 			CMDIdGPDB::CastMdid(m_md_accessor->PtMDType<IMDTypeInt4>()->MDId())

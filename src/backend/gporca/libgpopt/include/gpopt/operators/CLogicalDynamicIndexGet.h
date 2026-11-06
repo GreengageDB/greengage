@@ -59,6 +59,7 @@ public:
 							CColRefArray *pdrgpcrOutput,
 							CColRef2dArray *pdrgpdrgpcrPart,
 							IMdIdArray *partition_mdids,
+							CBitSet *selected_parts,
 							ULONG ulUnindexedPredColCount);
 
 	// dtor

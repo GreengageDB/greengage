@@ -48,7 +48,11 @@ public:
 		CMemoryPool *mp, CTableDescriptor *ptabdesc, ULONG ulOriginOpId,
 		const CName *pnameAlias, ULONG scan_id, CColRefArray *pdrgpcrOutput,
 		CColRef2dArray *pdrgpdrgpcrParts, IMdIdArray *partition_mdids,
+		CBitSet *selected_parts,
 		ColRefToUlongMapArray *root_col_mapping_per_part);
+
+	// dtor
+	~CPhysicalDynamicBitmapTableScan() override = default;
 
 	// ident accessors
 	EOperatorId

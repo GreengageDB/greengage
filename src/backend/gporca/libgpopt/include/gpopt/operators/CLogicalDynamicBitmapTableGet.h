@@ -47,18 +47,16 @@ public:
 		delete;
 
 	// ctors
-	CLogicalDynamicBitmapTableGet(CMemoryPool *mp, CTableDescriptor *ptabdesc,
-								  ULONG ulOriginOpId,
-								  const CName *pnameTableAlias,
-								  ULONG ulPartIndex,
-								  CColRefArray *pdrgpcrOutput,
-								  CColRef2dArray *pdrgpdrgpcrPart,
-								  IMdIdArray *partition_mdids);
+	CLogicalDynamicBitmapTableGet(
+		CMemoryPool *mp, CTableDescriptor *ptabdesc, ULONG ulOriginOpId,
+		const CName *pnameTableAlias, ULONG ulPartIndex,
+		CColRefArray *pdrgpcrOutput, CColRef2dArray *pdrgpdrgpcrPart,
+		IMdIdArray *partition_mdids, CBitSet *selected_parts);
 
 	explicit CLogicalDynamicBitmapTableGet(CMemoryPool *mp);
 
 	// dtor
-	~CLogicalDynamicBitmapTableGet() override;
+	~CLogicalDynamicBitmapTableGet() override = default;
 
 	// identifier
 	EOperatorId

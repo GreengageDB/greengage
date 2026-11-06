@@ -299,6 +299,15 @@ CXformJoin2IndexApplyGeneric::Transform(CXformContext *pxfctxt,
 				distributionCols = popDynamicGet->PcrsDist();
 				pexprGet = pexprCurrInnerChild;
 
+				// Do not run if contains foreign partitions, instead run
+				// CXformExpandDynamicGetWithForeignPartitions; the index
+				// rules then apply to the branch of heap partitions it
+				// produces
+				if (popDynamicGet->ContainsForeignParts())
+				{
+					return;
+				}
+
 				// We need to early exit when the relation contains security quals
 				// because we are adding the security quals when translating from DXL to
 				// Planned Statement as a filter. If we don't early exit then it may happen

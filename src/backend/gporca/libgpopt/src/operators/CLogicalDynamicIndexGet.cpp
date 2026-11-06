@@ -55,9 +55,11 @@ CLogicalDynamicIndexGet::CLogicalDynamicIndexGet(
 	CMemoryPool *mp, const IMDIndex *pmdindex, CTableDescriptor *ptabdesc,
 	ULONG ulOriginOpId, const CName *pnameAlias, ULONG part_idx_id,
 	CColRefArray *pdrgpcrOutput, CColRef2dArray *pdrgpdrgpcrPart,
-	IMdIdArray *partition_mdids, ULONG ulUnindexedPredColCount)
+	IMdIdArray *partition_mdids, CBitSet *selected_parts,
+	ULONG ulUnindexedPredColCount)
 	: CLogicalDynamicGetBase(mp, pnameAlias, ptabdesc, part_idx_id,
-							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids),
+							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids,
+							 selected_parts),
 	  m_pindexdesc(nullptr),
 	  m_ulOriginOpId(ulOriginOpId)
 {
@@ -98,10 +100,15 @@ CLogicalDynamicIndexGet::~CLogicalDynamicIndexGet()
 ULONG
 CLogicalDynamicIndexGet::HashValue() const
 {
-	return gpos::CombineHashes(
+	ULONG ulHash = gpos::CombineHashes(
 		COperator::HashValue(),
 		gpos::CombineHashes(gpos::HashValue(&m_scan_id),
 							m_pindexdesc->MDId()->HashValue()));
+	if (m_selected_parts)
+	{
+		ulHash = gpos::CombineHashes(ulHash, m_selected_parts->HashValue());
+	}
+	return ulHash;
 }
 
 
@@ -167,10 +174,14 @@ CLogicalDynamicIndexGet::PopCopyWithRemappedColumns(
 
 	Ptabdesc()->AddRef();
 	m_partition_mdids->AddRef();
+	if (m_selected_parts)
+	{
+		m_selected_parts->AddRef();
+	}
 
 	return GPOS_NEW(mp) CLogicalDynamicIndexGet(
 		mp, pmdindex, Ptabdesc(), m_ulOriginOpId, pnameAlias, m_scan_id,
-		pdrgpcrOutput, pdrgpdrgpcrPart, m_partition_mdids,
+		pdrgpcrOutput, pdrgpdrgpcrPart, m_partition_mdids, m_selected_parts,
 		m_ulUnindexedPredColCount);
 }
 

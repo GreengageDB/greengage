@@ -44,6 +44,7 @@ CDXLPhysicalDynamicBitmapTableScan::GetParts() const
 CDXLPhysicalDynamicBitmapTableScan::~CDXLPhysicalDynamicBitmapTableScan()
 {
 	m_part_mdids->Release();
+	CRefCount::SafeRelease(m_selected_parts);
 	CRefCount::SafeRelease(m_selector_ids);
 }
 
@@ -69,6 +70,16 @@ CDXLPhysicalDynamicBitmapTableScan::SerializeToDXL(
 		CDXLTokens::GetDXLTokenStr(EdxltokenSelectorIds),
 		serialized_selector_ids);
 	GPOS_DELETE(serialized_selector_ids);
+	if (m_selected_parts)
+	{
+		CWStringDynamic *serialized_selected_parts =
+			CDXLUtils::SerializeCBitSetToCommaSeparatedRangesString(
+				m_mp, m_selected_parts);
+		xml_serializer->AddAttribute(
+			CDXLTokens::GetDXLTokenStr(EdxltokenSelectedPartitionSet),
+			serialized_selected_parts);
+		GPOS_DELETE(serialized_selected_parts);
+	}
 	node->SerializePropertiesToDXL(xml_serializer);
 	node->SerializeChildrenToDXL(xml_serializer);
 	IMDCacheObject::SerializeMDIdList(
