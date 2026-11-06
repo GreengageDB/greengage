@@ -3,7 +3,7 @@
 top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 
-DATA= __init__.py dca.py gp.py pg.py unix.py
+DATA= __init__.py dca.py gp.py pg.py unix.py patroni.py
 
 installdirs:
 	$(MKDIR_P) '$(DESTDIR)$(libdir)/python/gppylib/commands'

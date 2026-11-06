@@ -3591,6 +3591,52 @@ def impl(context, config_file):
     run_gpcommand(context, 'gpinitsystem -a -I %s -l /tmp/' % config_file)
     check_return_code(context, 0)
 
+@when('initialize a cluster using "{config_file}" with standby on {standby_host}, port {standby_port}, data directory {standby_dir}')
+def impl(context, config_file, standby_host, standby_port, standby_dir):
+    run_gpcommand(context, 'gpinitsystem -a -I %s -l /tmp/ -s %s -P %s -S %s' % (config_file, standby_host, standby_port, standby_dir))
+    check_return_code(context, 0)
+
+@given('Patroni access is enabled on both coordinators')
+def impl(context):
+    data_dir = '/home/gpadmin/.data'
+    hba_entry = 'host all patroni 127.0.0.1/32 md5\n'
+    with open(path.join(data_dir, 'gpseg-1', 'pg_hba.conf'), 'a') as hba:
+        hba.write(hba_entry)
+    subprocess.check_call(['ssh', 'scdw',
+                           "printf '%s\\n' 'host all patroni 127.0.0.1/32 md5' >> " +
+                           path.join(data_dir, 'standby', 'pg_hba.conf')])
+
+@when('Patroni test cluster state is cleared')
+def impl(context):
+    for host in ('cdw', 'scdw'):
+        subprocess.check_call(['ssh', host, "if pgrep -f 'python3 -m [p]atroni' >/dev/null; then exit 1; fi"])
+    config_file = '/home/gpadmin/gpdb_src/ci/patroni/configs/mdw.yml'
+    subprocess.run(['patronictl', '-c', config_file, 'remove', 'test-cluster'],
+                   input='test-cluster\nYes I am aware\n', text=True, check=True)
+
+@then('Patroni has leader "{leader}" and streaming replica "{replica}"')
+def impl(context, leader, replica):
+    config_file = '/home/gpadmin/gpdb_src/ci/patroni/configs/mdw.yml'
+    last_output = ''
+    for _ in range(120):
+        result = subprocess.run(
+            ['patronictl', '-c', config_file, 'list', 'test-cluster', '-f', 'json'],
+            capture_output=True, text=True)
+        last_output = result.stdout + result.stderr
+        if result.returncode == 0:
+            match = re.search(r'\[.*\]', result.stdout, re.S)
+            if match:
+                members = json.loads(match.group(0))
+                by_name = {member['Member']: member for member in members}
+                if (by_name.get(leader, {}).get('Role') == 'Leader' and
+                        by_name.get(leader, {}).get('State') == 'running' and
+                        by_name.get(replica, {}).get('Role') == 'Replica' and
+                        by_name.get(replica, {}).get('State') == 'streaming'):
+                    return
+        time.sleep(1)
+    raise AssertionError("Patroni did not show leader %s and streaming replica %s: %s" %
+                         (leader, replica, last_output))
+
 @when('generate cluster config file "{config_file}"')
 def impl(context, config_file):
     run_gpcommand(context, 'gpinitsystem -a -c ../gpAux/gpdemo/clusterConfigFile -O %s' % config_file)
