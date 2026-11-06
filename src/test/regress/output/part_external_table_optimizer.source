@@ -696,6 +696,68 @@ select * from part_mixed;
  17 | 18
 (10 rows)
 
+-- Dynamic index scan over the heap branch of a table whose foreign partitions
+-- sit in the middle of the partition list: the selected heap partitions are
+-- not a single range of positions.
+analyse part_mixed;
+WARNING:  skipping "p_e2" --- cannot analyze this foreign table
+WARNING:  skipping "p_e1" --- cannot analyze this foreign table
+create index on part_mixed(a);
+explain (costs off) select * from part_mixed pm where pm.a = 35;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Dynamic Index Scan on part_mixed_a_idx on part_mixed pm
+               Index Cond: (a = 35)
+               Number of partitions to scan: 2 (out of 4)
+         ->  Dynamic Foreign Scan on part_mixed pm
+               Filter: (a = 35)
+               Number of partitions to scan: 2 (out of 4)
+ Optimizer: GPORCA
+(9 rows)
+
+select * from part_mixed pm where pm.a = 35;
+ a  | b  
+----+----
+ 35 | 35
+(1 row)
+
+insert into filter_table values (35);
+-- Dynamic partition elimination over the dynamic index only scan of the same
+-- table: the partition selector picks the partitions holding 15 and 35, and
+-- the scan intersects them with its own set of heap partitions.
+create index on part_mixed(a, b);
+set optimizer_enable_dynamictablescan = off;
+set optimizer_enable_dynamicindexscan = off;
+explain (costs off) select pm.a, pm.b from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 35;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (pm.b = ft.a)
+         ->  Append
+               ->  Dynamic Index Only Scan on part_mixed_a_b_idx on part_mixed pm
+                     Index Cond: (a = 35)
+                     Number of partitions to scan: 2 (out of 4)
+               ->  Dynamic Foreign Scan on part_mixed pm
+                     Filter: (a = 35)
+                     Number of partitions to scan: 2 (out of 4)
+         ->  Hash
+               ->  Partition Selector (selector id: $0)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on filter_table ft
+ Optimizer: GPORCA
+(15 rows)
+
+select pm.a, pm.b from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 35;
+ a  | b  
+----+----
+ 35 | 35
+(1 row)
+
+reset optimizer_enable_dynamictablescan;
+reset optimizer_enable_dynamicindexscan;
 drop table if exists filter_table;
 drop table if exists part_mixed cascade;
 drop external table if exists p_e1;
