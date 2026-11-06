@@ -167,13 +167,47 @@ test__DeltaCompression__Core(void **state)
 	free(dsw);
 }
 
+/* A value's Datum is what fetch_att makes of it, as the executor expects. */
+static void
+test__DatumStreamBlockRead_Get__SignExtends(void **state)
+{
+	DatumStreamBlockRead dsr;
+	int16		i16 = -1;
+	int32		i32 = -1;
+	Datum		datum = 0;
+	bool		null = true;
+
+	memset(&dsr, 0, sizeof(dsr));
+	strncpy(dsr.eyecatcher, DatumStreamBlockRead_Eyecatcher, DatumStreamBlockRead_EyecatcherLen);
+	dsr.datumStreamVersion = DatumStreamVersion_Original;
+	dsr.typeInfo.byval = true;
+
+	dsr.typeInfo.datumlen = 2;
+	dsr.datump = (uint8 *) &i16;
+	DatumStreamBlockRead_Get(&dsr, &datum, &null);
+	assert_false(null);
+	assert_true(datum == fetch_att(&i16, true, 2));
+
+	dsr.typeInfo.datumlen = 4;
+	dsr.datump = (uint8 *) &i32;
+	DatumStreamBlockRead_Get(&dsr, &datum, &null);
+	assert_true(datum == fetch_att(&i32, true, 4));
+
+	/* A delta-compressed block keeps its current value in delta_datum_p. */
+	dsr.delta_item = true;
+	dsr.delta_datum_p = (uint32) i32;
+	DatumStreamBlockRead_Get(&dsr, &datum, &null);
+	assert_true(datum == fetch_att(&i32, true, 4));
+}
+
 int 
 main(int argc, char* argv[]) 
 {
 	cmockery_parse_arguments(argc, argv);
 
 	const UnitTest tests[] = {
-			unit_test(test__DeltaCompression__Core)
+			unit_test(test__DeltaCompression__Core),
+			unit_test(test__DatumStreamBlockRead_Get__SignExtends)
 	};
 	return run_tests(tests);
 }
