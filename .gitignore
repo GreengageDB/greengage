@@ -53,10 +53,6 @@ GTAGS
 lib*dll.def
 lib*.pc
 compile_commands.json
-**/debian/*
-!**/debian/co*
-!**/debian/lint*
-!**/debian/rules
 
 # Local excludes in root directory
 /GNUmakefile
