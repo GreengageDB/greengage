@@ -6366,7 +6366,9 @@
   descr => 'number of input rows for which the input expression is not null',
   proname => 'count', prokind => 'a', proisstrict => 'f', prorettype => 'int8',
   proargtypes => 'any', prosrc => 'aggregate_dummy' },
-{ oid => '2803', descr => 'number of input rows',
+{ oid => '2803',
+  oid_symbol => 'COUNT_STAR_OID',
+  descr => 'number of input rows',
   proname => 'count', prokind => 'a', proisstrict => 'f', prorettype => 'int8',
   proargtypes => '', prosrc => 'aggregate_dummy' },
 
