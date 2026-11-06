@@ -214,6 +214,12 @@ $(call recurse,installcheck-world, $(ICW_TARGETS),installcheck)
 $(call recurse,installcheck-world, \
 			   src/test/ssl,check)
 
+# GPDB: src/test neither installs the test modules nor runs their tests
+# (src/test/Makefile). test_custom_scan checks custom scans against the
+# cluster, so install it and run its tests here.
+$(call recurse,installcheck-world, \
+			   src/test/modules/test_custom_scan,install installcheck)
+
 .PHONY: installcheck-mirrorless
 installcheck-mirrorless: submake-generated-headers
 	$(MAKE) -C src/test/regress installcheck-mirrorless
