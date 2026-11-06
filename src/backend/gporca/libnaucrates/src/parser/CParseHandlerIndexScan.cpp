@@ -241,6 +241,10 @@ CParseHandlerIndexScan::EndElementHelper(const XMLCh *const element_local_name,
 		IMdIdArray *mdid_partitions_array =
 			partition_mdids_parse_handler->GetMdIdArray();
 		mdid_partitions_array->AddRef();
+		if (nullptr != selected_parts)
+		{
+			selected_parts->AddRef();
+		}
 		dxl_op = GPOS_NEW(m_mp) CDXLPhysicalDynamicIndexOnlyScan(
 			m_mp, dxl_table_descr, dxl_index_descr, m_index_scan_dir,
 			mdid_partitions_array, selected_parts, selector_ids);
@@ -253,6 +257,10 @@ CParseHandlerIndexScan::EndElementHelper(const XMLCh *const element_local_name,
 		IMdIdArray *mdid_partitions_array =
 			partition_mdids_parse_handler->GetMdIdArray();
 		mdid_partitions_array->AddRef();
+		if (nullptr != selected_parts)
+		{
+			selected_parts->AddRef();
+		}
 		dxl_op = GPOS_NEW(m_mp) CDXLPhysicalDynamicIndexScan(
 			m_mp, dxl_table_descr, dxl_index_descr, m_index_scan_dir,
 			mdid_partitions_array, selected_parts, selector_ids);

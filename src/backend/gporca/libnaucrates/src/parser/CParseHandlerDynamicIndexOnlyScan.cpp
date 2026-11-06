@@ -82,10 +82,6 @@ CParseHandlerDynamicIndexOnlyScan::EndElement(
 	const XMLCh *const	// element_qname
 )
 {
-	if (m_selected_parts)
-	{
-		m_selected_parts->AddRef();
-	}
 	EndElementHelper(element_local_name, EdxltokenPhysicalDynamicIndexOnlyScan,
 					 m_selector_ids /*m_selector_ids*/, m_selected_parts);
 }

@@ -62,10 +62,6 @@ CParseHandlerPhysicalDynamicBitmapTableScan::EndElement(
 	const XMLCh *const	// element_qname
 )
 {
-	if (m_selected_parts)
-	{
-		m_selected_parts->AddRef();
-	}
 	EndElementHelper(element_local_name,
 					 EdxltokenPhysicalDynamicBitmapTableScan, m_selector_ids,
 					 m_selected_parts);
