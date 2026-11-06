@@ -1,0 +1,304 @@
+--
+-- A custom scan with children of its own. test_custom_scan wraps each
+-- subquery aliased "cscan" in a custom scan that passes the rows of its
+-- children through, so every query here returns the rows it would
+-- return without the provider.
+--
+-- setup has loaded the provider in every new backend.
+SELECT 'test_custom_scan' = ANY (string_to_array(current_setting('session_preload_libraries'), ','))
+  AS loaded;
+ loaded 
+--------
+ t
+(1 row)
+
+-- ORCA does not ask custom scan providers for paths.
+SET optimizer = off;
+CREATE TABLE cs_a (a int, b int) DISTRIBUTED BY (a);
+CREATE TABLE cs_b (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO cs_a SELECT i, i % 10 FROM generate_series(1, 100) i;
+INSERT INTO cs_b SELECT i, i % 10 FROM generate_series(1, 100) i;
+ANALYZE cs_a, cs_b;
+-- A plan with a custom scan, which keeps a value node in custom_private.
+EXPLAIN (COSTS OFF)
+SELECT * FROM (SELECT a, b FROM cs_a OFFSET 0) cscan;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Custom Scan (TestPassThrough)
+         ->  Seq Scan on cs_a
+ Optimizer: Postgres-based planner
+(4 rows)
+
+SELECT count(*), sum(a), sum(b) FROM (SELECT a, b FROM cs_a OFFSET 0) cscan;
+ count | sum  | sum 
+-------+------+-----
+   100 | 5050 | 450
+(1 row)
+
+-- A custom scan turns targeted dispatch off: the query goes to every
+-- segment.
+EXPLAIN (COSTS OFF)
+SELECT * FROM (SELECT a, b FROM cs_a WHERE a = 5 OFFSET 0) cscan;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Custom Scan (TestPassThrough)
+         ->  Seq Scan on cs_a
+               Filter: (a = 5)
+ Optimizer: Postgres-based planner
+(5 rows)
+
+SELECT * FROM (SELECT a, b FROM cs_a WHERE a = 5 OFFSET 0) cscan;
+ a | b 
+---+---
+ 5 | 5
+(1 row)
+
+-- A Motion under the custom scan.
+EXPLAIN (COSTS OFF)
+SELECT count(*)
+FROM (SELECT x.a FROM cs_a x JOIN cs_b y ON x.a = y.b OFFSET 0) cscan;
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Custom Scan (TestPassThrough)
+                     ->  Subquery Scan on cscan
+                           ->  Hash Join
+                                 Hash Cond: (y.b = x.a)
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                       Hash Key: y.b
+                                       ->  Seq Scan on cs_b y
+                                 ->  Hash
+                                       ->  Seq Scan on cs_a x
+ Optimizer: Postgres-based planner
+(13 rows)
+
+SELECT count(*)
+FROM (SELECT x.a FROM cs_a x JOIN cs_b y ON x.a = y.b OFFSET 0) cscan;
+ count 
+-------
+    90
+(1 row)
+
+-- EXPLAIN ANALYZE gathers from the segments the statistics of the nodes
+-- under the custom scan. The scan, on the coordinator, reads its child to
+-- the end and is shut down once, when the plan ends.
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF)
+SELECT count(*) FROM (SELECT a FROM cs_a LIMIT 1000) cscan;
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (TestPassThrough) (actual rows=100 loops=1)
+         Shutdowns: 1
+         ->  Subquery Scan on cscan (actual rows=100 loops=1)
+               ->  Limit (actual rows=100 loops=1)
+                     ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=100 loops=1)
+                           ->  Limit (actual rows=38 loops=1)
+                                 ->  Seq Scan on cs_a (actual rows=38 loops=1)
+ Optimizer: Postgres-based planner
+(9 rows)
+
+-- A LIMIT that stops the scan also shuts it down, so the provider can
+-- release what it holds: twice in all. All of it runs on the
+-- coordinator, so how far the segments got does not show.
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF)
+SELECT * FROM (SELECT g FROM generate_series(1, 100) g LIMIT 1000) cscan
+LIMIT 1;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Limit (actual rows=1 loops=1)
+   ->  Custom Scan (TestPassThrough) (actual rows=1 loops=1)
+         Shutdowns: 2
+         ->  Limit (actual rows=1 loops=1)
+               ->  Function Scan on generate_series g (actual rows=1 loops=1)
+ Optimizer: Postgres-based planner
+(6 rows)
+
+-- A LIMIT above the custom scan stops it and the Motion under it.
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM
+  (SELECT * FROM
+     (SELECT x.a FROM cs_a x JOIN cs_b y ON x.a = y.b OFFSET 0) cscan
+   LIMIT 5) s;
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
+ Aggregate
+   ->  Limit
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Limit
+                     ->  Result
+                           ->  Custom Scan (TestPassThrough)
+                                 ->  Subquery Scan on cscan
+                                       ->  Hash Join
+                                             Hash Cond: (y.b = x.a)
+                                             ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                                   Hash Key: y.b
+                                                   ->  Seq Scan on cs_b y
+                                             ->  Hash
+                                                   ->  Seq Scan on cs_a x
+ Optimizer: Postgres-based planner
+(15 rows)
+
+SELECT count(*) FROM
+  (SELECT * FROM
+     (SELECT x.a FROM cs_a x JOIN cs_b y ON x.a = y.b OFFSET 0) cscan
+   LIMIT 5) s;
+ count 
+-------
+     5
+(1 row)
+
+-- A SubPlan under the custom scan gets the Motion it needs.
+EXPLAIN (COSTS OFF)
+SELECT sum(s) FROM
+  (SELECT (SELECT y.a FROM cs_b y WHERE y.b = x.b ORDER BY y.a DESC LIMIT 1) s
+   FROM cs_a x OFFSET 0) cscan;
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Custom Scan (TestPassThrough)
+                     ->  Seq Scan on cs_a x
+                           SubPlan 1
+                             ->  Limit
+                                   ->  Sort
+                                         Sort Key: y.a DESC
+                                         ->  Result
+                                               Filter: (y.b = x.b)
+                                               ->  Materialize
+                                                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                                           ->  Seq Scan on cs_b y
+ Optimizer: Postgres-based planner
+(15 rows)
+
+SELECT sum(s) FROM
+  (SELECT (SELECT y.a FROM cs_b y WHERE y.b = x.b ORDER BY y.a DESC LIMIT 1) s
+   FROM cs_a x OFFSET 0) cscan;
+ sum  
+------
+ 9550
+(1 row)
+
+-- A CTE shared under the custom scan: one of its scans produces it.
+SET gp_cte_sharing = on;
+EXPLAIN (COSTS OFF)
+WITH c AS (SELECT a, b FROM cs_a)
+SELECT count(*) FROM (SELECT x.a FROM c x JOIN c y ON x.a = y.a OFFSET 0) cscan;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Custom Scan (TestPassThrough)
+                     ->  Subquery Scan on cscan
+                           ->  Hash Join
+                                 Hash Cond: (share0_ref2.a = y.a)
+                                 ->  Shared Scan (share slice:id 1:0)
+                                 ->  Hash
+                                       ->  Subquery Scan on y
+                                             ->  Shared Scan (share slice:id 1:0)
+                                                   ->  Seq Scan on cs_a
+ Optimizer: Postgres-based planner
+(13 rows)
+
+WITH c AS (SELECT a, b FROM cs_a)
+SELECT count(*) FROM (SELECT x.a FROM c x JOIN c y ON x.a = y.a OFFSET 0) cscan;
+ count 
+-------
+   100
+(1 row)
+
+-- A CTE shared between slices: one branch reads it in the custom scan's
+-- slice, the other below a Motion, in another slice. The scan runs its
+-- last child first and says so with CUSTOMPATH_GP_LAST_CHILD_FIRST, so
+-- the CTE is produced in the slice that runs first. Produced in the
+-- other one, it would never be: each slice would wait for the other.
+SET test_custom_scan.last_child_first = on;
+EXPLAIN (COSTS OFF)
+WITH c AS (SELECT a, b FROM cs_a)
+SELECT count(*), sum(x)
+FROM (SELECT a AS x FROM c UNION ALL SELECT b FROM c GROUP BY b) cscan;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Custom Scan (TestPassThrough)
+                     ->  Subquery Scan on c
+                           ->  Shared Scan (share slice:id 1:0)
+                     ->  HashAggregate
+                           Group Key: c_1.b
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: c_1.b
+                                 ->  Subquery Scan on c_1
+                                       ->  Shared Scan (share slice:id 2:0)
+                                             ->  Seq Scan on cs_a
+ Optimizer: Postgres-based planner
+(14 rows)
+
+WITH c AS (SELECT a, b FROM cs_a)
+SELECT count(*), sum(x)
+FROM (SELECT a AS x FROM c UNION ALL SELECT b FROM c GROUP BY b) cscan;
+ count | sum  
+-------+------
+   110 | 5095
+(1 row)
+
+RESET test_custom_scan.last_child_first;
+RESET gp_cte_sharing;
+-- A custom scan computes expressions only with
+-- CUSTOMPATH_SUPPORT_PROJECTION; without it, a Result above it does.
+EXPLAIN (COSTS OFF)
+SELECT a + b FROM (SELECT a, b FROM cs_a OFFSET 0) cscan;
+                QUERY PLAN                 
+-------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
+         ->  Custom Scan (TestPassThrough)
+               ->  Seq Scan on cs_a
+ Optimizer: Postgres-based planner
+(5 rows)
+
+SET test_custom_scan.projection = on;
+EXPLAIN (COSTS OFF)
+SELECT a + b FROM (SELECT a, b FROM cs_a OFFSET 0) cscan;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Custom Scan (TestPassThrough)
+         ->  Seq Scan on cs_a
+ Optimizer: Postgres-based planner
+(4 rows)
+
+SELECT sum(a + b) FROM (SELECT a, b FROM cs_a OFFSET 0) cscan;
+ sum  
+------
+ 5500
+(1 row)
+
+RESET test_custom_scan.projection;
+-- A custom scan with CUSTOMPATH_GP_MEMORY_INTENSIVE gets a share of the
+-- query's memory, as a Hash or a Sort does, and shows it in EXPLAIN.
+-- Without the flag, it would get the small share of an operator that
+-- needs none. Without resource groups, the scan gets the 10 MB of
+-- statement_mem less the fixed 100 kB of each of the two other nodes.
+SET statement_mem = '10MB';
+SET test_custom_scan.memory_intensive = on;
+EXPLAIN (COSTS OFF)
+SELECT * FROM (SELECT a, b FROM cs_a OFFSET 0) cscan;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Custom Scan (TestPassThrough)
+         Memory Share: 10040 kB
+         ->  Seq Scan on cs_a
+ Optimizer: Postgres-based planner
+(5 rows)
+
+RESET test_custom_scan.memory_intensive;
+RESET statement_mem;
+DROP TABLE cs_a, cs_b;

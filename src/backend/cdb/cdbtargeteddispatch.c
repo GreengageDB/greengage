@@ -529,6 +529,10 @@ DirectDispatchUpdateContentIdsFromPlan(PlannerInfo *root, Plan *plan)
 													 * foreign tables ...
 													 * so disable */
 			break;
+		case T_CustomScan:
+			/* What the provider reads is opaque: dispatch to every segment. */
+			DisableTargetedDispatch(&dispatchInfo);
+			break;
 		case T_SplitUpdate:
 			break;
 		default:
