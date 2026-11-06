@@ -12,7 +12,6 @@
 #define GPOPT_CPhysicalDynamicIndexScan_H
 
 #include "gpos/base.h"
-#include "gpos/common/CBitSet.h"
 
 #include "gpopt/metadata/CIndexDescriptor.h"
 #include "gpopt/operators/CPhysicalDynamicScan.h"
@@ -60,6 +59,7 @@ public:
 
 	// dtor
 	~CPhysicalDynamicIndexScan() override;
+
 
 	// ident accessors
 	EOperatorId
