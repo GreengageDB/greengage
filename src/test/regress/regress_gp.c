@@ -34,6 +34,8 @@
 #include "catalog/pg_language.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_type.h"
+#include "commands/dbcommands.h"
+#include "postmaster/postmaster.h"
 #include "cdb/memquota.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbdispatchresult.h"
@@ -2510,3 +2512,4 @@ gp_check_libpq_events(PG_FUNCTION_ARGS)
 
 	PG_RETURN_BOOL(true);
 }
+

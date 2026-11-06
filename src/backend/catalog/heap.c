@@ -38,6 +38,7 @@
 #include "access/sysattr.h"
 #include "access/table.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/reloptions.h"
 #include "access/xact.h"
@@ -4006,6 +4007,8 @@ heap_truncate_one_rel(Relation rel)
 	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 		return;
 
+	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
+
 	/* Truncate the underlying relation */
 	table_relation_nontransactional_truncate(rel);
 
@@ -4023,6 +4026,8 @@ heap_truncate_one_rel(Relation rel)
 		/* keep the lock... */
 		table_close(toastrel, NoLock);
 	}
+
+	END_TEMP_TABLE_SCOPE();
 }
 
 /*

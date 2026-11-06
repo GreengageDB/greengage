@@ -16,6 +16,7 @@
 
 #include "access/genam.h"
 #include "access/heapam.h"
+#include "access/tempcat.h"
 #include "access/xact.h"
 #include "catalog/binary_upgrade.h"
 #include "catalog/catalog.h"
@@ -216,6 +217,9 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 	if (check && lockmode != AccessExclusiveLock)
 		elog(ERROR, "AccessExclusiveLock required to add toast table.");
 
+	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(RelationGetRelid(rel)));
+
 	/*
 	 * Create the toast table and its index
 	 */
@@ -397,6 +401,8 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 	 * Make changes visible
 	 */
 	CommandCounterIncrement();
+
+	END_TEMP_TABLE_SCOPE();
 
 	return true;
 }

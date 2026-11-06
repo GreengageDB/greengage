@@ -37,6 +37,7 @@
 #include "access/reloptions.h"
 #include "access/tableam.h"
 #include "access/xact.h"
+#include "access/tempcat.h"
 #include "catalog/binary_upgrade.h"
 #include "catalog/catalog.h"
 #include "catalog/heap.h"
@@ -3023,6 +3024,28 @@ get_rels_with_domain(Oid domainOid, LOCKMODE lockmode)
 
 	/* since this function recurses, it could be driven to stack overflow */
 	check_stack_depth();
+
+	/*
+	 * Temporary objects of other sessions that use this domain have no
+	 * pg_depend rows visible here; their edges are published to the
+	 * shared-memory registry.  Neither the constraint to add nor any other
+	 * change could be propagated into another backend's memory.
+	 */
+	{
+		ObjectAddress domainobj;
+		ObjectAddress tempDepender;
+
+		ObjectAddressSet(domainobj, TypeRelationId, domainOid);
+		if (tempcat_registry_has_dependents(&domainobj, 0, &tempDepender))
+			ereport(ERROR,
+					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+					 errmsg("cannot alter type %s because temporary objects in other sessions depend on it",
+							format_type_be(domainOid)),
+					 errdetail("%s depends on %s",
+							   getTempObjectDescription(&tempDepender),
+							   format_type_be(domainOid)),
+					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
+	}
 
 	/*
 	 * We scan pg_depend to find those things that depend on the domain. (We
