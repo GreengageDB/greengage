@@ -911,7 +911,7 @@ class GpStartHA (GpStart):
             for replica in replicas:
                 replica_member = replica['Member']
                 logger.info(f"coordinator-HA: restart replica member '{replica_member}' to clear any 'Pending restart' request...")
-                patroni.PatroniCtlRestart.local('[cmd patronictl restart leader]', self.config_file_standby, self.cluster_name, replica_member)
+                patroni.PatroniCtlRestart.local('[cmd patronictl restart replica]', self.config_file_coordinator, self.cluster_name, replica_member)
             logger.info("coordinator-HA: re-validate replicas...")
             self._validate_patroni_cluster_replicas()
 

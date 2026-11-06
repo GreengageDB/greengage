@@ -2,7 +2,7 @@ import imp
 import os
 import sys
 
-from mock import Mock, patch, call
+from mock import Mock, patch, call, mock_open
 
 from gppylib.gparray import Segment, GpArray
 from gppylib.operations.startSegments import StartSegmentsResult
@@ -116,6 +116,38 @@ class GpStart(GpTestCase):
                 program._validate_patroni_cluster_replicas()
                 self.assertEqual(program._patronictl_list_members.call_count, len(snapshots))
                 self.assertEqual(mock_sleep.call_count, len(snapshots) - 1)
+
+    @patch('builtins.open', new_callable=mock_open, read_data='scope: test-cluster\n')
+    @patch('gpstart.patroni')
+    def test_ha_restart_uses_local_config_for_standby_member(self, mock_patroni, mock_file):
+        coordinator_config = '/tmp/mdw.yml'
+        standby_config = '/standby-only/smdw.yml'
+        program = self.subject.GpStartHA('/tmp/cdd', coordinator_config, standby_config)
+        for method in ('_prepare', '_check_coordinator_running_local',
+                       '_check_coordinator_running_remote', '_stop_remote_running_agents',
+                       '_prepare_cluster_for_segment_start'):
+            setattr(program, method, Mock())
+        program.gparray = Mock(hasStandbyCoordinator=True)
+        program.gparray.coordinator.getSegmentHostName.return_value = 'cdw'
+        program.gparray.coordinator.getSegmentPort.return_value = 7000
+        program.gparray.standbyCoordinator.getSegmentHostName.return_value = 'scdw'
+        program._prepare_segment_start = Mock(return_value=([], []))
+        program._segments_start = Mock(return_value=[])
+        program._patronictl_list_members = Mock(return_value=(
+            {'Member': 'mdw', 'Host': 'cdw:7000', 'State': 'running'},
+            [{'Member': 'smdw', 'Host': 'scdw:7001', 'State': 'streaming'}]))
+        self.subject.pg.DbStatus.local.side_effect = [False, True]
+        mock_patroni.PatroniCtlIsPaused.local.return_value = False
+        mock_patroni.PatroniAgentsCheck.local.return_value = True
+        mock_patroni.PatroniAgentsCheck.remote.return_value = True
+
+        self.assertEqual(program.run(), 0)
+        mock_file.assert_called_once_with(coordinator_config)
+        mock_patroni.PatroniAgentsStart.remote.assert_called_once_with(
+            '[cmd patroni agents standby start]', standby_config, 'scdw')
+        self.assertEqual(mock_patroni.PatroniCtlRestart.local.call_args_list, [
+            call('[cmd patronictl restart leader]', coordinator_config, 'test-cluster', 'mdw'),
+            call('[cmd patronictl restart replica]', coordinator_config, 'test-cluster', 'smdw')])
 
     def test_option_coordinator_success_without_auto_accept(self):
         sys.argv = ["gpstart", "-m"]
