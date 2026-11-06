@@ -546,7 +546,7 @@ explain (costs off) select pm.a, pm.b from part_mixed pm join filter_table ft on
                      ->  Broadcast Motion 3:3  (slice2; segments: 3)
                            ->  Seq Scan on filter_table ft
  Optimizer: GPORCA
-(14 rows)
+(15 rows)
 
 select pm.a, pm.b from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
  a  | b  
