@@ -29,7 +29,7 @@ case "$OS_VERSION" in
         ;;
 esac
 # shellcheck disable=SC2086 # intentional: word splitting for package lists
-dnf -y install \
+dnf -y install --nobest \
     apr-devel \
     apr-util-devel \
     autoconf \
@@ -69,6 +69,7 @@ dnf -y install \
     procps-ng \
     readline-devel \
     rpm-build \
+    rpmlint \
     rsync \
     snappy-devel \
     sudo \

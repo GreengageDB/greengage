@@ -346,12 +346,12 @@ endif
 # Packaging targets with changelog options
 #---------------------------------------------------------------------
 
-# Metadata vars
-PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print $$2}')
-MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
-DATE_RFC := $(shell date -R)
+# Common metadata vars
 ARTIFACTS_DIR := $(CURDIR)/../Package
-RPM_TOPDIR := $(CURDIR)/../RPM
+DATE_RFC := $(shell date -R)
+
+# Debian package name (used by debian/changelog, debian/install, pkg-deb)
+PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print $$2}')
 
 ../VERSION :
 	@echo "Update $@"
@@ -360,7 +360,7 @@ RPM_TOPDIR := $(CURDIR)/../RPM
 
 version-vars : ../VERSION
 	$(eval FULL_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION))
-	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g' ../VERSION))
+	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g; s,-(?=\w),~,' ../VERSION))
 	$(eval VERSION_CODENAME := $(shell . /etc/os-release && echo $$VERSION_CODENAME))
 	$(eval IS_RELEASE := $(if $(findstring +dev,$(PACKAGE_VERSION)),no,yes))
 	$(eval BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build))
@@ -373,7 +373,7 @@ version-info : version-vars
 	@echo "BUILD_TYPE: $(BUILD_TYPE)"
 
 # Generate package control files
-changelog : debian/changelog
+debian/changelog : MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
 debian/changelog : version-vars
 	@echo "$(PACKAGE_NAME) ($(PACKAGE_VERSION)) $(VERSION_CODENAME); urgency=low" > $@
 	@echo "" >> $@
@@ -384,16 +384,27 @@ debian/changelog : version-vars
 debian/install:
 	@echo "$(PACKAGE_NAME)/* /" > $@
 
-
-# Default packaging target
-pkg : pkg-deb
+# Default packaging target: detect the platform
+pkg:
+	@case "$(BLD_ARCH)" in \
+		rhel*|rocky*|ol*|fedora*|redos*|alt*) \
+			echo "Detected RPM-based platform ($(BLD_ARCH))"; \
+			$(MAKE) pkg-rpm ;; \
+		ubuntu*|debian*|astra*) \
+			echo "Detected DEB-based platform ($(BLD_ARCH))"; \
+			$(MAKE) pkg-deb ;; \
+		*) \
+			echo "Error: Unsupported platform '$(BLD_ARCH)' for packaging." >&2; \
+			exit 1 ;; \
+	esac
 
 # Build Debian package
 pkg-deb : GPROOT = /opt/greengagedb
 pkg-deb : GPDIR  = $(PACKAGE_NAME)
 pkg-deb : debian/changelog debian/install
 	@echo "Building with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
-	@GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" PACKAGE_NAME="$(PACKAGE_NAME)" debuild --preserve-env -us -uc -b
+	@if [ "$(IS_RELEASE)" = "yes" ]; then unset CONFIGURE_FLAGS; fi; \
+	GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" PACKAGE_NAME="$(PACKAGE_NAME)" debuild --preserve-env -us -uc -b
 	@mkdir -p $(ARTIFACTS_DIR)
 	@find $(CURDIR)/../ -maxdepth 1 -type f \( -name "*.deb" \
 											-o -name "*.ddeb" \
@@ -404,23 +415,26 @@ pkg-deb : debian/changelog debian/install
 
 # Build RPM package
 pkg-rpm : GPROOT = /opt/greengagedb
-pkg-rpm : GPDIR  = $(PACKAGE_NAME)
+pkg-rpm : GPDIR_DEFINE = $(if $(filter command line environment,$(origin GPDIR)),--define "gpdir $(GPDIR)")
+pkg-rpm : RPM_ARCH = $(shell rpm --eval '%{_arch}')
+pkg-rpm : RPM_TEMPDIR := $(CURDIR)/../RPM
 pkg-rpm : version-vars
-	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
-	@mkdir -p $(RPM_TOPDIR)/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+	@echo "Building RPM with GPROOT=$(GPROOT), ARCH=$(RPM_ARCH)"
+	@rm -rf $(RPM_TEMPDIR)
+	@mkdir -p $(addprefix $(RPM_TEMPDIR)/,BUILD BUILDROOT RPMS SOURCES SPECS SRPMS)
+	@if [ "$(IS_RELEASE)" = "yes" ]; then unset CONFIGURE_FLAGS; fi; \
 	rpmbuild -bb \
-		--define "_topdir $(RPM_TOPDIR)" \
-		--define "gpdb_version $(subst +,.,$(subst -,.,$(PACKAGE_VERSION)))" \
+		--define "_topdir $(RPM_TEMPDIR)" \
+		--define "gpdb_version $(subst +,^,$(subst -,.,$(PACKAGE_VERSION)))" \
 		--define "gpdb_release 1" \
-		--define "gproot $(GPROOT)" \
-		--define "gpdir $(GPDIR)" \
+		--define "gproot $(GPROOT)" $(GPDIR_DEFINE) \
 		--define "sourcedir $(CURDIR)/.." \
 		rpm/greengage6.spec
+	@rpmlint -f rpm/greengage6.rpmlintrc $(RPM_TEMPDIR)/RPMS/$(RPM_ARCH)/*.rpm
 	@mkdir -p $(ARTIFACTS_DIR)
-	@find $(RPM_TOPDIR)/RPMS -name "*.rpm" \
-		-exec mv -f {} $(ARTIFACTS_DIR)/ \;
+	@mv -f $(RPM_TEMPDIR)/RPMS/$(RPM_ARCH)/*.rpm $(ARTIFACTS_DIR)/
 
-.PHONY: pkg pkg-deb pkg-rpm changelog version-vars version-info
+.PHONY: pkg pkg-deb pkg-rpm version-vars version-info
 
 #---------------------------------------------------------------------
 # clientTools

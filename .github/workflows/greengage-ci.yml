@@ -22,10 +22,6 @@ jobs:
           - target_os: ubuntu
           - target_os: ubuntu
             target_os_version: "24.04"
-          - target_os: rockylinux
-            target_os_version: "8"
-          - target_os: rockylinux
-            target_os_version: "9"
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
@@ -178,12 +174,6 @@ jobs:
           - target_os: ubuntu
             target_os_version: "24.04"
             test_install: true
-          - target_os: rockylinux
-            target_os_version: "8"
-            test_install: false
-          - target_os: rockylinux
-            target_os_version: "9"
-            test_install: false
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
