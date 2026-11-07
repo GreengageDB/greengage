@@ -28,6 +28,9 @@ namespace gpopt
 class CPhysicalFilter : public CPhysical
 {
 private:
+	// is the distribution a non-singleton one with replicated not allowed
+	static BOOL FNonSingletonNonReplicated(const CDistributionSpec *pds);
+
 public:
 	CPhysicalFilter(const CPhysicalFilter &) = delete;
 
@@ -96,6 +99,10 @@ public:
 									CDrvdPropArray *pdrgpdpCtxt,
 									ULONG ulOptReq) const override;
 
+	// check if optimization context is valid
+	BOOL FValidContext(CMemoryPool *mp, COptimizationContext *poc,
+					   COptimizationContextArray *pdrgpocChild) const override;
+
 	// check if required columns are included in output columns
 	BOOL FProvidesReqdCols(CExpressionHandle &exprhdl, CColRefSet *pcrsRequired,
 						   ULONG ulOptReq) const override;
@@ -124,6 +131,11 @@ public:
 	CEnfdProp::EPropEnforcingType EpetOrder(
 		CExpressionHandle &exprhdl, const CEnfdOrder *peo) const override;
 
+
+	// return distribution property enforcing type for this operator
+	CEnfdProp::EPropEnforcingType EpetDistribution(
+		CExpressionHandle &exprhdl,
+		const CEnfdDistribution *ped) const override;
 
 	// return rewindability property enforcing type for this operator
 	CEnfdProp::EPropEnforcingType EpetRewindability(

@@ -444,7 +444,7 @@
         </dxl:LogicalCTEAnchor>
       </dxl:LogicalCTAS>
     </dxl:Query>
-    <dxl:Plan Id="0" SpaceSize="1674">
+    <dxl:Plan Id="0" SpaceSize="3234">
       <dxl:PhysicalCTAS Name="fake ctas rel" IsTemporary="true" StorageType="Heap" DistributionPolicy="Random" InsertColumns="20" VarTypeModList="-1">
         <dxl:Properties>
           <dxl:Cost StartupCost="0" TotalCost="1324033.480784" Rows="1.000000" Width="8"/>
