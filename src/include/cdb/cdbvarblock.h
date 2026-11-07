@@ -343,6 +343,107 @@ extern void VarBlockReaderInit(
     uint8               *buffer,
     VarBlockByteLen     bufferLen);
 
+/* The offset of an item from the beginning of the VarBlock. */
+static pg_attribute_always_inline VarBlockByteOffset
+VarBlockGetOffset(VarBlockHeader *header,
+				  VarBlockByteOffset offsetToOffsetArray,
+				  int itemIndex)
+{
+	uint8	   *offsetArray;
+
+	Assert(header != NULL);
+	Assert(offsetToOffsetArray >= VARBLOCK_HEADER_LEN);
+	Assert(itemIndex >= 0);
+	Assert(itemIndex < VarBlockGet_itemCount(header));
+
+	offsetArray = ((uint8 *) header) + offsetToOffsetArray;
+
+	if (VarBlockGet_offsetsAreSmall(header))
+	{
+		return ((VarBlockByteOffset16 *) offsetArray)[itemIndex];
+	}
+	else
+	{
+		VarBlockByteOffset24 offset24;
+
+		memcpy(&offset24,
+			   offsetArray + (itemIndex * VARBLOCK_BYTE_OFFSET_24_LEN),
+			   VARBLOCK_BYTE_OFFSET_24_LEN);
+
+		return offset24.byteOffset24;
+	}
+}
+
+static pg_attribute_always_inline VarBlockByteLen
+VarBlockGetItemLen(VarBlockReader *varBlockReader, int itemIndex)
+{
+	VarBlockHeader *header;
+	VarBlockByteLen itemLen;
+	VarBlockByteOffset offset;
+
+	Assert(varBlockReader != NULL);
+	Assert(itemIndex >= 0);
+
+	header = varBlockReader->header;
+
+	offset = VarBlockGetOffset(header,
+							   varBlockReader->offsetToOffsetArray,
+							   itemIndex);
+	if (itemIndex < VarBlockGet_itemCount(header) - 1)
+	{
+		VarBlockByteOffset nextOffset;
+
+		nextOffset = VarBlockGetOffset(header,
+									   varBlockReader->offsetToOffsetArray,
+									   itemIndex + 1);
+
+		itemLen = nextOffset - offset;
+		Assert(itemLen >= 0);
+	}
+	else
+	{
+		Assert(itemIndex == VarBlockGet_itemCount(header) - 1);
+
+		itemLen =
+			VARBLOCK_HEADER_LEN +
+			VarBlockGet_itemLenSum(header) -
+			offset;
+		Assert(itemLen >= 0);
+	}
+
+	return itemLen;
+}
+
+/*
+ * Get a pointer to the next variable-length item.
+ *
+ * Returns NULL when there are no more items. A scan calls this for every
+ * row, also from an extension, where only an inline function can be inlined.
+ */
+static pg_attribute_always_inline uint8 *
+VarBlockReaderGetNextItemPtrInline(VarBlockReader *varBlockReader,
+								   VarBlockByteLen *itemLen)
+{
+	uint8	   *nextItemPtr;
+
+	Assert(varBlockReader != NULL);
+	Assert(itemLen != NULL);
+
+	if (varBlockReader->nextIndex >=
+		VarBlockGet_itemCount(varBlockReader->header))
+	{
+		return NULL;
+	}
+
+	*itemLen = VarBlockGetItemLen(varBlockReader, varBlockReader->nextIndex);
+	nextItemPtr = varBlockReader->nextItemPtr;
+
+	varBlockReader->nextItemPtr += *itemLen;
+	varBlockReader->nextIndex++;
+
+	return nextItemPtr;
+}
+
 /*
  * Get a pointer to the next variable-length item.
  *
