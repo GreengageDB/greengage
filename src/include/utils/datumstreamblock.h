@@ -1214,7 +1214,7 @@ extern void DatumStreamBlockRead_CheckDenseGetInvariant(
 #endif
 
 /* Stream access method */
-inline static void
+static pg_attribute_always_inline void
 DatumStreamBlockRead_Get(DatumStreamBlockRead * dsr, Datum *datum, bool *null)
 {
 	/*
@@ -1437,7 +1437,7 @@ DatumStreamBlockRead_Get(DatumStreamBlockRead * dsr, Datum *datum, bool *null)
 	}
 }
 
-inline static int
+static pg_attribute_always_inline int
 DatumStreamBlockRead_AdvanceOrig(DatumStreamBlockRead * dsr)
 {
 	Assert(dsr);
@@ -1720,7 +1720,7 @@ DatumStreamBlockRead_AdvanceDenseDelta(DatumStreamBlockRead * dsr)
 	return DELTA_COMPRESSION_OK;
 }
 
-inline static int
+static pg_attribute_always_inline int
 DatumStreamBlockRead_AdvanceDense(DatumStreamBlockRead * dsr)
 {
 	Assert(dsr);
@@ -2034,7 +2034,7 @@ DatumStreamBlockRead_AdvanceDense(DatumStreamBlockRead * dsr)
 	return 1;
 }
 
-inline static int
+static pg_attribute_always_inline int
 DatumStreamBlockRead_Advance(DatumStreamBlockRead * dsr)
 {
 	/*
