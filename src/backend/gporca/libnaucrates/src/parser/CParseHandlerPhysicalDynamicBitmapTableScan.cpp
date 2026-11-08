@@ -36,6 +36,15 @@ CParseHandlerPhysicalDynamicBitmapTableScan::StartElement(
 	m_selector_ids = CDXLOperatorFactory::ExtractConvertValuesToArray(
 		m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenSelectorIds,
 		EdxltokenPhysicalDynamicTableScan);
+
+	if (-1 !=
+		attrs.getIndex(CDXLTokens::XmlstrToken(EdxltokenSelectedPartitionSet)))
+	{
+		m_selected_parts = CDXLOperatorFactory::ExtractConvertRangesToIntBitSet(
+			m_parse_handler_mgr->GetDXLMemoryManager(), attrs,
+			EdxltokenSelectedPartitionSet,
+			EdxltokenPhysicalDynamicBitmapTableScan);
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -54,7 +63,8 @@ CParseHandlerPhysicalDynamicBitmapTableScan::EndElement(
 )
 {
 	EndElementHelper(element_local_name,
-					 EdxltokenPhysicalDynamicBitmapTableScan, m_selector_ids);
+					 EdxltokenPhysicalDynamicBitmapTableScan, m_selector_ids,
+					 m_selected_parts);
 }
 
 // EOF

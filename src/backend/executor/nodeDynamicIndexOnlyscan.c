@@ -53,10 +53,35 @@ ExecInitDynamicIndexOnlyScan(DynamicIndexOnlyScan *node, EState *estate, int efl
 
 	dynamicIndexOnlyScanState->scan_state = SCAN_INIT;
 	dynamicIndexOnlyScanState->whichPart = -1;
-	dynamicIndexOnlyScanState->nOids = list_length(node->partOids);
-	dynamicIndexOnlyScanState->partOids = palloc(sizeof(Oid) * dynamicIndexOnlyScanState->nOids);
-	foreach_with_count(lc, node->partOids, i)
-		dynamicIndexOnlyScanState->partOids[i] = lfirst_oid(lc);
+	/*
+	 * Without join pruning only the partitions selected for this scan are
+	 * opened. With join pruning the full list is kept, because the partition
+	 * selector's result refers to positions in that list; the selected set is
+	 * applied together with it in the first call of the scan.
+	 */
+	if (bms_num_members(node->selected_parts) == 0)
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+				errmsg("No partition is selected for Dynamic Scan")));
+
+	if (node->join_prune_paramids)
+	{
+		dynamicIndexOnlyScanState->nOids = list_length(node->partOids);
+		dynamicIndexOnlyScanState->partOids = palloc(sizeof(Oid) * dynamicIndexOnlyScanState->nOids);
+		foreach_with_count(lc, node->partOids, i)
+			dynamicIndexOnlyScanState->partOids[i] = lfirst_oid(lc);
+	}
+	else
+	{
+		int			partIdx = 0;
+
+		dynamicIndexOnlyScanState->nOids = bms_num_members(node->selected_parts);
+		dynamicIndexOnlyScanState->partOids = palloc(sizeof(Oid) * dynamicIndexOnlyScanState->nOids);
+		foreach_with_count(lc, node->partOids, i)
+		{
+			if (bms_is_member(i, node->selected_parts))
+				dynamicIndexOnlyScanState->partOids[partIdx++] = lfirst_oid(lc);
+		}
+	}
 
 	/*
 	 * Initialize child expressions
@@ -107,11 +132,11 @@ ExecDynamicIndexOnlyScan(PlanState *pstate)
 	if (NULL != plan->join_prune_paramids && !node->did_pruning)
 	{
 		node->did_pruning = true;
-		node->as_valid_subplans =
+		node->as_valid_subplans = bms_intersect(plan->selected_parts,
 			ExecFindMatchingSubPlans(node->as_prune_state,
 									 node->ss.ps.state,
 									 list_length(plan->partOids),
-									 plan->join_prune_paramids);
+									 plan->join_prune_paramids));
 
 		int			i;
 		int			partOidIdx = -1;

@@ -12,6 +12,7 @@
 #define GPOPT_CLogicalDynamicGetBase_H
 
 #include "gpos/base.h"
+#include "gpos/common/CBitSet.h"
 
 #include "gpopt/operators/CLogical.h"
 
@@ -65,6 +66,10 @@ protected:
 	// per child partition in m_partition_mdid
 	ColRefToUlongMapArray *m_root_col_mapping_per_part = nullptr;
 
+	// positions in the partition list that belong to this operator; null
+	// when the operator covers every partition of the list
+	CBitSet *m_selected_parts = nullptr;
+
 	// Construct a mapping from each column in root table to an index in each
 	// child partition's table descr by matching column names$
 	static ColRefToUlongMapArray *ConstructRootColMappingPerPart(
@@ -83,11 +88,13 @@ public:
 						   CTableDescriptor *ptabdesc, ULONG scan_id,
 						   CColRefArray *pdrgpcrOutput,
 						   CColRef2dArray *pdrgpdrgpcrPart,
-						   IMdIdArray *partition_mdids);
+						   IMdIdArray *partition_mdids,
+						   CBitSet *selected_parts);
 
 	CLogicalDynamicGetBase(CMemoryPool *mp, const CName *pnameAlias,
 						   CTableDescriptor *ptabdesc, ULONG scan_id,
-						   IMdIdArray *partition_mdids);
+						   IMdIdArray *partition_mdids,
+						   CBitSet *selected_parts);
 
 	// dtor
 	~CLogicalDynamicGetBase() override;
@@ -183,6 +190,12 @@ public:
 	GetRootColMappingPerPart() const
 	{
 		return m_root_col_mapping_per_part;
+	}
+
+	CBitSet *
+	GetSelectedParts() const
+	{
+		return m_selected_parts;
 	}
 };	// class CLogicalDynamicGetBase
 

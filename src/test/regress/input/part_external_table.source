@@ -207,11 +207,25 @@ insert into filter_table values (15);
 explain select * from part_mixed pm join filter_table ft on pm.b = ft.a;
 select * from part_mixed pm join filter_table ft on pm.b = ft.a;
 
--- the moment, ORCA cannot generate a dynamic index scan on a table with mixed 
--- partitions, so executors don't fully support it either.
--- This test is needed to catch when ORCA starts generating such plans. 
+-- With the select pushed below the union all of the heap and foreign branches,
+-- ORCA generates a dynamic index scan on the heap branch of a table with mixed
+-- partitions. The index scan must cover the heap partitions only; the foreign
+-- partition has no index and is scanned by the foreign branch.
 create index on part_mixed(a);
 explain (costs off) select * from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
+select * from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
+
+-- Dynamic partition elimination over the dynamic index only scan of the heap
+-- branch. The partition selector refers to positions in the full partition
+-- list, so the scan keeps that list and applies its own set of partitions on
+-- top of the partitions chosen by the selector.
+create index on part_mixed(a, b);
+set optimizer_enable_dynamictablescan = off;
+set optimizer_enable_dynamicindexscan = off;
+explain (costs off) select pm.a, pm.b from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
+select pm.a, pm.b from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 15;
+reset optimizer_enable_dynamictablescan;
+reset optimizer_enable_dynamicindexscan;
 
 drop table part_mixed cascade;
 
@@ -253,6 +267,36 @@ ALTER TABLE part_mixed ATTACH PARTITION p_3 FOR VALUES FROM (30) TO (40);
 -- Test that explain contain expected count of scanning partitions in Dynamic Scans
 explain (costs off) select * from part_mixed;
 select * from part_mixed;
+
+-- Dynamic index scan over the heap branch of a table whose foreign partitions
+-- sit in the middle of the partition list: the selected heap partitions are
+-- not a single range of positions.
+analyse part_mixed;
+create index on part_mixed(a);
+explain (costs off) select * from part_mixed pm where pm.a = 35;
+select * from part_mixed pm where pm.a = 35;
+
+-- Dynamic bitmap heap scan over the heap branch of the same table.
+set optimizer_enable_dynamictablescan = off;
+set optimizer_enable_dynamicindexscan = off;
+set optimizer_enable_dynamicindexonlyscan = off;
+explain (costs off) select * from part_mixed pm where pm.a = 35 or pm.a = -5;
+select * from part_mixed pm where pm.a = 35 or pm.a = -5;
+reset optimizer_enable_dynamictablescan;
+reset optimizer_enable_dynamicindexscan;
+reset optimizer_enable_dynamicindexonlyscan;
+insert into filter_table values (35);
+
+-- Dynamic partition elimination over the dynamic index only scan of the same
+-- table: the partition selector picks the partitions holding 15 and 35, and
+-- the scan intersects them with its own set of heap partitions.
+create index on part_mixed(a, b);
+set optimizer_enable_dynamictablescan = off;
+set optimizer_enable_dynamicindexscan = off;
+explain (costs off) select pm.a, pm.b from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 35;
+select pm.a, pm.b from part_mixed pm join filter_table ft on pm.b = ft.a and pm.a = 35;
+reset optimizer_enable_dynamictablescan;
+reset optimizer_enable_dynamicindexscan;
 
 drop table if exists filter_table;
 drop table if exists part_mixed cascade;

@@ -26,8 +26,6 @@ private:
 
 	IMDRelation::Ereldistrpolicy m_exec_location;
 
-	CBitSet *m_selected_parts;
-
 public:
 	CPhysicalDynamicForeignScan(const CPhysicalDynamicForeignScan &) = delete;
 
@@ -40,7 +38,7 @@ public:
 		ColRefToUlongMapArray *root_col_mapping_per_part,
 		OID foreign_server_oid, IMDRelation::Ereldistrpolicy exec_location);
 
-	~CPhysicalDynamicForeignScan() override;
+	~CPhysicalDynamicForeignScan() override = default;
 
 	EOperatorId
 	Eopid() const override
@@ -53,12 +51,6 @@ public:
 	SzId() const override
 	{
 		return "CPhysicalDynamicForeignScan";
-	}
-
-	CBitSet *
-	GetSelectedParts() const
-	{
-		return m_selected_parts;
 	}
 
 	// match function

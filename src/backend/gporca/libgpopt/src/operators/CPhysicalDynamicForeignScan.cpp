@@ -42,10 +42,9 @@ CPhysicalDynamicForeignScan::CPhysicalDynamicForeignScan(
 
 	: CPhysicalDynamicScan(mp, ptabdesc, ulOriginOpId, pnameAlias, scan_id,
 						   pdrgpcrOutput, pdrgpdrgpcrParts, partition_mdids,
-						   root_col_mapping_per_part),
+						   selected_parts, root_col_mapping_per_part),
 	  m_foreign_server_oid(foreign_server_oid),
-	  m_exec_location(exec_location),
-	  m_selected_parts(selected_parts)
+	  m_exec_location(exec_location)
 {
 	GPOS_ASSERT(nullptr != selected_parts);
 
@@ -73,11 +72,6 @@ CPhysicalDynamicForeignScan::CPhysicalDynamicForeignScan(
 	}
 }
 
-CPhysicalDynamicForeignScan::~CPhysicalDynamicForeignScan()
-{
-	CRefCount::SafeRelease(m_selected_parts);
-}
-
 //---------------------------------------------------------------------------
 //	@function:
 //		CPhysicalDynamicForeignScan::Matches
@@ -97,9 +91,7 @@ CPhysicalDynamicForeignScan::Matches(COperator *pop) const
 	CPhysicalDynamicForeignScan *popForeignScan =
 		CPhysicalDynamicForeignScan::PopConvert(pop);
 	return CUtils::FMatchDynamicScan(this, pop) &&
-		   m_foreign_server_oid == popForeignScan->GetForeignServerOid() &&
-		   CUtils::FMatchSelectedParts(GetSelectedParts(),
-									   popForeignScan->GetSelectedParts());
+		   m_foreign_server_oid == popForeignScan->GetForeignServerOid();
 }
 
 //---------------------------------------------------------------------------

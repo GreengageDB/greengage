@@ -13,6 +13,7 @@
 #define GPDXL_CParseHandlerDynamicIndexScan_H
 
 #include "gpos/base.h"
+#include "gpos/common/CBitSet.h"
 
 #include "naucrates/dxl/operators/CDXLPhysicalIndexScan.h"
 #include "naucrates/dxl/parser/CParseHandlerIndexScan.h"
@@ -37,6 +38,8 @@ class CParseHandlerDynamicIndexScan : public CParseHandlerIndexScan
 private:
 	ULongPtrArray *m_selector_ids;
 
+	CBitSet *m_selected_parts{nullptr};
+
 	// process the start of an element
 	void StartElement(
 		const XMLCh *const element_uri,			// URI of element's namespace
@@ -60,6 +63,8 @@ public:
 	CParseHandlerDynamicIndexScan(CMemoryPool *mp,
 								  CParseHandlerManager *parse_handler_mgr,
 								  CParseHandlerBase *parse_handler_root);
+
+	~CParseHandlerDynamicIndexScan() override;
 };
 }  // namespace gpdxl
 

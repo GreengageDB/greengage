@@ -236,6 +236,7 @@ public:
 		ExfLimit2IndexOnlyGet,
 		ExfFullOuterJoin2HashJoin,
 		ExfFullJoinCommutativity,
+		ExfSelectOverUnionAll2UnionAllOverSelect,
 		ExfInvalid,
 		ExfSentinel = ExfInvalid
 	};

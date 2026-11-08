@@ -53,6 +53,7 @@ public:
 							  CColRefArray *pdrgpcrOutput, ULONG scan_id,
 							  CColRef2dArray *pdrgpdrgpcrPart, COrderSpec *pos,
 							  IMdIdArray *partition_mdids,
+							  CBitSet *selected_parts,
 							  ColRefToUlongMapArray *root_col_mapping_per_part,
 							  ULONG ulUnindexedPredColCount);
 

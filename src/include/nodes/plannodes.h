@@ -629,6 +629,12 @@ typedef struct DynamicIndexScan
 	 * partitions.
 	 */
 	List	   *join_prune_paramids;
+
+	/*
+	 * Bitmap indicating which of the partitions from partOids are relevant to
+	 * the current Dynamic Scan
+	 */
+	Bitmapset *selected_parts;
 } DynamicIndexScan;
 
 /* ----------------
@@ -698,6 +704,12 @@ typedef struct DynamicIndexOnlyScan
 	 * partitions.
 	 */
 	List	   *join_prune_paramids;
+
+	/*
+	 * Bitmap indicating which of the partitions from partOids are relevant to
+	 * the current Dynamic Scan
+	 */
+	Bitmapset *selected_parts;
 } DynamicIndexOnlyScan;
 
 /* ----------------
@@ -778,6 +790,12 @@ typedef struct DynamicBitmapHeapScan
 	 * partitions.
 	 */
 	List	   *join_prune_paramids;
+
+	/*
+	 * Bitmap indicating which of the partitions from partOids are relevant to
+	 * the current Dynamic Scan
+	 */
+	Bitmapset *selected_parts;
 } DynamicBitmapHeapScan;
 
 /*
