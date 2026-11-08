@@ -30,8 +30,6 @@ private:
 
 	IMDRelation::Ereldistrpolicy m_exec_location;
 
-	CBitSet *m_selected_parts{nullptr};
-
 public:
 	CLogicalDynamicForeignGet(const CLogicalDynamicForeignGet &) = delete;
 
@@ -46,7 +44,7 @@ public:
 							  CBitSet *selected_parts, OID foreign_server_oid,
 							  IMDRelation::Ereldistrpolicy exec_location);
 
-	~CLogicalDynamicForeignGet() override;
+	~CLogicalDynamicForeignGet() override = default;
 
 	// ident accessors
 
@@ -81,12 +79,6 @@ public:
 	DistributionType() const
 	{
 		return m_exec_location;
-	}
-
-	CBitSet *
-	GetSelectedParts() const
-	{
-		return m_selected_parts;
 	}
 
 	//-------------------------------------------------------------------------------------

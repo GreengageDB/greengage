@@ -13,6 +13,7 @@
 #define GPDXL_CDXLPhysicalDynamicIndexScan_H
 
 #include "gpos/base.h"
+#include "gpos/common/CBitSet.h"
 
 #include "naucrates/dxl/operators/CDXLIndexDescr.h"
 #include "naucrates/dxl/operators/CDXLNode.h"
@@ -43,6 +44,9 @@ private:
 
 	IMdIdArray *m_part_mdids;
 
+	// positions in m_part_mdids this scan covers; null means all of them
+	CBitSet *m_selected_parts;
+
 	ULongPtrArray *m_selector_ids = nullptr;
 
 public:
@@ -62,6 +66,7 @@ public:
 								 CDXLIndexDescr *dxl_index_descr,
 								 EdxlIndexScanDirection idx_scan_direction,
 								 IMdIdArray *part_mdids,
+								 CBitSet *selected_parts,
 								 ULongPtrArray *selector_ids);
 
 	//dtor
@@ -83,6 +88,12 @@ public:
 	EdxlIndexScanDirection GetIndexScanDir() const;
 
 	IMdIdArray *GetParts() const;
+
+	CBitSet *
+	GetSelectedParts() const
+	{
+		return m_selected_parts;
+	}
 
 	const ULongPtrArray *
 	GetSelectorIds() const

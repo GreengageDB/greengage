@@ -40,10 +40,8 @@ CPhysicalDynamicTableScan::CPhysicalDynamicTableScan(
 	CBitSet *selected_parts, ColRefToUlongMapArray *root_col_mapping_per_part)
 	: CPhysicalDynamicScan(mp, ptabdesc, ulOriginOpId, pnameAlias, scan_id,
 						   pdrgpcrOutput, pdrgpdrgpcrParts, partition_mdids,
-						   root_col_mapping_per_part),
-	  m_selected_parts(selected_parts)
+						   selected_parts, root_col_mapping_per_part)
 {
-	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
 }
 
 //---------------------------------------------------------------------------
@@ -57,24 +55,7 @@ CPhysicalDynamicTableScan::CPhysicalDynamicTableScan(
 BOOL
 CPhysicalDynamicTableScan::Matches(COperator *pop) const
 {
-	if (Eopid() != pop->Eopid())
-	{
-		return false;
-	}
-
-	CPhysicalDynamicTableScan *popScan =
-		CPhysicalDynamicTableScan::PopConvert(pop);
-
-	if (!CUtils::FMatchSelectedParts(m_selected_parts,
-									 popScan->m_selected_parts))
-	{
-		return false;
-	}
-
-	// match if the table descriptors are identical
-	return ScanId() == popScan->ScanId() &&
-		   Ptabdesc()->MDId()->Equals(popScan->Ptabdesc()->MDId()) &&
-		   PdrgpcrOutput()->Equals(popScan->PdrgpcrOutput());
+	return CUtils::FMatchDynamicScan(this, pop);
 }
 
 //---------------------------------------------------------------------------
@@ -108,10 +89,6 @@ CPhysicalDynamicTableScan::PppsDerive(CMemoryPool *mp,
 				Ptabdesc()->MDId(), nullptr, nullptr);
 
 	return pps;
-}
-CPhysicalDynamicTableScan::~CPhysicalDynamicTableScan()
-{
-	CRefCount::SafeRelease(m_selected_parts);
 }
 
 // EOF

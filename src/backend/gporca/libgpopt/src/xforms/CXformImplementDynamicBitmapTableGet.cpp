@@ -93,12 +93,17 @@ CXformImplementDynamicBitmapTableGet::Transform(
 
 	popLogical->GetPartitionMdids()->AddRef();
 	popLogical->GetRootColMappingPerPart()->AddRef();
+	CBitSet *selected_parts = popLogical->GetSelectedParts();
+	if (nullptr != selected_parts)
+	{
+		selected_parts->AddRef();
+	}
 
 	CPhysicalDynamicBitmapTableScan *popPhysical =
 		GPOS_NEW(mp) CPhysicalDynamicBitmapTableScan(
 			mp, ptabdesc, pexpr->Pop()->UlOpId(), pname, popLogical->ScanId(),
 			pdrgpcrOutput, pdrgpdrgpcrPart, popLogical->GetPartitionMdids(),
-			popLogical->GetRootColMappingPerPart());
+			selected_parts, popLogical->GetRootColMappingPerPart());
 
 	CExpression *pexprCondition = (*pexpr)[0];
 	CExpression *pexprIndexPath = (*pexpr)[1];

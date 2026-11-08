@@ -2450,6 +2450,7 @@ CXformUtils::PexprBuildBtreeIndexPlan(CMemoryPool *mp, CMDAccessor *md_accessor,
 	ULONG ulPartIndex = gpos::ulong_max;
 	CColRef2dArray *pdrgpdrgpcrPart = nullptr;
 	IMdIdArray *partition_mdids = nullptr;
+	CBitSet *selected_parts = nullptr;
 
 	if (ptabdesc->RetrieveRelStorageType() != IMDRelation::ErelstorageHeap &&
 		(pmdindex->IndexType() == IMDIndex::EmdindGist ||
@@ -2471,6 +2472,7 @@ CXformUtils::PexprBuildBtreeIndexPlan(CMemoryPool *mp, CMDAccessor *md_accessor,
 			CWStringConst(mp, popDynamicGet->Name().Pstr()->GetBuffer());
 		pdrgpdrgpcrPart = popDynamicGet->PdrgpdrgpcrPart();
 		partition_mdids = popDynamicGet->GetPartitionMdids();
+		selected_parts = popDynamicGet->GetSelectedParts();
 	}
 	else
 	{
@@ -2560,6 +2562,10 @@ CXformUtils::PexprBuildBtreeIndexPlan(CMemoryPool *mp, CMDAccessor *md_accessor,
 	{
 		pdrgpdrgpcrPart->AddRef();
 		partition_mdids->AddRef();
+		if (nullptr != selected_parts)
+		{
+			selected_parts->AddRef();
+		}
 		if (indexonly)
 		{
 			popLogicalGet =
@@ -2567,7 +2573,7 @@ CXformUtils::PexprBuildBtreeIndexPlan(CMemoryPool *mp, CMDAccessor *md_accessor,
 					mp, pmdindex, ptabdesc, ulOriginOpId,
 					GPOS_NEW(mp) CName(mp, CName(alias)), ulPartIndex,
 					pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids,
-					ulUnindexedPredColCount);
+					selected_parts, ulUnindexedPredColCount);
 			if (!CHintUtils::SatisfiesPlanHints(
 					CLogicalDynamicIndexOnlyGet::PopConvert(popLogicalGet),
 					COptCtxt::PoctxtFromTLS()
@@ -2591,7 +2597,7 @@ CXformUtils::PexprBuildBtreeIndexPlan(CMemoryPool *mp, CMDAccessor *md_accessor,
 					mp, pmdindex, ptabdesc, ulOriginOpId,
 					GPOS_NEW(mp) CName(mp, CName(alias)), ulPartIndex,
 					pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids,
-					ulUnindexedPredColCount);
+					selected_parts, ulUnindexedPredColCount);
 			if (!CHintUtils::SatisfiesPlanHints(
 					CLogicalDynamicIndexGet::PopConvert(popLogicalGet),
 					COptCtxt::PoctxtFromTLS()
@@ -3539,10 +3545,15 @@ CXformUtils::PexprBitmapTableGet(CMemoryPool *mp, CLogical *popGet,
 				CLogicalDynamicGet::PopConvert(popGet);
 			popDynamicGet->PdrgpdrgpcrPart()->AddRef();
 			popDynamicGet->GetPartitionMdids()->AddRef();
+			CBitSet *selected_parts = popDynamicGet->GetSelectedParts();
+			if (nullptr != selected_parts)
+			{
+				selected_parts->AddRef();
+			}
 			popBitmapTableGet = GPOS_NEW(mp) CLogicalDynamicBitmapTableGet(
 				mp, ptabdesc, ulOriginOpId, pname, popDynamicGet->ScanId(),
 				pdrgpcrOutput, popDynamicGet->PdrgpdrgpcrPart(),
-				popDynamicGet->GetPartitionMdids());
+				popDynamicGet->GetPartitionMdids(), selected_parts);
 		}
 		else
 		{

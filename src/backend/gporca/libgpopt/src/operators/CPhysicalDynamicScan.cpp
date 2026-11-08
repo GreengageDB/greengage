@@ -38,17 +38,18 @@ CPhysicalDynamicScan::CPhysicalDynamicScan(
 	CMemoryPool *mp, CTableDescriptor *ptabdesc, ULONG ulOriginOpId,
 	const CName *pnameAlias, ULONG scan_id, CColRefArray *pdrgpcrOutput,
 	CColRef2dArray *pdrgpdrgpcrParts, IMdIdArray *partition_mdids,
-	ColRefToUlongMapArray *root_col_mapping_per_part)
+	CBitSet *selected_parts, ColRefToUlongMapArray *root_col_mapping_per_part)
 	: CPhysicalScan(mp, pnameAlias, ptabdesc, pdrgpcrOutput),
 	  m_ulOriginOpId(ulOriginOpId),
 	  m_scan_id(scan_id),
 	  m_pdrgpdrgpcrPart(pdrgpdrgpcrParts),
 	  m_partition_mdids(partition_mdids),
-	  m_root_col_mapping_per_part(root_col_mapping_per_part)
-
+	  m_root_col_mapping_per_part(root_col_mapping_per_part),
+	  m_selected_parts(selected_parts)
 {
 	GPOS_ASSERT(nullptr != pdrgpdrgpcrParts);
 	GPOS_ASSERT(0 < pdrgpdrgpcrParts->Size());
+	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
 
 	CMDAccessor *mda = COptCtxt::PoctxtFromTLS()->Pmda();
 	const IMDRelation *root_rel = mda->RetrieveRel(ptabdesc->MDId());
@@ -78,6 +79,7 @@ CPhysicalDynamicScan::~CPhysicalDynamicScan()
 	m_pdrgpdrgpcrPart->Release();
 	m_partition_mdids->Release();
 	m_root_col_mapping_per_part->Release();
+	CRefCount::SafeRelease(m_selected_parts);
 }
 
 //---------------------------------------------------------------------------
@@ -97,6 +99,10 @@ CPhysicalDynamicScan::HashValue() const
 							m_ptabdesc->MDId()->HashValue()));
 	ulHash =
 		gpos::CombineHashes(ulHash, CUtils::UlHashColArray(m_pdrgpcrOutput));
+	if (nullptr != m_selected_parts)
+	{
+		ulHash = gpos::CombineHashes(ulHash, m_selected_parts->HashValue());
+	}
 
 	return ulHash;
 }

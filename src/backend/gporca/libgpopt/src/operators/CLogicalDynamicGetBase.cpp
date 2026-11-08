@@ -63,7 +63,7 @@ CLogicalDynamicGetBase::CLogicalDynamicGetBase(CMemoryPool *mp)
 CLogicalDynamicGetBase::CLogicalDynamicGetBase(
 	CMemoryPool *mp, const CName *pnameAlias, CTableDescriptor *ptabdesc,
 	ULONG scan_id, CColRefArray *pdrgpcrOutput, CColRef2dArray *pdrgpdrgpcrPart,
-	IMdIdArray *partition_mdids)
+	IMdIdArray *partition_mdids, CBitSet *selected_parts)
 	: CLogical(mp),
 	  m_pnameAlias(pnameAlias),
 	  m_ptabdesc(GPOS_NEW(mp) CTableDescriptorHashSet(mp)),
@@ -71,13 +71,14 @@ CLogicalDynamicGetBase::CLogicalDynamicGetBase(
 	  m_pdrgpcrOutput(pdrgpcrOutput),
 	  m_pdrgpdrgpcrPart(pdrgpdrgpcrPart),
 	  m_pcrsDist(nullptr),
-	  m_partition_mdids(partition_mdids)
-
+	  m_partition_mdids(partition_mdids),
+	  m_selected_parts(selected_parts)
 {
 	GPOS_ASSERT(nullptr != ptabdesc);
 	GPOS_ASSERT(nullptr != pnameAlias);
 	GPOS_ASSERT(nullptr != pdrgpcrOutput);
 	GPOS_ASSERT(nullptr != pdrgpdrgpcrPart);
+	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
 
 	m_ptabdesc->Insert(ptabdesc);
 
@@ -95,21 +96,21 @@ CLogicalDynamicGetBase::CLogicalDynamicGetBase(
 //		ctor
 //
 //---------------------------------------------------------------------------
-CLogicalDynamicGetBase::CLogicalDynamicGetBase(CMemoryPool *mp,
-											   const CName *pnameAlias,
-											   CTableDescriptor *ptabdesc,
-											   ULONG scan_id,
-											   IMdIdArray *partition_mdids)
+CLogicalDynamicGetBase::CLogicalDynamicGetBase(
+	CMemoryPool *mp, const CName *pnameAlias, CTableDescriptor *ptabdesc,
+	ULONG scan_id, IMdIdArray *partition_mdids, CBitSet *selected_parts)
 	: CLogical(mp),
 	  m_pnameAlias(pnameAlias),
 	  m_ptabdesc(GPOS_NEW(mp) CTableDescriptorHashSet(mp)),
 	  m_scan_id(scan_id),
 	  m_pdrgpcrOutput(nullptr),
 	  m_pcrsDist(nullptr),
-	  m_partition_mdids(partition_mdids)
+	  m_partition_mdids(partition_mdids),
+	  m_selected_parts(selected_parts)
 {
 	GPOS_ASSERT(nullptr != ptabdesc);
 	GPOS_ASSERT(nullptr != pnameAlias);
+	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
 
 	m_ptabdesc->Insert(ptabdesc);
 
@@ -139,6 +140,7 @@ CLogicalDynamicGetBase::~CLogicalDynamicGetBase()
 	CRefCount::SafeRelease(m_pdrgpdrgpcrPart);
 	CRefCount::SafeRelease(m_partition_mdids);
 	CRefCount::SafeRelease(m_root_col_mapping_per_part);
+	CRefCount::SafeRelease(m_selected_parts);
 	CRefCount::SafeRelease(m_pcrsDist);
 
 	GPOS_DELETE(m_pnameAlias);

@@ -184,11 +184,13 @@ private:
 		CMemoryPool *mp, const IMDIndex *pmdindex, CTableDescriptor *ptabdesc,
 		ULONG ulOriginOpId, CName *pname, ULONG ulPartIndex,
 		CColRefArray *pdrgpcrOutput, CColRef2dArray *pdrgpdrgpcrPart,
-		IMdIdArray *partition_mdids, ULONG ulUnindexedPredColCount)
+		IMdIdArray *partition_mdids, CBitSet *selected_parts,
+		ULONG ulUnindexedPredColCount)
 	{
-		return GPOS_NEW(mp) T(mp, pmdindex, ptabdesc, ulOriginOpId, pname,
-							  ulPartIndex, pdrgpcrOutput, pdrgpdrgpcrPart,
-							  partition_mdids, ulUnindexedPredColCount);
+		return GPOS_NEW(mp)
+			T(mp, pmdindex, ptabdesc, ulOriginOpId, pname, ulPartIndex,
+			  pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids, selected_parts,
+			  ulUnindexedPredColCount);
 	}
 
 	//	create a static operator for a btree index plan

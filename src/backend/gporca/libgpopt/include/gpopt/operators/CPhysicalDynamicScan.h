@@ -19,6 +19,7 @@
 #define GPOPT_CPhysicalDynamicScan_H
 
 #include "gpos/base.h"
+#include "gpos/common/CBitSet.h"
 
 #include "gpopt/operators/CPhysicalScan.h"
 
@@ -55,6 +56,10 @@ private:
 	// per child partition in m_partition_mdid
 	ColRefToUlongMapArray *m_root_col_mapping_per_part = nullptr;
 
+	// positions in the partition list that belong to this operator; null
+	// when the operator covers every partition of the list
+	CBitSet *m_selected_parts = nullptr;
+
 public:
 	CPhysicalDynamicScan(const CPhysicalDynamicScan &) = delete;
 
@@ -63,7 +68,7 @@ public:
 						 ULONG ulOriginOpId, const CName *pnameAlias,
 						 ULONG scan_id, CColRefArray *pdrgpcrOutput,
 						 CColRef2dArray *pdrgpdrgpcrParts,
-						 IMdIdArray *partition_mdids,
+						 IMdIdArray *partition_mdids, CBitSet *selected_parts,
 						 ColRefToUlongMapArray *root_col_mapping_per_part);
 
 	// dtor
@@ -117,6 +122,12 @@ public:
 	GetRootColMappingPerPart() const
 	{
 		return m_root_col_mapping_per_part;
+	}
+
+	CBitSet *
+	GetSelectedParts() const
+	{
+		return m_selected_parts;
 	}
 
 	// debug print

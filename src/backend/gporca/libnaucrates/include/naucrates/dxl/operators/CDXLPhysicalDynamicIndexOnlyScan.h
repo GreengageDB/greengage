@@ -38,10 +38,11 @@ public:
 									 CDXLIndexDescr *dxl_index_descr,
 									 EdxlIndexScanDirection idx_scan_direction,
 									 IMdIdArray *part_mdids,
+									 CBitSet *selected_parts,
 									 ULongPtrArray *selector_ids)
 		: CDXLPhysicalDynamicIndexScan(mp, table_descr, dxl_index_descr,
 									   idx_scan_direction, part_mdids,
-									   selector_ids)
+									   selected_parts, selector_ids)
 	{
 	}
 

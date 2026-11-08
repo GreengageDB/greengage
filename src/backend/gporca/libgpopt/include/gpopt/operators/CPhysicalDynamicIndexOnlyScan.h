@@ -37,11 +37,11 @@ public:
 		CTableDescriptor *ptabdesc, ULONG ulOriginOpId, const CName *pnameAlias,
 		CColRefArray *pdrgpcrOutput, ULONG scan_id,
 		CColRef2dArray *pdrgpdrgpcrPart, COrderSpec *pos,
-		IMdIdArray *partition_mdids,
+		IMdIdArray *partition_mdids, CBitSet *selected_parts,
 		ColRefToUlongMapArray *root_col_mapping_per_part)
 		: CPhysicalDynamicIndexScan(
 			  mp, pindexdesc, ptabdesc, ulOriginOpId, pnameAlias, pdrgpcrOutput,
-			  scan_id, pdrgpdrgpcrPart, pos, partition_mdids,
+			  scan_id, pdrgpdrgpcrPart, pos, partition_mdids, selected_parts,
 			  root_col_mapping_per_part,
 			  0 /* m_ulUnindexedPredColCount - No residual predicate possible, if we are making index only scan*/)
 	{
