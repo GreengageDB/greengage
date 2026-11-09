@@ -4,6 +4,7 @@
 DH_VERBOSE = 1
 export DH_OPTIONS = -v
 export DEB_BUILD_OPTIONS = nocheck
+DBGSYM_ROOT = $(CURDIR)/debian/.debhelper/$(PACKAGE_NAME)/dbgsym-root
 
 %:
 	dh $@
@@ -41,3 +42,9 @@ override_dh_fixperms:
 override_dh_gencontrol:
 	@echo "=== GENCONTROL GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME) ==="
 	dh_gencontrol
+
+override_dh_strip:
+	dh_strip
+	[ ! -d $(DBGSYM_ROOT) ] || \
+	install -D -m 0644 debian/dbgsym-lintian-overrides \
+	  $(DBGSYM_ROOT)/usr/share/lintian/overrides/$(PACKAGE_NAME)-dbgsym
