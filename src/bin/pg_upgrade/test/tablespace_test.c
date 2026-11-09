@@ -76,7 +76,7 @@ test__get_dbid (void **state)
 	ClusterInfo clusterInfo = {0};
 	clusterInfo.pgdata = "/tmp/pgdata";
 
-	// Find a gp_dbid in the first line.
+	// Find a gp_dbid in the first line
 	will_return(__wrap_fopen, 0x10);
 	will_return(__wrap_fgets, "gp_dbid=1");
 	will_return(__wrap_ferror, 0);
@@ -92,7 +92,7 @@ test__get_dbid (void **state)
 	
 	assert_int_equal(get_dbid(&clusterInfo), 1);
 	
-	// Find a gp_dbid in the second line.
+	// Find a gp_dbid in the second line
 	will_return(__wrap_fopen, 0x10);
 	will_return(__wrap_fgets, "test=1");
 	will_return(__wrap_fgets, "gp_dbid=10");
