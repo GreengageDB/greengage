@@ -1164,6 +1164,15 @@ def impl(context):
             raise Exception("'%s' not found in stored rows" % row)
 
 
+@then('validate that following rows are exactly the stored rows')
+def impl(context):
+    expected = sorted(tuple(row) for row in context.table)
+    actual = sorted(tuple('t' if value is True else 'f' if value is False else str(value)
+                          for value in row) for row in context.stored_rows)
+    if actual != expected:
+        raise AssertionError("Expected rows %r, got %r" % (expected, actual))
+
+
 @then('validate that first column of first stored row has "{numlines}" lines of raw output')
 def impl(context, numlines):
     raw_lines_count = len(context.stored_rows[0][0].splitlines())
@@ -1606,10 +1615,11 @@ def impl(context, sql, dbname):
 
 
 @when('execute following sql in db "{dbname}" and store result in the context')
-def impl(context, dbname):
+@when('execute following sql on host "{host}" port "{port}" in db "{dbname}" and store result in the context')
+def impl(context, dbname, host=None, port=0):
     context.stored_rows = []
 
-    with closing(dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False)) as conn:
+    with closing(dbconn.connect(dbconn.DbURL(dbname=dbname, hostname=host, port=port), unsetSearchPath=False)) as conn:
         curs = dbconn.query(conn, context.text)
         context.stored_rows = curs.fetchall()
 
@@ -3614,8 +3624,10 @@ def impl(context):
     subprocess.run(['patronictl', '-c', config_file, 'remove', 'test-cluster'],
                    input='test-cluster\nYes I am aware\n', text=True, check=True)
 
-@then('Patroni has leader "{leader}" and streaming replica "{replica}"')
-def impl(context, leader, replica):
+def _wait_for_patroni_member(has, member_name, host, role, state):
+    if has not in ('has', 'has no'):
+        raise ValueError('Expected "has" or "has no", got %r' % has)
+
     config_file = '/home/gpadmin/gpdb_src/ci/patroni/configs/mdw.yml'
     last_output = ''
     for _ in range(120):
@@ -3627,15 +3639,26 @@ def impl(context, leader, replica):
             match = re.search(r'\[.*\]', result.stdout, re.S)
             if match:
                 members = json.loads(match.group(0))
-                by_name = {member['Member']: member for member in members}
-                if (by_name.get(leader, {}).get('Role') == 'Leader' and
-                        by_name.get(leader, {}).get('State') == 'running' and
-                        by_name.get(replica, {}).get('Role') == 'Replica' and
-                        by_name.get(replica, {}).get('State') == 'streaming'):
+                # Patroni may include the PostgreSQL port in Host.
+                found = any(member.get('Member') == member_name and
+                            re.fullmatch(re.escape(host) + r'(?::\d+)?',
+                                         member.get('Host', '')) is not None and
+                            member.get('Role') == role and
+                            member.get('State') == state
+                            for member in members)
+                if found == (has == 'has'):
                     return
         time.sleep(1)
-    raise AssertionError("Patroni did not show leader %s and streaming replica %s: %s" %
-                         (leader, replica, last_output))
+    raise AssertionError('Expected Patroni %s %s %s "%s" on host "%s": %s' %
+                         (has, state, role.lower(), member_name, host, last_output))
+
+@then('Patroni {has} running leader "{leader}" on host "{host}"')
+def impl(context, has, leader, host):
+    _wait_for_patroni_member(has, leader, host, 'Leader', 'running')
+
+@then('Patroni {has} streaming replica "{replica}" on host "{host}"')
+def impl(context, has, replica, host):
+    _wait_for_patroni_member(has, replica, host, 'Replica', 'streaming')
 
 @when('generate cluster config file "{config_file}"')
 def impl(context, config_file):
