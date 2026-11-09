@@ -220,6 +220,29 @@ def impl(context, query, dbname):
     dbconn.execSQL(context.long_lived_conn, 'BEGIN; %s' % query)
 
 
+@when('the transaction runs "{query}"')
+def impl(context, query):
+    dbconn.execSQL(context.long_lived_conn, query)
+
+
+@when('a session waits for the aoseg table of "{tablename}" in "{dbname}"')
+def impl(context, tablename, dbname):
+    waiting_lock_count_sql = """
+        SELECT count(*) FROM pg_locks l, pg_appendonly a
+        WHERE l.relation = a.segrelid AND a.relid = '%s'::regclass
+        AND l.mode = 'AccessShareLock' AND NOT l.granted AND l.gp_segment_id = -1
+    """ % tablename
+
+    with closing(dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False)) as conn:
+        for _ in range(1200):
+            if dbconn.execSQLForSingleton(conn, waiting_lock_count_sql) > 0:
+                return
+
+            time.sleep(0.1)
+
+    raise Exception("No session waits for the aoseg table of %s" % tablename)
+
+
 @given('the user rollsback the transaction')
 @when('the user rollsback the transaction')
 def impl(context):
