@@ -3141,6 +3141,20 @@ struct config_bool ConfigureNamesBool_gp[] =
 struct config_int ConfigureNamesInt_gp[] =
 {
 	{
+		{"gp_tempcat_registry_capacity", PGC_POSTMASTER, CUSTOM_OPTIONS,
+			gettext_noop("Capacity of the in-memory temporary catalog dependency registry."),
+			gettext_noop("Hard limit of entries in the shared dependency-edge and "
+						 "OID-reservation hashes. Sessions that exceed it keep "
+						 "working: further cross-session dependency checks skip "
+						 "overflow entries with a WARNING. Changing it requires "
+						 "a restart.")
+		},
+		&tempcat_registry_capacity,
+		16384, 1024, 1048576,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"readable_external_table_timeout", PGC_USERSET, EXTERNAL_TABLES,
 			gettext_noop("Cancel the query if no data read within N seconds."),
 			gettext_noop("A value of 0 turns off the timeout."),

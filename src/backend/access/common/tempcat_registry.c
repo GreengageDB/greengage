@@ -56,9 +56,15 @@
 #include "storage/proc.h"
 #include "utils/hsearch.h"
 
-/* Upper bound on edges/OIDs published by all sessions together. */
-#define TEMPCAT_REGISTRY_MAX_EDGES 16384
-#define TEMPCAT_REGISTRY_MAX_OIDS 16384
+/*
+ * Hard capacity of both registry hashes, in entries. A session that
+ * fills it keeps its committed dependencies (they stay in backend memory),
+ * but further cross-session checks skip the overflow entries with a
+ * WARNING, and OID reservation fails loudly.
+ *
+ * Sizeable at startup via gp_tempcat_registry_capacity.
+ */
+int			tempcat_registry_capacity = 16384;
 
 /* Entry of the OID reservation hash; the oid is the key. */
 typedef struct TempcatOidReservation
@@ -105,9 +111,9 @@ tempcat_edge_owner_is_alive(const TempcatDepEdge *edge)
 Size
 tempcat_registry_shmem_size(void)
 {
-	return add_size(hash_estimate_size(TEMPCAT_REGISTRY_MAX_EDGES,
+	return add_size(hash_estimate_size(tempcat_registry_capacity,
 									   sizeof(TempcatDepEdge)),
-					add_size(hash_estimate_size(TEMPCAT_REGISTRY_MAX_OIDS,
+					add_size(hash_estimate_size(tempcat_registry_capacity,
 												sizeof(TempcatOidReservation)),
 							 add_size(sizeof(pg_atomic_uint32),
 									  mul_size(MaxBackends,
@@ -126,10 +132,11 @@ tempcat_registry_init(void)
 	ctl.entrysize = sizeof(TempcatDepEdge);
 
 	TempcatRegistryHash = ShmemInitHash("Tempcat dependency registry",
-										TEMPCAT_REGISTRY_MAX_EDGES,
-										TEMPCAT_REGISTRY_MAX_EDGES,
+										tempcat_registry_capacity,
+										tempcat_registry_capacity,
 										&ctl,
-										HASH_ELEM | HASH_BLOBS);
+										HASH_ELEM | HASH_BLOBS |
+										HASH_FIXED_SIZE);
 
 	/* OID reservations: key is the oid, payload the owner identity. */
 	MemSet(&ctl, 0, sizeof(ctl));
@@ -137,10 +144,11 @@ tempcat_registry_init(void)
 	ctl.entrysize = sizeof(TempcatOidReservation);
 
 	TempcatOidHash = ShmemInitHash("Tempcat OID reservations",
-								   TEMPCAT_REGISTRY_MAX_OIDS,
-								   TEMPCAT_REGISTRY_MAX_OIDS,
+								   tempcat_registry_capacity,
+								   tempcat_registry_capacity,
 								   &ctl,
-								   HASH_ELEM | HASH_BLOBS);
+								   HASH_ELEM | HASH_BLOBS |
+								   HASH_FIXED_SIZE);
 
 	TempcatOidWatermark = ShmemInitStruct("Tempcat OID watermark",
 										   sizeof(pg_atomic_uint32),
@@ -254,7 +262,7 @@ tempcat_registry_publish(int nedges, const TempcatDepEdge *edges,
 		ereport(WARNING,
 				(errmsg("out of temporary dependency registry slots"),
 				 errdetail("Some dependencies of temporary objects are not published; drops of the objects they reference are not blocked."),
-				 errhint("Drop unused temporary objects in other sessions, or raise the registry size.")));
+				 errhint("Drop unused temporary objects in other sessions, or raise gp_tempcat_registry_capacity (a restart is required).")));
 }
 
 void
@@ -312,7 +320,8 @@ tempcat_registry_unpublish_on_exit(int code, Datum arg)
 bool
 tempcat_registry_has_dependents(const ObjectAddress *referenced,
 								char deptype,
-								ObjectAddress *depender)
+								ObjectAddress *depender,
+								int *owner_pid)
 {
 	HASH_SEQ_STATUS status;
 	TempcatDepEdge *entry;
@@ -353,6 +362,8 @@ tempcat_registry_has_dependents(const ObjectAddress *referenced,
 			depender->objectId = entry->objid;
 			depender->objectSubId = entry->objsubid;
 		}
+		if (owner_pid != NULL)
+			*owner_pid = entry->pid;
 		result = true;
 		hash_seq_term(&status);
 		break;
@@ -447,7 +458,7 @@ tempcat_registry_reserve_oid(Oid oid)
 				(errcode(ERRCODE_OUT_OF_MEMORY),
 				 errmsg("out of temporary OID reservation slots"),
 				 errdetail("Too many OIDs are reserved for temporary objects across all sessions."),
-				 errhint("Drop unused temporary objects in other sessions, or raise the registry size.")));
+				 errhint("Drop unused temporary objects in other sessions, or raise gp_tempcat_registry_capacity (a restart is required).")));
 	}
 
 	entry->pgprocno = MyProc->pgprocno;

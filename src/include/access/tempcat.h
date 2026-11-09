@@ -69,6 +69,7 @@ extern bool      tempcat_relation_is_virtual(Oid relid);
 extern bool      tempcat_type_is_virtual(Oid typoid);
 
 /* Transaction support */
+extern int       tempcat_registry_capacity;
 extern bool      tempcat_xact_modified(void);
 extern void      tempcat_reset_xact_modified(void);
 extern void      tempcat_begin_transaction(void);
@@ -219,7 +220,8 @@ extern void tempcat_registry_unpublish_on_exit(int code, Datum arg);
  */
 extern bool tempcat_registry_has_dependents(const ObjectAddress *referenced,
 											char deptype,
-											ObjectAddress *depender);
+											ObjectAddress *depender,
+											int *owner_pid);
 
 /*
  * OID reservation for virtual catalog rows, consulted by the OID
