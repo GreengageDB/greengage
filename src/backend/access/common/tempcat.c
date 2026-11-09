@@ -757,24 +757,21 @@ static void
 TempcatSnapshotUnwind(void)
 {
 	TempcatSnapshot tempcat_snapshot;
-	bool		any_entries = false;
 
 	while ((tempcat_snapshot = TempcatSnapshotPopBack()) != NULL)
-	{
-		any_entries = any_entries ||
-			TempcatSnapshotHasEntries(tempcat_snapshot);
 		TempcatSnapshotFree(tempcat_snapshot);
-	}
 
 	Assert(!TempcatTransactionInProgress());
 
 	/*
-	 * Mark for re-serialization only when some snapshot held rows: a
-	 * session that never used the temp catalog would otherwise have its
-	 * empty state serialized into a new DSM segment on every statement.
+	 * Nothing here marks the state for re-serialization: unwinding only
+	 * returns to the last committed state, which is what was serialized.
+	 * Rows are marked where they change (tempcat_insert/update/delete and
+	 * tempcat_deserialize); marking here as well would re-serialize an
+	 * unchanged catalog on every statement of a session that holds rows,
+	 * bumping the version and forcing every reader gang to deserialize
+	 * again for no reason.
 	 */
-	if (any_entries || TempcatSnapshotHasEntries(TempcatSnapshotGetCurrent()))
-		TempcatDirtyFlag = true;
 }
 
 static bool
@@ -930,6 +927,13 @@ tempcat_finish_prepared_transaction(bool isCommit)
 	TempcatSnapshotFree(wrapper);
 
 	TempcatSnapshotPushBack(pending);
+
+	/*
+	 * The prepared state was parked in backend memory, not produced by
+	 * tempcat_insert() in this transaction, so nothing else marked it:
+	 * mark here, or readers keep the pre-transaction catalog forever.
+	 */
+	TempcatDirtyFlag = true;
 }
 
 /*
@@ -1001,10 +1005,11 @@ tempcat_abort_subtransaction(void)
 	elog(NOTICE, "TEMPCAT: tempcat_abort_subtransaction");
 #endif
 
+	/* Aborting returns to the parent state, which is what was
+	 * serialized; rows that the subtransaction wrote already marked the
+	 * state, and re-serializing identical content would only bump the
+	 * version and force readers to deserialize it again. */
 	snapshot = TempcatSnapshotPopBack();
-	if (TempcatSnapshotHasEntries(snapshot) ||
-		TempcatSnapshotHasEntries(TempcatSnapshotGetCurrent()))
-		TempcatDirtyFlag = true;
 	TempcatSnapshotFree(snapshot);
 }
 
