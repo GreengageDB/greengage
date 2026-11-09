@@ -78,6 +78,7 @@
 
 #include "postgres.h"
 
+#include "access/tempcat.h"
 #include "catalog/catalog.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_am.h"
@@ -454,6 +455,9 @@ GetNewOrPreassignedOid(Relation relation, Oid indexId, AttrNumber oidcolumn,
 					 RelationGetRelationName(relation), searchkey->objname ? searchkey->objname : "",
 					 searchkey->namespaceOid, searchkey->keyOid1, searchkey->keyOid2);
 		}
+
+		if (OidIsValid(oid) && IsTempTableScopeFor(relation))
+			tempcat_note_reserved_oid(oid);
 	}
 	else if (Gp_role == GP_ROLE_DISPATCH)
 	{
