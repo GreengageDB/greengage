@@ -345,14 +345,15 @@ performDeletion(const ObjectAddress *object,
 	 */
 	{
 		ObjectAddress tempDepender;
+	int			tempDependerPid;
 
-		if (tempcat_registry_has_dependents(object, 0, &tempDepender))
+		if (tempcat_registry_has_dependents(object, 0, &tempDepender, &tempDependerPid))
 			ereport(ERROR,
 					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
 					 errmsg("cannot drop %s because temporary objects in other sessions depend on it",
 							getObjectDescription(object)),
 					 errdetail("%s depends on %s",
-							   getTempObjectDescription(&tempDepender),
+							   getTempObjectDescription(&tempDepender, tempDependerPid),
 							   getObjectDescription(object)),
 					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
 	}
@@ -429,14 +430,15 @@ performMultipleDeletions(const ObjectAddresses *objects,
 	{
 		const ObjectAddress *object = &objects->refs[i];
 		ObjectAddress tempDepender;
+	int			tempDependerPid;
 
-		if (tempcat_registry_has_dependents(object, 0, &tempDepender))
+		if (tempcat_registry_has_dependents(object, 0, &tempDepender, &tempDependerPid))
 			ereport(ERROR,
 					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
 					 errmsg("cannot drop %s because temporary objects in other sessions depend on it",
 							getObjectDescription(object)),
 					 errdetail("%s depends on %s",
-							   getTempObjectDescription(&tempDepender),
+							   getTempObjectDescription(&tempDepender, tempDependerPid),
 							   getObjectDescription(object)),
 					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
 	}
@@ -1122,11 +1124,12 @@ reportDependentObjects(const ObjectAddresses *targetObjects,
 		const ObjectAddress *object = &targetObjects->refs[i];
 		const ObjectAddressExtra *extra = &targetObjects->extras[i];
 		ObjectAddress tempDepender;
+	int			tempDependerPid;
 
 		if (extra->flags & DEPFLAG_ORIGINAL)
 			continue;
 
-		if (!tempcat_registry_has_dependents(object, 0, &tempDepender))
+		if (!tempcat_registry_has_dependents(object, 0, &tempDepender, &tempDependerPid))
 			continue;
 
 		if (origObject)
@@ -1135,7 +1138,7 @@ reportDependentObjects(const ObjectAddresses *targetObjects,
 					 errmsg("cannot drop %s because temporary objects in other sessions depend on it",
 							getObjectDescription(origObject)),
 					 errdetail("%s depends on %s",
-							   getTempObjectDescription(&tempDepender),
+							   getTempObjectDescription(&tempDepender, tempDependerPid),
 							   getObjectDescription(object)),
 					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
 		else

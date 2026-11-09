@@ -3034,15 +3034,16 @@ get_rels_with_domain(Oid domainOid, LOCKMODE lockmode)
 	{
 		ObjectAddress domainobj;
 		ObjectAddress tempDepender;
+	int			tempDependerPid;
 
 		ObjectAddressSet(domainobj, TypeRelationId, domainOid);
-		if (tempcat_registry_has_dependents(&domainobj, 0, &tempDepender))
+		if (tempcat_registry_has_dependents(&domainobj, 0, &tempDepender, &tempDependerPid))
 			ereport(ERROR,
 					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
 					 errmsg("cannot alter type %s because temporary objects in other sessions depend on it",
 							format_type_be(domainOid)),
 					 errdetail("%s depends on %s",
-							   getTempObjectDescription(&tempDepender),
+							   getTempObjectDescription(&tempDepender, tempDependerPid),
 							   format_type_be(domainOid)),
 					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
 	}

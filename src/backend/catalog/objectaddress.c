@@ -3734,34 +3734,38 @@ getObjectDescriptionOids(Oid classid, Oid objid)
  * not prove anything about the owning session.
  */
 char *
-getTempObjectDescription(const ObjectAddress *object)
+getTempObjectDescription(const ObjectAddress *object, int owner_pid)
 {
+	/*
+	 * The pid lets the user tell WHICH session to disconnect, as the
+	 * refusal's hint asks; it comes from the registry edge.
+	 */
 	switch (object->classId)
 	{
 		case RelationRelationId:
 			if (object->objectSubId != 0)
-				return psprintf(_("column %d of temporary relation %u in another session"),
-								object->objectSubId, object->objectId);
-			return psprintf(_("temporary relation %u in another session"),
-							object->objectId);
+				return psprintf(_("column %d of temporary relation %u in another session (pid %d)"),
+								object->objectSubId, object->objectId, owner_pid);
+			return psprintf(_("temporary relation %u in another session (pid %d)"),
+							object->objectId, owner_pid);
 		case NamespaceRelationId:
-			return psprintf(_("temporary schema %u in another session"),
-							object->objectId);
+			return psprintf(_("temporary schema %u in another session (pid %d)"),
+							object->objectId, owner_pid);
 		case AttrDefaultRelationId:
-			return psprintf(_("temporary default %u in another session"),
-							object->objectId);
+			return psprintf(_("temporary default %u in another session (pid %d)"),
+							object->objectId, owner_pid);
 		case ConstraintRelationId:
-			return psprintf(_("temporary constraint %u in another session"),
-							object->objectId);
+			return psprintf(_("temporary constraint %u in another session (pid %d)"),
+							object->objectId, owner_pid);
 		case TriggerRelationId:
-			return psprintf(_("temporary trigger %u in another session"),
-							object->objectId);
+			return psprintf(_("temporary trigger %u in another session (pid %d)"),
+							object->objectId, owner_pid);
 		case RewriteRelationId:
-			return psprintf(_("temporary rule %u in another session"),
-							object->objectId);
+			return psprintf(_("temporary rule %u in another session (pid %d)"),
+							object->objectId, owner_pid);
 		default:
-			return psprintf(_("temporary object %u in another session"),
-							object->objectId);
+			return psprintf(_("temporary object %u in another session (pid %d)"),
+							object->objectId, owner_pid);
 	}
 }
 

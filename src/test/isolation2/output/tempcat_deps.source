@@ -56,6 +56,11 @@ CREATE TABLE
 2:RESET ROLE;
 RESET
 
+-- start_matchsubs
+-- m/\(pid [0-9]+\)/
+-- s/\(pid [0-9]+\)/(pid N)/
+-- end_matchsubs
+
 -- The dependency rows are not on disk: session 1 sees none of them, the
 -- edges live in the shared-memory registry instead.  (Column a of dep_t
 -- depends on int4, which is pinned, so it records no row at all.)
@@ -237,7 +242,7 @@ DROP DOMAIN
 -- shared registry: when the coordinator's OID counter is pointed directly
 -- at one, the next object gets a different OID instead of colliding (and
 -- later being destroyed by the temporary object's drop).
-0:CREATE FUNCTION gp_set_next_oid_master(oid) RETURNS void AS '@abs_builddir@/isolation2_regress@DLSUFFIX@', 'gp_set_next_oid' LANGUAGE C VOLATILE;
+0:CREATE FUNCTION gp_set_next_oid_master(oid) RETURNS void AS '/home/gpadmin/gpdb_src/src/test/isolation2/isolation2_regress.so', 'gp_set_next_oid' LANGUAGE C VOLATILE;
 CREATE FUNCTION
 2:CREATE TEMP TABLE dep_to (a int) DISTRIBUTED BY (a);
 CREATE TABLE
@@ -436,7 +441,7 @@ DROP TABLE
 -- as a floor for that scan (clog/multixact truncation would otherwise
 -- drop status the table's rows still need).  This runs before session 2
 -- is terminated so that its temporary table is still alive.
-0:CREATE FUNCTION tempcat_burn_xids(int4) RETURNS void AS '@abs_builddir@/isolation2_regress@DLSUFFIX@', 'test_consume_xids' LANGUAGE C;
+0:CREATE FUNCTION tempcat_burn_xids(int4) RETURNS void AS '/home/gpadmin/gpdb_src/src/test/isolation2/isolation2_regress.so', 'test_consume_xids' LANGUAGE C;
 CREATE FUNCTION
 2:CREATE TEMP TABLE dep_clog (a int);
 CREATE TABLE

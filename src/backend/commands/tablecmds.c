@@ -7148,15 +7148,16 @@ tempcat_check_no_temp_dependents(Oid classid, Oid objid, const char *objdesc)
 {
 	ObjectAddress obj;
 	ObjectAddress tempDepender;
+	int			tempDependerPid;
 
 	ObjectAddressSet(obj, classid, objid);
-	if (tempcat_registry_has_dependents(&obj, 0, &tempDepender))
+	if (tempcat_registry_has_dependents(&obj, 0, &tempDepender, &tempDependerPid))
 		ereport(ERROR,
 				(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
 				 errmsg("cannot alter %s because temporary objects in other sessions depend on it",
 						objdesc),
 				 errdetail("%s depends on %s",
-						   getTempObjectDescription(&tempDepender),
+						   getTempObjectDescription(&tempDepender, tempDependerPid),
 						   objdesc),
 				 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
 }
@@ -7337,15 +7338,16 @@ find_composite_type_dependencies(Oid typeOid, Relation origRelation,
 	{
 		ObjectAddress typeobj;
 		ObjectAddress tempDepender;
+	int			tempDependerPid;
 
 		ObjectAddressSet(typeobj, TypeRelationId, typeOid);
-		if (tempcat_registry_has_dependents(&typeobj, 0, &tempDepender))
+		if (tempcat_registry_has_dependents(&typeobj, 0, &tempDepender, &tempDependerPid))
 			ereport(ERROR,
 					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
 					 errmsg("cannot alter type %s because temporary objects in other sessions depend on it",
 							format_type_be(typeOid)),
 					 errdetail("%s depends on %s",
-							   getTempObjectDescription(&tempDepender),
+							   getTempObjectDescription(&tempDepender, tempDependerPid),
 							   format_type_be(typeOid)),
 					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
 	}

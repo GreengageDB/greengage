@@ -68,6 +68,11 @@ $$ LANGUAGE plpgsql;
 2:CREATE TEMP TABLE dep_r (a int) DISTRIBUTED BY (a);
 2:RESET ROLE;
 
+-- start_matchsubs
+-- m/\(pid [0-9]+\)/
+-- s/\(pid [0-9]+\)/(pid N)/
+-- end_matchsubs
+
 -- The dependency rows are not on disk: session 1 sees none of them, the
 -- edges live in the shared-memory registry instead.  (Column a of dep_t
 -- depends on int4, which is pinned, so it records no row at all.)

@@ -1624,27 +1624,28 @@ DropRole(DropRoleStmt *stmt)
 		{
 			ObjectAddress roleobj;
 			ObjectAddress tempDepender;
+			int			tempDependerPid;
 
 			ObjectAddressSet(roleobj, AuthIdRelationId, roleid);
 			if (tempcat_registry_has_dependents(&roleobj,
 												SHARED_DEPENDENCY_OWNER,
-												&tempDepender))
+												&tempDepender, &tempDependerPid))
 				ereport(ERROR,
 						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
 						 errmsg("cannot drop role %s because of %s",
 								role,
-								getTempObjectDescription(&tempDepender)),
+								getTempObjectDescription(&tempDepender, tempDependerPid)),
 						 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));
 
 			/* The registry also carries the ACL edges of temporary objects. */
 			if (tempcat_registry_has_dependents(&roleobj,
 												SHARED_DEPENDENCY_ACL,
-												&tempDepender))
+												&tempDepender, &tempDependerPid))
 				ereport(ERROR,
 						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
 						 errmsg("cannot drop role %s because privileges are granted on %s",
 								role,
-								getTempObjectDescription(&tempDepender)),
+								getTempObjectDescription(&tempDepender, tempDependerPid)),
 						 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));
 		}
 

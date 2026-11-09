@@ -1772,7 +1772,7 @@ acquire_inherited_sample_rows(Relation onerel, int elevel,
 
 		ObjectAddressSet(parentaddr, RelationRelationId,
 						 RelationGetRelid(onerel));
-		if (!tempcat_registry_has_dependents(&parentaddr, 0, NULL))
+		if (!tempcat_registry_has_dependents(&parentaddr, 0, NULL, NULL))
 		{
 			/* CCI because we already updated the pg_class row in this command */
 			CommandCounterIncrement();
