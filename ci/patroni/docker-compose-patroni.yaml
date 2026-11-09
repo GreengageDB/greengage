@@ -9,27 +9,68 @@ x-common-service: &common-service
   entrypoint: >
     sleep infinity
 
+x-etcd-common: &etcd-common
+  image: quay.io/coreos/etcd:v3.7.2
+  # no TLS and no authentication -- local development only
+  healthcheck:
+    test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
+    interval: 10s
+    timeout: 5s
+    retries: 10
+    start_period: 10s
+
 services:
 
-  etcd:
-    image: quay.io/coreos/etcd:v3.7.2
-    container_name: etcd
-    # no TLS and no authentication -- local development only
+  etcd1:
+    <<: *etcd-common
+    container_name: etcd1
     command:
       - etcd
+      - --name=etcd1
       # listen on all interfaces, so that both greengage and the host can reach it
       - --listen-client-urls=http://0.0.0.0:2379
       # Patroni discovers the endpoints from the member list, hence not localhost
-      - --advertise-client-urls=http://etcd:2379
+      - --advertise-client-urls=http://etcd1:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd1:2380
+      - --initial-cluster-token=patroni-etcd
+      - --initial-cluster-state=new
+      - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
     ports:
-      # expose etcd to the host as well (Patroni outside the container: etcd3.host 127.0.0.1:2379)
+      # expose etcd1 to the host as well (Patroni outside the container: 127.0.0.1:2379)
       - "2379:2379"
-    healthcheck:
-      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
+
+  etcd2:
+    <<: *etcd-common
+    container_name: etcd2
+    command:
+      - etcd
+      - --name=etcd2
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd2:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd2:2380
+      - --initial-cluster-token=patroni-etcd
+      - --initial-cluster-state=new
+      - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+    ports:
+      - "12379:2379"
+
+  etcd3:
+    <<: *etcd-common
+    container_name: etcd3
+    command:
+      - etcd
+      - --name=etcd3
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd3:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd3:2380
+      - --initial-cluster-token=patroni-etcd
+      - --initial-cluster-state=new
+      - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+    ports:
+      - "22379:2379"
 
   cdw:
     <<: *common-service
@@ -40,8 +81,13 @@ services:
       - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
       - ${PATRONI_DIR}:/home/gpadmin/patroni
     depends_on:
-      etcd:
+      etcd1:
         condition: service_healthy
+      etcd2:
+        condition: service_healthy
+      etcd3:
+        condition: service_healthy
+
   scdw:
     <<: *common-service
     working_dir: /home/gpadmin
@@ -51,8 +97,13 @@ services:
       - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
       - ${PATRONI_DIR}:/home/gpadmin/patroni
     depends_on:
-      etcd:
+      etcd1:
         condition: service_healthy
+      etcd2:
+        condition: service_healthy
+      etcd3:
+        condition: service_healthy
+
   sdw1:
     <<: *common-service
     hostname: sdw1

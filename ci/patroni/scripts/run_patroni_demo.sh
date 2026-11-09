@@ -11,7 +11,7 @@ fi
 docker-compose -f ./ci/patroni/docker-compose-patroni.yaml up -d
 
 # Prepare ALL containers first
-services=$(docker-compose -f ./ci/patroni/docker-compose-patroni.yaml config --services | grep -vx etcd | tr '\n' ' ')
+services=$(docker-compose -f ./ci/patroni/docker-compose-patroni.yaml config --services | grep -vx -e etcd1 -e etcd2 -e etcd3 | tr '\n' ' ')
 for service in $services
 do
   docker-compose -f ./ci/patroni/docker-compose-patroni.yaml exec -T \
