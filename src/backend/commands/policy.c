@@ -19,6 +19,7 @@
 #include "access/table.h"
 #include "access/sysattr.h"
 #include "access/xact.h"
+#include "access/tempcat.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
@@ -669,6 +670,9 @@ CreatePolicy(CreatePolicyStmt *stmt)
 	assign_expr_collations(with_check_pstate, with_check_qual);
 
 	/* Open pg_policy catalog */
+	BEGIN_TEMP_TABLE_SCOPE(get_rel_persistence(table_id) == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(table_id));
+
 	pg_policy_rel = table_open(PolicyRelationId, RowExclusiveLock);
 
 	/* Set key - policy's relation id. */
@@ -757,6 +761,8 @@ CreatePolicy(CreatePolicyStmt *stmt)
 
 	/* Invalidate Relation Cache */
 	CacheInvalidateRelcache(target_table);
+
+	END_TEMP_TABLE_SCOPE();
 
 	/* Clean up. */
 	heap_freetuple(policy_tuple);
