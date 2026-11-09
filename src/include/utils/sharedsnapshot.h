@@ -87,6 +87,7 @@ extern void readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext dist
  */
 extern uint64 ReaderLastTempcatVersion;
 extern void readerFillLocalTempcat(volatile SharedSnapshotSlot *slot);
+extern void readerApplyLocalTempcat(void);
 
 extern void AtEOXact_SharedSnapshot(void);
 

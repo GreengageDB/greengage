@@ -200,13 +200,16 @@ static ResourceOwner DumpResOwner = NULL;	/* shared snapshot dump resources */
 uint64 ReaderLastTempcatVersion = 0;
 static SharedSnapshotSlot *ReaderTempcatSlot = NULL;
 
+/* Payload copied by readerFillLocalTempcat, consumed by readerApplyLocalTempcat. */
+static char *ReaderTempcatPendingData = NULL;
+static int	ReaderTempcatPendingLen = 0;
+static uint64 ReaderTempcatPendingVersion = 0;
+
 /*
- * Pick up the tempcat state published by the writer QE for the given slot,
- * unless this process already loaded this version of it.  Used by both the
- * cursor and the regular reader path.
- *
- * The caller must hold the slot's shared lock: the (handle, version) pair
- * must be read atomically with respect to the writer's update.
+ * Copy the tempcat payload published by the writer QE for this slot,
+ * unless already loaded.  The caller must hold the slot's shared lock;
+ * readerApplyLocalTempcat() deserializes the copy after the lock is
+ * released, so that relation_open() stays cancelable.
  */
 void
 readerFillLocalTempcat(volatile SharedSnapshotSlot *slot)
@@ -227,16 +230,41 @@ readerFillLocalTempcat(volatile SharedSnapshotSlot *slot)
 	seg = dsm_attach(slot->tempcat_dsm);
 	if (seg)
 	{
-		tempcat_deserialize(dsm_segment_map_length(seg),
-							dsm_segment_address(seg));
+		int		len = dsm_segment_map_length(seg);
+
+		if (ReaderTempcatPendingData != NULL)
+			pfree(ReaderTempcatPendingData);
+		ReaderTempcatPendingLen = len;
+		ReaderTempcatPendingData = MemoryContextAlloc(TopMemoryContext, len);
+		memcpy(ReaderTempcatPendingData, dsm_segment_address(seg), len);
+		ReaderTempcatPendingVersion = slot->tempcat_version;
 		dsm_detach(seg);
 
-		ReaderLastTempcatVersion = slot->tempcat_version;
-
 		ereport((Debug_print_full_dtm ? LOG : DEBUG5),
-				(errmsg("readerFillLocalTempcat: deserialized tempcat from DSM, version=%lu",
-						(unsigned long) ReaderLastTempcatVersion)));
+				(errmsg("readerFillLocalTempcat: copied tempcat from DSM, version=%lu",
+						(unsigned long) ReaderTempcatPendingVersion)));
 	}
+}
+
+/* Deserialize what readerFillLocalTempcat() copied; no LWLock held. */
+void
+readerApplyLocalTempcat(void)
+{
+	if (ReaderTempcatPendingData == NULL)
+		return;
+
+	tempcat_deserialize(ReaderTempcatPendingLen, ReaderTempcatPendingData);
+	pfree(ReaderTempcatPendingData);
+	ReaderTempcatPendingData = NULL;
+	ReaderTempcatPendingLen = 0;
+
+	/* Count the version only once loaded; a failure retries next time. */
+	ReaderLastTempcatVersion = ReaderTempcatPendingVersion;
+	ReaderTempcatPendingVersion = 0;
+
+	ereport((Debug_print_full_dtm ? LOG : DEBUG5),
+			(errmsg("readerApplyLocalTempcat: deserialized tempcat, version=%lu",
+					(unsigned long) ReaderLastTempcatVersion)));
 }
 
 /* MPP Shared Snapshot. */
@@ -803,12 +831,13 @@ readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext distributedTrans
 
 		/*
 		 * Cursor slices run on reader gangs: pick up the writer's tempcat
-		 * state as well (must run under the slot lock, see
-		 * readerFillLocalTempcat).
+		 * state as well; readerApplyLocalTempcat() deserializes it after
+		 * the lock is released.
 		 */
 		readerFillLocalTempcat(src);
 
 		LWLockRelease(SharedLocalSnapshotSlot->slotLock);
+		readerApplyLocalTempcat();
 	}
 
 	Snapshot dumpsnapshot = entry->snapshot;

@@ -1863,6 +1863,7 @@ readerFillLocalSnapshot(Snapshot snapshot, DtxContext distributedTransactionCont
 			readerFillLocalTempcat(SharedLocalSnapshotSlot);
 
 			LWLockRelease(SharedLocalSnapshotSlot->slotLock);
+			readerApplyLocalTempcat();
 			return;
 		}
 
