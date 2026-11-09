@@ -164,8 +164,11 @@ static bool TempcatDirtyFlag = false;
  * phases: with a one-phase commit, a failure at commit on one segment (a
  * deferred constraint, for instance) cannot undo catalog changes already
  * committed on the other segments, and the session ends up with some
- * segments having applied the DDL and some not.  Like a WAL write, the
- * flag survives subtransaction rollback and is cleared only when the next
+ * segments having applied the DDL and some not.  Only rows this backend
+ * wrote itself count: a reader that receives its rows by deserialization
+ * sets no flag, or every read-only transaction over the temporary tables
+ * would be committed in two phases as well.  Like a WAL write, the flag
+ * survives subtransaction rollback and is cleared only when the next
  * transaction starts.
  */
 static bool TempcatXactModified = false;
@@ -1138,7 +1141,10 @@ tempcat_insert(Relation relation, HeapTuple htup)
 	CacheInvalidateHeapTuple(relation, dlist_tup->tup, NULL);
 	tempcat_mark_command_id_used();
 	TempcatDirtyFlag = true;
-	TempcatXactModified = true;
+	/* Rows that arrive by deserialization change nothing that a commit
+	 * of this backend would have to undo on the other segments. */
+	if (!TempcatDeserializing)
+		TempcatXactModified = true;
 
 	TempcatDescCacheInsert(relation);
 

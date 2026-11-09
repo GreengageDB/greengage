@@ -1,0 +1,189 @@
+--
+-- Two-phase commit decision for in-memory temporary catalog changes.
+--
+-- A transaction that changed in-memory catalog rows on a segment reports
+-- that to the dispatcher with the ReadyForQuery 'x' message, exactly as a
+-- WAL write for a permanent relation does, so that the dispatcher commits
+-- it in two phases.  The first two cases verify the decision with faults:
+-- a 'skip' fault on the expected path fires once, an 'error' fault on the
+-- wrong path fails the COMMIT outright.
+--
+-- The remaining cases verify the atomicity that the decision buys: a
+-- deferred unique constraint that fails at commit on one segment must roll
+-- transaction back on every segment, leaving concurrent DDL on the
+-- session's temporary tables undone everywhere.
+--
+
+-- start_matchsubs
+-- m/\(seg[0-9]+ [0-9.]+:\d+ pid=\d+\)/
+-- s/\(seg[0-9]+ [0-9.]+:\d+ pid=\d+\)/(segN ...)/
+-- end_matchsubs
+
+create extension if not exists gp_inject_fault;
+CREATE EXTENSION
+
+-- Case 1: DDL on a temp table under the temp memory catalog changes
+-- in-memory catalog rows on every segment: two-phase commit.
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: set gp_enable_temp_memory_catalog = on;
+SET
+1: begin;
+BEGIN
+1: create temp table dtx_mem_t(a int) distributed by (a);
+CREATE TABLE
+1: insert into dtx_mem_t select i from generate_series(1, 100) i;
+INSERT 0 100
+1: commit;
+COMMIT
+select gp_inject_fault('before_xlog_xact_prepare', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'before_xlog_xact_prepare' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- A read-only transaction with no faults armed: a ReadyForQuery 'x'
+-- message of the previous transaction that arrives late, after the
+-- dispatcher already started its next transaction, would make this one
+-- commit in two phases as well; run it uninstrumented so the test does
+-- not depend on that race.
+1: begin;
+BEGIN
+1: select 1;
+ ?column? 
+----------
+ 1        
+(1 row)
+1: commit;
+COMMIT
+
+-- Case 2: a transaction that only reads the temporary table changes
+-- nothing: one-phase commit.  The join goes through reader gangs, which
+-- deserialize the writer's catalog; rows received that way must not count
+-- as writes of the reading backend, or every read-only transaction would
+-- be committed in two phases as well.
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: select count(*) from dtx_mem_t x join dtx_mem_t y on x.a = y.a + 1;
+ count 
+-------
+ 99    
+(1 row)
+1: commit;
+COMMIT
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                                             
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'start_performDtxProtocolCommitOnePhase' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 3: a deferred unique constraint that fails at commit on one
+-- segment rolls the concurrent DROP back everywhere.
+1: create temp table dtx_defer(i int unique deferrable initially deferred) distributed by (i);
+CREATE TABLE
+1: insert into dtx_defer values (1);
+INSERT 0 1
+1: create temp table dtx_victim(a int) distributed by (a);
+CREATE TABLE
+1: insert into dtx_victim select generate_series(1, 30);
+INSERT 0 30
+1: begin;
+BEGIN
+1: drop table dtx_victim;
+DROP TABLE
+1: insert into dtx_defer values (1);
+INSERT 0 1
+1: commit;
+ERROR:  duplicate key value violates unique constraint "dtx_defer_i_key"  (seg1 172.17.0.2:7003 pid=41482)
+DETAIL:  Key (i)=(1) already exists.
+1: select count(*) from dtx_victim;
+ count 
+-------
+ 30    
+(1 row)
+
+-- TRUNCATE is rolled back as well.
+1: create temp table dtx_tr(a int) distributed by (a);
+CREATE TABLE
+1: insert into dtx_tr select generate_series(1, 30);
+INSERT 0 30
+1: begin;
+BEGIN
+1: truncate dtx_tr;
+TRUNCATE TABLE
+1: insert into dtx_defer values (1);
+INSERT 0 1
+1: commit;
+ERROR:  duplicate key value violates unique constraint "dtx_defer_i_key"  (seg1 172.17.0.2:7003 pid=41482)
+DETAIL:  Key (i)=(1) already exists.
+1: select count(*) from dtx_tr;
+ count 
+-------
+ 30    
+(1 row)
+
+-- And so is ALTER TABLE.
+1: create temp table dtx_al(a int) distributed by (a);
+CREATE TABLE
+1: insert into dtx_al select generate_series(1, 30);
+INSERT 0 30
+1: begin;
+BEGIN
+1: alter table dtx_al add column b int;
+ALTER TABLE
+1: insert into dtx_defer values (1);
+INSERT 0 1
+1: commit;
+ERROR:  duplicate key value violates unique constraint "dtx_defer_i_key"  (seg1 172.17.0.2:7003 pid=41482)
+DETAIL:  Key (i)=(1) already exists.
+1: insert into dtx_al values (100);
+INSERT 0 1
+1: insert into dtx_al values (100, 100);
+ERROR:  INSERT has more expressions than target columns
+LINE 1: insert into dtx_al values (100, 100);
+                                        ^
+1: select count(*) from dtx_al;
+ count 
+-------
+ 31    
+(1 row)

@@ -1,0 +1,100 @@
+--
+-- Two-phase commit decision for in-memory temporary catalog changes.
+--
+-- A transaction that changed in-memory catalog rows on a segment reports
+-- that to the dispatcher with the ReadyForQuery 'x' message, exactly as a
+-- WAL write for a permanent relation does, so that the dispatcher commits
+-- it in two phases.  The first two cases verify the decision with faults:
+-- a 'skip' fault on the expected path fires once, an 'error' fault on the
+-- wrong path fails the COMMIT outright.
+--
+-- The remaining cases verify the atomicity that the decision buys: a
+-- deferred unique constraint that fails at commit on one segment must roll
+-- transaction back on every segment, leaving concurrent DDL on the
+-- session's temporary tables undone everywhere.
+--
+
+-- start_matchsubs
+-- m/\(seg[0-9]+ [0-9.]+:\d+ pid=\d+\)/
+-- s/\(seg[0-9]+ [0-9.]+:\d+ pid=\d+\)/(segN ...)/
+-- end_matchsubs
+
+create extension if not exists gp_inject_fault;
+
+-- Case 1: DDL on a temp table under the temp memory catalog changes
+-- in-memory catalog rows on every segment: two-phase commit.
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'error', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+1: set gp_enable_temp_memory_catalog = on;
+1: begin;
+1: create temp table dtx_mem_t(a int) distributed by (a);
+1: insert into dtx_mem_t select i from generate_series(1, 100) i;
+1: commit;
+select gp_inject_fault('before_xlog_xact_prepare', 'status', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+
+-- A read-only transaction with no faults armed: a ReadyForQuery 'x'
+-- message of the previous transaction that arrives late, after the
+-- dispatcher already started its next transaction, would make this one
+-- commit in two phases as well; run it uninstrumented so the test does
+-- not depend on that race.
+1: begin;
+1: select 1;
+1: commit;
+
+-- Case 2: a transaction that only reads the temporary table changes
+-- nothing: one-phase commit.  The join goes through reader gangs, which
+-- deserialize the writer's catalog; rows received that way must not count
+-- as writes of the reading backend, or every read-only transaction would
+-- be committed in two phases as well.
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'skip', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+select gp_inject_fault('before_xlog_xact_prepare', 'error', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+1: begin;
+1: select count(*) from dtx_mem_t x join dtx_mem_t y on x.a = y.a + 1;
+1: commit;
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'status', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+
+-- Case 3: a deferred unique constraint that fails at commit on one
+-- segment rolls the concurrent DROP back everywhere.
+1: create temp table dtx_defer(i int unique deferrable initially deferred) distributed by (i);
+1: insert into dtx_defer values (1);
+1: create temp table dtx_victim(a int) distributed by (a);
+1: insert into dtx_victim select generate_series(1, 30);
+1: begin;
+1: drop table dtx_victim;
+1: insert into dtx_defer values (1);
+1: commit;
+1: select count(*) from dtx_victim;
+
+-- TRUNCATE is rolled back as well.
+1: create temp table dtx_tr(a int) distributed by (a);
+1: insert into dtx_tr select generate_series(1, 30);
+1: begin;
+1: truncate dtx_tr;
+1: insert into dtx_defer values (1);
+1: commit;
+1: select count(*) from dtx_tr;
+
+-- And so is ALTER TABLE.
+1: create temp table dtx_al(a int) distributed by (a);
+1: insert into dtx_al select generate_series(1, 30);
+1: begin;
+1: alter table dtx_al add column b int;
+1: insert into dtx_defer values (1);
+1: commit;
+1: insert into dtx_al values (100);
+1: insert into dtx_al values (100, 100);
+1: select count(*) from dtx_al;
