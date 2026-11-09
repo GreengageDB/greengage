@@ -87,6 +87,18 @@
 2:set default_table_access_method = ao_column;
 2:show default_table_access_method;
 2:DROP TABLE IF EXISTS crash_coordinator_before_cleanup_phase CASCADE;
+-- Function that:
+--
+-- 1. Finds oldest xid that leaves segfiles in 
+--    AOSEG_STATE_AWAITING_DROP.
+--
+-- 2. Waits until procarry progresses to newer oldest xid.
+--    This will happen when uncommited oldest transaction will dissapear
+--    after recreation of procarray during recovery both on coordinator
+--    and segments.
+--
+-- (All on one line because of limitations in the isolation2 test language.)
+2:CREATE OR REPLACE FUNCTION wait_for_new_oldest_xid(tbl regclass, timeout_secs int DEFAULT 10) RETURNS text AS $$ DECLARE blocking_xid xid; n int; BEGIN EXECUTE format('SELECT min(xmin::text::bigint)::text::xid FROM gp_dist_random(%L) WHERE state = 2', (SELECT segrelid::regclass::text FROM pg_catalog.pg_appendonly WHERE relid = $1)) INTO blocking_xid; IF blocking_xid IS NULL THEN RETURN 'OK'; END IF; FOR i IN 1..timeout_secs*10 LOOP SELECT count(*) INTO n FROM gp_dist_random('pg_stat_activity') WHERE backend_xmin IS NOT NULL AND backend_xmin::text::bigint <= blocking_xid::text::bigint; IF n = 0 THEN RETURN 'OK'; END IF; PERFORM pg_sleep(0.1); END LOOP; RETURN format('FAIL: horizon still blocked by %s txns at or below xid %s', n, blocking_xid); END; $$ LANGUAGE plpgsql;
 2:CREATE TABLE crash_coordinator_before_cleanup_phase (a INT, b INT, c CHAR(20));
 2:CREATE INDEX crash_coordinator_before_cleanup_phase_index ON crash_coordinator_before_cleanup_phase(b);
 2:INSERT INTO crash_coordinator_before_cleanup_phase SELECT i AS a, 1 AS b, 'hello world' AS c FROM generate_series(1, 10) AS i;
@@ -106,8 +118,10 @@
 4:UPDATE crash_coordinator_before_cleanup_phase SET b = b+10 WHERE a=25;
 4:SELECT * FROM crash_coordinator_before_cleanup_phase ORDER BY a,b;
 4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
--- use second VACUUM to ensure no segfiles are left in AOSEG_STATE_AWAITING_DROP
-4:VACUUM crash_coordinator_before_cleanup_phase;
+-- Leaving uncommited (because of panic) transaction's xid in 
+-- procarray leads to segfiles staying in AOSEG_STATE_AWAITING_DROP 
+-- and being unable to be dropped.
+4:SELECT wait_for_new_oldest_xid('crash_coordinator_before_cleanup_phase');
 4:VACUUM crash_coordinator_before_cleanup_phase;
 4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
 4:INSERT INTO crash_coordinator_before_cleanup_phase VALUES(21, 1, 'c'), (26, 1, 'c');
