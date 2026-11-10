@@ -10,14 +10,14 @@
 -- ============================================================
 SHOW gp_enable_temp_memory_catalog;
  gp_enable_temp_memory_catalog 
-------------
+-------------------------------
  off
 (1 row)
 
 SET gp_enable_temp_memory_catalog = on;
 SHOW gp_enable_temp_memory_catalog;
  gp_enable_temp_memory_catalog 
-------------
+-------------------------------
  on
 (1 row)
 
@@ -77,16 +77,16 @@ CREATE INDEX tempcat_idx1 ON tempcat_test1 (id);
 SET enable_seqscan = off;
 -- start_ignore
 EXPLAIN (COSTS OFF) SELECT * FROM tempcat_test1 WHERE id = 10;
-GP_IGNORE:                  QUERY PLAN                   
-GP_IGNORE:-----------------------------------------------
-GP_IGNORE: Gather Motion 1:1  (slice1; segments: 1)
-GP_IGNORE:   ->  Bitmap Heap Scan on tempcat_test1
-GP_IGNORE:         Recheck Cond: (id = 10)
-GP_IGNORE:         ->  Bitmap Index Scan on tempcat_idx1
-GP_IGNORE:               Index Cond: (id = 10)
-GP_IGNORE: Optimizer: Postgres-based planner
-GP_IGNORE:(6 rows)
-GP_IGNORE:
+                  QUERY PLAN                   
+-----------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Bitmap Heap Scan on tempcat_test1
+         Recheck Cond: (id = 10)
+         ->  Bitmap Index Scan on tempcat_idx1
+               Index Cond: (id = 10)
+ Optimizer: Postgres-based planner
+(6 rows)
+
 -- end_ignore
 SELECT * FROM tempcat_test1 WHERE id = 10;
  id 
@@ -493,19 +493,16 @@ CREATE TEMP TABLE tempcat_ao_off (a int) WITH (appendonly=true);
 SET gp_enable_temp_memory_catalog = off;
 ERROR:  cannot disable gp_enable_temp_memory_catalog while the in-memory catalog holds temporary table metadata
 DETAIL:  Temporary tables created while the setting was enabled still have their metadata in backend-private memory.
-HINT:  Drop those temporary tables before disabling the setting.
 -- RESET would flip the setting back to its default (off): refused as well
 RESET gp_enable_temp_memory_catalog;
 ERROR:  cannot disable gp_enable_temp_memory_catalog while the in-memory catalog holds temporary table metadata
 DETAIL:  Temporary tables created while the setting was enabled still have their metadata in backend-private memory.
-HINT:  Drop those temporary tables before disabling the setting.
 -- Setting the current value again is a no-op and always allowed
 SET gp_enable_temp_memory_catalog = on;
 -- RESET ALL goes through the same check: refused while entries exist
 RESET ALL;
 ERROR:  cannot disable gp_enable_temp_memory_catalog while the in-memory catalog holds temporary table metadata
 DETAIL:  Temporary tables created while the setting was enabled still have their metadata in backend-private memory.
-HINT:  Drop those temporary tables before disabling the setting.
 -- No toggle inside a transaction block, in either direction
 BEGIN;
 SET gp_enable_temp_memory_catalog = off;
@@ -516,12 +513,10 @@ DROP TABLE tempcat_ao_off;
 SET gp_enable_temp_memory_catalog = off;
 ERROR:  cannot disable gp_enable_temp_memory_catalog while the in-memory catalog holds temporary table metadata
 DETAIL:  Temporary tables created while the setting was enabled still have their metadata in backend-private memory.
-HINT:  Drop those temporary tables before disabling the setting.
 DROP TABLE tempcat_test2;
 SET gp_enable_temp_memory_catalog = off;
 ERROR:  cannot disable gp_enable_temp_memory_catalog while the in-memory catalog holds temporary table metadata
 DETAIL:  Temporary tables created while the setting was enabled still have their metadata in backend-private memory.
-HINT:  Drop those temporary tables before disabling the setting.
 DROP TABLE tempcat_test_sp;
 -- No temporary table metadata left: the switch succeeds ...
 SET gp_enable_temp_memory_catalog = off;
@@ -555,8 +550,6 @@ SELECT * FROM tempcat_test2 ORDER BY id;
 -- Cursor reader gangs receive tempcat state
 -- ============================================================
 CREATE TEMP TABLE tempcat_cursor_src (id int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO tempcat_cursor_src SELECT i FROM generate_series(1, 5) i;
 -- A cursor's slices run on reader gangs, which receive the session state
 -- through the cursor snapshot dump instead of the regular shared-snapshot
@@ -611,8 +604,6 @@ FETCH 1 FROM tempcat_cur2;
 
 CLOSE tempcat_cur2;
 CREATE TEMP TABLE tempcat_cursor_mid (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO tempcat_cursor_mid VALUES (2), (4);
 DECLARE tempcat_cur3 CURSOR FOR SELECT s.id, m.a
     FROM tempcat_cursor_src s JOIN tempcat_cursor_mid m ON s.id = m.a
@@ -652,7 +643,6 @@ RESET gp_enable_temp_memory_catalog;
 SET gp_enable_temp_memory_catalog = on;
 CREATE TEMP TABLE tempcat_discard (x int);
 DISCARD ALL;
-HINT:  Consider alternatives as DEALLOCATE ALL, or DISCARD TEMP if a clusterwide effect is desired.
 NOTICE:  command without clusterwide effect
 SHOW gp_enable_temp_memory_catalog;
  gp_enable_temp_memory_catalog 
@@ -752,12 +742,10 @@ CREATE TEMP TABLE tempcat_dep_src (a int) DISTRIBUTED BY (a);
 CREATE TABLE tempcat_dep_perm (a int, c tempcat_dep_src) DISTRIBUTED BY (a);
 ERROR:  cannot create a permanent object that depends on a temporary one
 DETAIL:  type tempcat_dep_src is temporary: it exists only in the creating session.
-HINT:  Reference only objects that outlive the session.
 CREATE FUNCTION tempcat_dep_fn() RETURNS tempcat_dep_src
     AS $$ SELECT NULL::tempcat_dep_src $$ LANGUAGE sql;
 ERROR:  cannot create a permanent object that depends on a temporary one
 DETAIL:  type tempcat_dep_src is temporary: it exists only in the creating session.
-HINT:  Reference only objects that outlive the session.
 CREATE TEMP TABLE tempcat_dep_temp (a int, c tempcat_dep_src) DISTRIBUTED BY (a);
 SELECT 'temp-dependent-ok' AS probe, count(*) FROM tempcat_dep_temp;
        probe       | count 
@@ -811,3 +799,27 @@ RESET gp_enable_temp_memory_catalog;
 DROP EVENT TRIGGER tempcat_et;
 DROP TABLE tempcat_et_log;
 DROP FUNCTION tempcat_et_rewrite();
+-- COMMENT ON a temp object must stay in the in-memory catalog: nothing may
+-- land in on-disk pg_description, and clean session exit stays clean.
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_comment_t (a int, b text) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tempcat_comment_ref (c int CHECK (c > 0)) DISTRIBUTED BY (c);
+SELECT count(*) AS disk_comment_rows_before FROM pg_description;
+ disk_comment_rows_before 
+--------------------------
+                     4300
+(1 row)
+
+COMMENT ON TABLE tempcat_comment_t IS 'table comment';
+COMMENT ON COLUMN tempcat_comment_t.a IS 'column comment';
+COMMENT ON TYPE tempcat_comment_t IS 'type comment';
+COMMENT ON CONSTRAINT tempcat_comment_ref_c_check ON tempcat_comment_ref IS 'constraint comment';
+SELECT count(*) AS disk_comment_rows_after FROM pg_description;
+ disk_comment_rows_after 
+-------------------------
+                    4300
+(1 row)
+
+DROP TABLE tempcat_comment_t;
+DROP TABLE tempcat_comment_ref;
+RESET gp_enable_temp_memory_catalog;

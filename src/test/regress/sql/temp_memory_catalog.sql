@@ -536,3 +536,19 @@ RESET gp_enable_temp_memory_catalog;
 DROP EVENT TRIGGER tempcat_et;
 DROP TABLE tempcat_et_log;
 DROP FUNCTION tempcat_et_rewrite();
+
+-- COMMENT ON a temp object must stay in the in-memory catalog: nothing may
+-- land in on-disk pg_description, and clean session exit stays clean.
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_comment_t (a int, b text) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tempcat_comment_ref (c int CHECK (c > 0)) DISTRIBUTED BY (c);
+SELECT count(*) AS disk_comment_rows_before FROM pg_description;
+COMMENT ON TABLE tempcat_comment_t IS 'table comment';
+COMMENT ON COLUMN tempcat_comment_t.a IS 'column comment';
+COMMENT ON TYPE tempcat_comment_t IS 'type comment';
+COMMENT ON CONSTRAINT tempcat_comment_ref_c_check ON tempcat_comment_ref IS 'constraint comment';
+SELECT count(*) AS disk_comment_rows_after FROM pg_description;
+DROP TABLE tempcat_comment_t;
+DROP TABLE tempcat_comment_ref;
+RESET gp_enable_temp_memory_catalog;
+
