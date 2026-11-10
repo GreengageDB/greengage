@@ -1064,7 +1064,6 @@ class GpStartHA (GpStart):
             options.parallel = int(proccount)
 
         if options.high_availability_mode:
-            msg_body = "option is not supported with '--HA' option"
             msg_body = "Incompatible flags. Cannot mix '%s' option with '--HA' option"
             if options.coordinator_only:
                 raise ProgramArgumentValidationException(msg_body % "--coordinator_only")
