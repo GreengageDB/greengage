@@ -542,12 +542,13 @@ DROP FUNCTION tempcat_et_rewrite();
 SET gp_enable_temp_memory_catalog = on;
 CREATE TEMP TABLE tempcat_comment_t (a int, b text) DISTRIBUTED BY (a);
 CREATE TEMP TABLE tempcat_comment_ref (c int CHECK (c > 0)) DISTRIBUTED BY (c);
-SELECT count(*) AS disk_comment_rows_before FROM pg_description;
+SELECT count(*) AS n_before FROM pg_description \gset
 COMMENT ON TABLE tempcat_comment_t IS 'table comment';
 COMMENT ON COLUMN tempcat_comment_t.a IS 'column comment';
 COMMENT ON TYPE tempcat_comment_t IS 'type comment';
 COMMENT ON CONSTRAINT tempcat_comment_ref_c_check ON tempcat_comment_ref IS 'constraint comment';
-SELECT count(*) AS disk_comment_rows_after FROM pg_description;
+SELECT count(*) AS n_after FROM pg_description \gset
+SELECT :n_before = :n_after AS comments_stayed_virtual;
 DROP TABLE tempcat_comment_t;
 DROP TABLE tempcat_comment_ref;
 RESET gp_enable_temp_memory_catalog;
