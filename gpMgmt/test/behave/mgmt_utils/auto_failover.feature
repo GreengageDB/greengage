@@ -92,10 +92,11 @@ Feature: auto failover behave tests
          And Patroni has running leader "mdw" on host "cdw"
          And the coordinator on host "cdw" port "7000" is ready for queries
          And Patroni has streaming replica "smdw" on host "scdw"
-        When the coordinator goes down
-         And the user runs command "ssh cdw 'pgrep -x postgres >/dev/null; test $? -eq 1'"
+        When the current coordinator process is saved
+         And the coordinator goes down
+        Then the saved coordinator process has stopped
          # wait for loop_wait seconds
-         And waiting "10" seconds
+        When waiting "10" seconds
          # verify the Coordinator is up again
         Then Patroni has running leader "mdw" on host "cdw"
          And the coordinator on host "cdw" port "7000" is ready for queries
