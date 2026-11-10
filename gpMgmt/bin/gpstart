@@ -821,14 +821,11 @@ class GpStartHA (GpStart):
             logger.info("coordinator-HA: check patronictl is available...")
             patroni.PatroniCtlVersion.local('[cmd patronictl version]')
 
-            logger.info("coordinator-HA: gather information and validate the environment...")
+            logger.info("coordinator-HA: check if local Coordinator is already running...")
             self._prepare()
 
             with open(self.config_file_coordinator) as f:
                 self.cluster_name = yaml.safe_load(f)['scope']
-
-            logger.info("coordinator-HA: check if local Coordinator is already running...")
-            self._check_coordinator_running_local()
 
             logger.info("coordinator-HA: check if Coordinator on other peer is already running...")
             self._check_coordinator_running_remote()
@@ -845,7 +842,7 @@ class GpStartHA (GpStart):
             logger.info("coordinator-HA: start local Coordinator in utility mode...")
             self._prepare_cluster_for_segment_start()
 
-            if not self.gparray.hasStandbyCoordinator:
+            if not self.gparray.hasStandbyCoordinator():
                 raise ExceptionNoStackTraceNeeded("Greengage cluster should be inited with standby before running it in HA mode")
 
             if pg.DbStatus.local('coordinator instance', self.gparray.coordinator):
@@ -921,14 +918,6 @@ class GpStartHA (GpStart):
             logger.error(f"coordinator-HA: {str(e)}")
             success = False
         return 0 if success else 1
-
-    def _prepare(self):
-        self._basic_setup()
-        self._check_version()
-
-    def _check_coordinator_running_local(self):
-        if os.path.exists(self.coordinator_datadir + '/postmaster.pid'):
-            raise ExceptionNoStackTraceNeeded("Coordinator instance process running")
 
     def _patronictl_list_members(self):
         """Return (leader, replicas) parsed from `patronictl list` JSON output."""
