@@ -552,3 +552,15 @@ DROP TABLE tempcat_comment_t;
 DROP TABLE tempcat_comment_ref;
 RESET gp_enable_temp_memory_catalog;
 
+-- Creating a temp table inside a REPEATABLE READ transaction is rejected;
+-- outside a transaction block it is fine even at RR isolation.
+SET gp_enable_temp_memory_catalog = on;
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+CREATE TEMP TABLE tempcat_rr_t (a int) DISTRIBUTED BY (a);
+ROLLBACK;
+SET default_transaction_isolation = 'repeatable read';
+CREATE TEMP TABLE tempcat_rr_ok (a int) DISTRIBUTED BY (a);
+INSERT INTO tempcat_rr_ok VALUES (1);
+RESET default_transaction_isolation;
+DROP TABLE tempcat_rr_ok;
+RESET gp_enable_temp_memory_catalog;
