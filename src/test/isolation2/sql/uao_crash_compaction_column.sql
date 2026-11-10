@@ -121,6 +121,7 @@
 -- Leaving uncommited (because of panic) transaction's xid in 
 -- procarray leads to segfiles staying in AOSEG_STATE_AWAITING_DROP 
 -- and being unable to be dropped.
+4:SELECT * FROM gp_stat_progress_dtx_recovery;
 4:SELECT wait_for_new_oldest_xid('crash_coordinator_before_cleanup_phase');
 4:VACUUM crash_coordinator_before_cleanup_phase;
 4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
