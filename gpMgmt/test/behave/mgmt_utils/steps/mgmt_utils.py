@@ -3630,6 +3630,73 @@ def impl(context, seconds):
     subprocess.run(['patronictl', '-c', config_file, 'edit-config', '--set', f'ttl={seconds}', '--force', '--quiet'],
                    text=True, check=True)
 
+def _restore_etcd_routes(host, blocked_addresses):
+    errors = []
+    for address in blocked_addresses[:]:
+        try:
+            subprocess.check_call(['ssh', host, 'sudo', '-n', 'ip', '-4',
+                                   'route', 'del', 'blackhole', address])
+        except subprocess.CalledProcessError as exc:
+            errors.append(str(exc))
+        else:
+            blocked_addresses.remove(address)
+    if errors:
+        raise AssertionError('Failed to restore ETCD access from %s: %s' %
+                             (host, '; '.join(errors)))
+
+
+@when('ETCD hosts "{etcd_hosts}" are blocked from host "{host}"')
+def impl(context, etcd_hosts, host):
+    # The Patroni Compose network uses IPv4 only.
+    resolve = (
+        'import json, socket, sys; '
+        'print(json.dumps(sorted({entry[4][0] for host in sys.argv[1:] '
+        'for entry in socket.getaddrinfo(host, 2379, family=socket.AF_INET, '
+        'type=socket.SOCK_STREAM)})))'
+    )
+    addresses = json.loads(subprocess.check_output(
+        ['ssh', host, shlex.join(['python3', '-c', resolve] + etcd_hosts.split())],
+        text=True))
+    if not addresses:
+        raise AssertionError('No addresses found for ETCD hosts %s' % etcd_hosts)
+
+    if not hasattr(context, 'etcd_blocked_routes'):
+        context.etcd_blocked_routes = {}
+    blocked_addresses = context.etcd_blocked_routes.setdefault(host, [])
+    if blocked_addresses:
+        raise AssertionError('ETCD access is already blocked from %s' % host)
+    # Register before changing routes so a partial setup failure is cleaned up.
+    context.add_cleanup(_restore_etcd_routes, host, blocked_addresses)
+    for address in addresses:
+        subprocess.check_call(['ssh', host, 'sudo', '-n', 'ip', '-4',
+                               'route', 'add', 'blackhole', address])
+        blocked_addresses.append(address)
+        result = subprocess.run(['ssh', host, 'sudo', '-n', 'ss', '-4', '-K',
+                                 'dst', address + '/32', 'dport', '=', '2379'],
+                                capture_output=True, text=True)
+        if result.returncode:
+            print('Could not close existing ETCD connections: %s' % result.stderr)
+
+    # Verify isolation before accepting a failed switchover as a test result.
+    probe = (
+        'import socket, sys\n'
+        'for address in sys.argv[1:]:\n'
+        '    try:\n'
+        '        connection = socket.create_connection((address, 2379), timeout=1)\n'
+        '    except OSError:\n'
+        '        continue\n'
+        '    connection.close()\n'
+        '    raise RuntimeError("ETCD is still accessible at " + address)\n'
+    )
+    subprocess.check_call(
+        ['ssh', host, shlex.join(['python3', '-c', probe] + addresses)])
+
+
+@when('ETCD hosts are unblocked from host "{host}"')
+def impl(context, host):
+    _restore_etcd_routes(host, context.etcd_blocked_routes[host])
+
+
 @then('verify ETCD (at endpoint="{endpoint}") lease TTL is equal to "{seconds}" seconds')
 def impl(context, endpoint, seconds):
     """

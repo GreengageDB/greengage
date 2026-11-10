@@ -39,6 +39,9 @@ services:
     ports:
       # expose etcd1 to the host as well (Patroni outside the container: 127.0.0.1:2379)
       - "2379:2379"
+    networks:
+      cluster_net:
+        ipv4_address: 172.20.0.11
 
   etcd2:
     <<: *etcd-common
@@ -55,6 +58,9 @@ services:
       - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
     ports:
       - "12379:2379"
+    networks:
+      cluster_net:
+        ipv4_address: 172.20.0.12
 
   etcd3:
     <<: *etcd-common
@@ -71,6 +77,9 @@ services:
       - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
     ports:
       - "22379:2379"
+    networks:
+      cluster_net:
+        ipv4_address: 172.20.0.13
 
   cdw:
     <<: *common-service
@@ -87,6 +96,9 @@ services:
         condition: service_healthy
       etcd3:
         condition: service_healthy
+    networks:
+      cluster_net:
+        ipv4_address: 172.20.0.21
 
   scdw:
     <<: *common-service
@@ -103,6 +115,9 @@ services:
         condition: service_healthy
       etcd3:
         condition: service_healthy
+    networks:
+      cluster_net:
+        ipv4_address: 172.20.0.22
 
   sdw1:
     <<: *common-service
@@ -110,15 +125,33 @@ services:
     volumes:
       - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
       - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
+    networks:
+      cluster_net:
+        ipv4_address: 172.20.0.31
   sdw2:
     <<: *common-service
     hostname: sdw2
     volumes:
       - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
       - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
+    networks:
+      cluster_net:
+        ipv4_address: 172.20.0.32
   sdw3:
     <<: *common-service
     hostname: sdw3
     volumes:
       - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
       - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
+    networks:
+      cluster_net:
+        ipv4_address: 172.20.0.33
+
+networks:
+  cluster_net:
+    driver: bridge
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+          gateway: 172.20.0.1

@@ -160,6 +160,19 @@ Feature: auto failover behave tests
         When Patroni lease ticket TTL is set to "35" seconds
          And waiting "35" seconds
         Then verify ETCD (at endpoint="http://etcd1:2379") lease TTL is equal to "35" seconds
+        # Test 5 - reject manual switchover to a standby isolated from ETCD.
+        When ETCD hosts "etcd1 etcd2 etcd3" are blocked from host "scdw"
+         # Allow the 35-second member lease and a 10-second HA loop to expire.
+         And waiting "46" seconds
+        Then Patroni has no streaming replica "smdw" on host "scdw"
+        When the user runs command "patronictl -c /home/gpadmin/gpdb_src/ci/patroni/configs/mdw.yml switchover test-cluster --leader mdw --candidate smdw --force" eok
+        Then patronictl should return a return code of 1
+         And patronictl should print "No candidates found to switchover to" error message
+         And Patroni has running leader "mdw" on host "cdw"
+         And Patroni has no running leader "smdw" on host "scdw"
+        When ETCD hosts are unblocked from host "scdw"
+        Then Patroni has running leader "mdw" on host "cdw"
+         And Patroni has streaming replica "smdw" on host "scdw"
         When the user runs "gpstop --HA"
         Then gpstop should return a return code of 0
          And the user runs command "ssh cdw 'pgrep -x postgres >/dev/null; test $? -eq 1'"
