@@ -642,7 +642,11 @@ struct config_bool ConfigureNamesBool_gp[] =
 			gettext_noop("When enabled, temporary table metadata is stored in "
 						 "backend-private memory instead of pg_catalog, "
 						 "preventing catalog bloating from frequent temp table "
-						 "creation and deletion."),
+						 "creation and deletion.  Metadata of such tables is "
+						 "not visible to plain queries on pg_catalog, and "
+						 "temporary tables cannot be created inside "
+						 "REPEATABLE READ transactions.  See doc/tempcat.md "
+						 "for the full list of known limitations."),
 			GUC_NOT_IN_SAMPLE | GUC_CHECK_HOOK_ON_RESET | GUC_NO_PROCONFIG
 		},
 		&enable_temp_memory_catalog,
