@@ -11257,8 +11257,17 @@ if test "$with_zstd" = yes; then
     { $as_echo "$as_me:${as_lineno-$LINENO}: checking for static zstd library" >&5
 $as_echo_n "checking for static zstd library... " >&6; }
     zstd_static_lib=
+    pgac_pending_L=
     for pgac_option in $LDFLAGS; do
+      # a standalone -L takes the directory from the next argument
+      if test -n "$pgac_pending_L"; then
+        pgac_pending_L=
+        pgac_option="-L$pgac_option"
+      fi
       case $pgac_option in
+        -L)
+          pgac_pending_L=yes
+          ;;
         -L*)
           pgac_dir=`echo "$pgac_option" | sed -e 's/^-L//'`
           if test -f "$pgac_dir/libzstd.a"; then

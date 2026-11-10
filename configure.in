@@ -1462,8 +1462,17 @@ if test "$with_zstd" = yes; then
   if test "$PORTNAME" = darwin; then
     AC_MSG_CHECKING([for static zstd library])
     zstd_static_lib=
+    pgac_pending_L=
     for pgac_option in $LDFLAGS; do
+      # a standalone -L takes the directory from the next argument
+      if test -n "$pgac_pending_L"; then
+        pgac_pending_L=
+        pgac_option="-L$pgac_option"
+      fi
       case $pgac_option in
+        -L)
+          pgac_pending_L=yes
+          ;;
         -L*)
           pgac_dir=`echo "$pgac_option" | sed -e 's/^-L//'`
           if test -f "$pgac_dir/libzstd.a"; then
