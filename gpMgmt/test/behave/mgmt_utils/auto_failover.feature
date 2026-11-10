@@ -59,16 +59,19 @@ Feature: auto failover behave tests
         Then gpstart should return a return code of 0
          And Patroni has running leader "mdw" on host "cdw"
          And the coordinator on host "cdw" port "7000" is ready for queries
+         And ETCD leader ticket at endpoint="http://etcd1:2379" belongs to "mdw"
          And Patroni has streaming replica "smdw" on host "scdw"
         When the user runs psql with "-c 'SELECT 1'" against database "postgres"
         When the user runs command "patronictl -c /home/gpadmin/gpdb_src/ci/patroni/configs/mdw.yml switchover test-cluster --leader mdw --candidate smdw --force"
         Then Patroni has running leader "smdw" on host "scdw"
          And the coordinator on host "scdw" port "7001" is ready for queries
+         And ETCD leader ticket at endpoint="http://etcd1:2379" belongs to "smdw"
          And Patroni has streaming replica "mdw" on host "cdw"
         When the user runs psql with "-h scdw -p 7001 -c 'SELECT 1'" against database "postgres"
         When the user runs command "patronictl -c /home/gpadmin/gpdb_src/ci/patroni/configs/mdw.yml switchover test-cluster --leader smdw --candidate mdw --force"
         Then Patroni has running leader "mdw" on host "cdw"
          And the coordinator on host "cdw" port "7000" is ready for queries
+         And ETCD leader ticket at endpoint="http://etcd1:2379" belongs to "mdw"
          And Patroni has streaming replica "smdw" on host "scdw"
         When the user runs psql with "-c 'SELECT 1'" against database "postgres"
         When the user runs "gpstop --HA"
