@@ -3761,15 +3761,20 @@ def impl(context, endpoint, seconds):
             + "\n  ".join(errors)
         )
 
-def _wait_for_patroni_member(has, member_name, host, role, state):
+def _wait_for_patroni_member(has, member_name, host, role, state, observer=None):
     if has not in ('has', 'has no'):
         raise ValueError('Expected "has" or "has no", got %r' % has)
 
     config_file = '/home/gpadmin/gpdb_src/ci/patroni/configs/mdw.yml'
+    command = ['patronictl', '-c', config_file, 'list', 'test-cluster', '-f', 'json']
+    if observer is not None:
+        # Noninteractive SSH may omit the directory containing patronictl.
+        remote_command = ['python3', '-c', 'from patroni.ctl import ctl; ctl()'] + command[1:]
+        command = ['ssh', observer, shlex.join(remote_command)]
     last_output = ''
     for _ in range(120):
         result = subprocess.run(
-            ['patronictl', '-c', config_file, 'list', 'test-cluster', '-f', 'json'],
+            command,
             capture_output=True, text=True)
         last_output = result.stdout + result.stderr
         if result.returncode == 0:
@@ -3792,6 +3797,10 @@ def _wait_for_patroni_member(has, member_name, host, role, state):
 @then('Patroni {has} running leader "{leader}" on host "{host}"')
 def impl(context, has, leader, host):
     _wait_for_patroni_member(has, leader, host, 'Leader', 'running')
+
+@then('from host "{observer}", Patroni {has} running leader "{leader}" on host "{host}"')
+def impl(context, observer, has, leader, host):
+    _wait_for_patroni_member(has, leader, host, 'Leader', 'running', observer=observer)
 
 @then('Patroni {has} streaming replica "{replica}" on host "{host}"')
 def impl(context, has, replica, host):

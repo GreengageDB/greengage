@@ -173,6 +173,47 @@ Feature: auto failover behave tests
         When ETCD hosts are unblocked from host "scdw"
         Then Patroni has running leader "mdw" on host "cdw"
          And Patroni has streaming replica "smdw" on host "scdw"
+        # Test 6 - stop the primary coordinator when it loses ETCD access.
+        When ETCD hosts "etcd1 etcd2 etcd3" are blocked from host "cdw"
+        Then wait until the process "postgres" goes down
+         And the user runs command "test ! -f /home/gpadmin/.data/gpseg-1/postmaster.pid"
+         # Observe the new leader from the host that can still reach ETCD.
+         And from host "scdw", Patroni has running leader "smdw" on host "scdw"
+        When the user runs command "PGCONNECT_TIMEOUT=5 psql -X -h cdw -p 7000 -d postgres -c 'SELECT * FROM gp_segment_configuration ORDER BY dbid;'" eok
+        Then psql should return a return code of 2
+        When execute following sql on host "scdw" port "7001" in db "postgres" and store result in the context
+            """
+            SELECT * FROM gp_segment_configuration ORDER BY dbid;
+            """
+        Then validate that following rows are exactly the stored rows
+          | dbid | content | role | preferred_role | mode | status | port | hostname | address | datadir                            |
+          | 12   | -1      | p    | p              | s    | u      | 7001 | scdw     | scdw    | /home/gpadmin/.data/standby        |
+          | 2    | 0       | p    | p              | s    | u      | 7100 | sdw1     | sdw1    | /home/gpadmin/.data/primary/gpseg0 |
+          | 3    | 1       | p    | p              | s    | u      | 7101 | sdw2     | sdw2    | /home/gpadmin/.data/primary/gpseg1 |
+          | 4    | 2       | p    | p              | s    | u      | 7102 | sdw3     | sdw3    | /home/gpadmin/.data/primary/gpseg2 |
+          | 5    | 0       | m    | m              | s    | u      | 7200 | sdw2     | sdw2    | /home/gpadmin/.data/mirror/gpseg0  |
+          | 6    | 1       | m    | m              | s    | u      | 7201 | sdw3     | sdw3    | /home/gpadmin/.data/mirror/gpseg1  |
+          | 7    | 2       | m    | m              | s    | u      | 7202 | sdw1     | sdw1    | /home/gpadmin/.data/mirror/gpseg2  |
+        When ETCD hosts are unblocked from host "cdw"
+        Then Patroni has running leader "smdw" on host "scdw"
+         And Patroni has streaming replica "mdw" on host "cdw"
+        When the user runs command "patronictl -c /home/gpadmin/gpdb_src/ci/patroni/configs/mdw.yml switchover test-cluster --leader smdw --candidate mdw --force"
+        Then Patroni has running leader "mdw" on host "cdw"
+         And Patroni has streaming replica "smdw" on host "scdw"
+        When execute following sql on host "cdw" port "7000" in db "postgres" and store result in the context
+            """
+            SELECT * FROM gp_segment_configuration ORDER BY dbid;
+            """
+        Then validate that following rows are exactly the stored rows
+          | dbid | content | role | preferred_role | mode | status | port | hostname | address | datadir                            |
+          | 13   | -1      | p    | p              | s    | u      | 7000 | cdw      | cdw     | /home/gpadmin/.data/gpseg-1        |
+          | 14   | -1      | m    | m              | s    | u      | 7001 | scdw     | scdw    | /home/gpadmin/.data/standby        |
+          | 2    | 0       | p    | p              | s    | u      | 7100 | sdw1     | sdw1    | /home/gpadmin/.data/primary/gpseg0 |
+          | 3    | 1       | p    | p              | s    | u      | 7101 | sdw2     | sdw2    | /home/gpadmin/.data/primary/gpseg1 |
+          | 4    | 2       | p    | p              | s    | u      | 7102 | sdw3     | sdw3    | /home/gpadmin/.data/primary/gpseg2 |
+          | 5    | 0       | m    | m              | s    | u      | 7200 | sdw2     | sdw2    | /home/gpadmin/.data/mirror/gpseg0  |
+          | 6    | 1       | m    | m              | s    | u      | 7201 | sdw3     | sdw3    | /home/gpadmin/.data/mirror/gpseg1  |
+          | 7    | 2       | m    | m              | s    | u      | 7202 | sdw1     | sdw1    | /home/gpadmin/.data/mirror/gpseg2  |
         When the user runs "gpstop --HA"
         Then gpstop should return a return code of 0
          And the user runs command "ssh cdw 'pgrep -x postgres >/dev/null; test $? -eq 1'"
