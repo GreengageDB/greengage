@@ -1891,12 +1891,41 @@ CTranslatorExprToDXL::PdxlnResult(CExpression *pexprRelational,
 {
 	GPOS_ASSERT(nullptr != pexprRelational);
 
-	// Project required subplan outputs in the child before the filter uses them.
+	// Translate the child without changing its projection.
 	CDXLNode *pdxlnRelationalChild = CreateDXLNode(
 		pexprRelational, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
-		pfDML, true /*fRemap*/, false /*fRoot */);
+		pfDML, false /*fRemap*/, false /*fRoot */);
 	GPOS_ASSERT(nullptr != pexprRelational->Prpp());
 	CColRefSet *pcrsOutput = pexprRelational->Prpp()->PcrsRequired();
+
+	// A TRUE condition adds no filter, so keep the original projection.
+	if (!CTranslatorExprToDXLUtils::FScalarConstTrue(m_pmda, pdxlnScalar))
+	{
+		CDXLNode *proj_list = (*pdxlnRelationalChild)[0];
+		CBitSet *projected = GPOS_NEW(m_mp) CBitSet(m_mp);
+		for (ULONG ul = 0; ul < proj_list->Arity(); ul++)
+		{
+			projected->ExchangeSet(CDXLScalarProjElem::Cast(
+				(*proj_list)[ul]->GetOperator())->Id());
+		}
+
+		CColRefSetIter crsi(*pcrsOutput);
+		while (crsi.Advance())
+		{
+			CColRef *colref = crsi.Pcr();
+			CDXLNode *subplan = m_phmcrdxln->Find(colref);
+			if (!projected->Get(colref->Id()) && nullptr != subplan &&
+				EdxlopScalarSubPlan == subplan->GetOperator()->GetDXLOperator())
+			{
+				CColRefArray *required = pcrsOutput->Pdrgpcr(m_mp);
+				pdxlnRelationalChild = PdxlnRemapOutputColumns(
+					pexprRelational, pdxlnRelationalChild, required, colref_array);
+				required->Release();
+				break;
+			}
+		}
+		projected->Release();
+	}
 
 	return PdxlnAddScalarFilterOnRelationalChild(pdxlnRelationalChild,
 												 pdxlnScalar, dxl_properties,
