@@ -1,4 +1,5 @@
 import math
+import base64
 import fnmatch
 import glob
 import json
@@ -3630,6 +3631,87 @@ def impl(context, seconds):
     subprocess.run(['patronictl', '-c', config_file, 'edit-config', '--set', f'ttl={seconds}', '--force', '--quiet'],
                    text=True, check=True)
 
+def _resume_patroni_agent(host, state):
+    if state['paused']:
+        subprocess.check_call(['ssh', host, 'kill', '-CONT', str(state['pid'])])
+        state['paused'] = False
+
+
+@when('Patroni HA agent on host "{host}" is suspended')
+def impl(context, host):
+    if not hasattr(context, 'suspended_patroni_agents'):
+        context.suspended_patroni_agents = {}
+    if context.suspended_patroni_agents.get(host, {}).get('paused'):
+        raise AssertionError('Patroni HA agent on %s is already suspended' % host)
+    pids = subprocess.check_output(
+        ['ssh', host, "pgrep -f 'python3 -m [p]atroni'"], text=True).split()
+    if len(pids) != 1:
+        raise AssertionError('Expected one Patroni HA agent on %s, found %s' % (host, pids))
+    state = {'pid': int(pids[0]), 'paused': True}
+    context.suspended_patroni_agents[host] = state
+    context.add_cleanup(_resume_patroni_agent, host, state)
+    subprocess.check_call(['ssh', host, 'kill', '-STOP', str(state['pid'])])
+
+
+@when('Patroni HA agent on host "{host}" is resumed')
+def impl(context, host):
+    _resume_patroni_agent(host, context.suspended_patroni_agents[host])
+
+
+def _run_etcdctl(endpoint, *args, input=None):
+    if '://' not in endpoint:
+        endpoint = 'http://' + endpoint
+    try:
+        return subprocess.run(['etcdctl', '--endpoints=' + endpoint, *args],
+                              text=True, check=True, capture_output=True, input=input,
+                              env={**os.environ, 'ETCDCTL_API': '3'})
+    except subprocess.CalledProcessError as exc:
+        raise AssertionError(
+            f"etcdctl {' '.join(args)} failed (rc={exc.returncode}): "
+            f"{(exc.stderr or '').strip()}"
+        ) from exc
+
+
+def _read_etcd_leader_ticket(endpoint):
+    output = _run_etcdctl(endpoint, '--write-out=json', 'get', '/db/test-cluster/', '--prefix')
+    records = {base64.b64decode(record['key']).decode(): record
+               for record in json.loads(output.stdout).get('kvs', [])}
+    # Discover the key so Patroni's optional MPP group path is included.
+    leader_keys = [key for key in records if key.endswith('/leader')]
+    if len(leader_keys) != 1:
+        raise AssertionError('Expected one ETCD leader ticket, found %s' % leader_keys)
+    return leader_keys[0], records
+
+
+@when('ETCD leader ticket at endpoint="{endpoint}" is transferred from "{leader}" to "{new_leader}"')
+def impl(context, endpoint, leader, new_leader):
+    key, records = _read_etcd_leader_ticket(endpoint)
+    owner = base64.b64decode(records[key]['value']).decode()
+    if owner != leader or new_leader == leader:
+        raise AssertionError('Expected a transfer from %s to a different member, current owner is %s' %
+                             (leader, owner))
+    member_key = key.rsplit('/', 1)[0] + '/members/' + new_leader
+    lease = int(records.get(member_key, {}).get('lease', 0))
+    if not lease or lease == int(records[key].get('lease', 0)):
+        raise AssertionError('Expected %s to have its own live ETCD lease' % new_leader)
+    # Refresh the suspended agent's lease before giving it the leader ticket.
+    _run_etcdctl(endpoint, 'lease', 'keep-alive', '--once', format(lease, 'x'))
+    transaction = ('value(%s) = %s\n\nput %s %s --lease=%x\n\nget %s\n\n' %
+                   (json.dumps(key), json.dumps(leader), json.dumps(key),
+                    json.dumps(new_leader), lease, json.dumps(key)))
+    result = _run_etcdctl(endpoint, '--write-out=json', 'txn', input=transaction)
+    if not json.loads(result.stdout).get('succeeded'):
+        raise AssertionError('ETCD leader ticket changed before the transfer: %s' % result.stdout)
+
+
+@then('ETCD leader ticket at endpoint="{endpoint}" belongs to "{leader}"')
+def impl(context, endpoint, leader):
+    key, records = _read_etcd_leader_ticket(endpoint)
+    owner = base64.b64decode(records[key]['value']).decode()
+    if owner != leader or not int(records[key].get('lease', 0)):
+        raise AssertionError('Expected a leased leader ticket for %s, found %s' % (leader, owner))
+
+
 def _restore_etcd_routes(host, blocked_addresses):
     errors = []
     for address in blocked_addresses[:]:
@@ -3708,26 +3790,8 @@ def impl(context, endpoint, seconds):
     """
     expected_ttl = int(seconds)
 
-    # Accept both "host:port" and "http://host:port" forms.
-    if "://" not in endpoint:
-        endpoint = f"http://{endpoint}"
-
-    env = {**os.environ, "ETCDCTL_API": "3"}
-
-    def run_etcdctl(*args):
-        try:
-            return subprocess.run(
-                ["etcdctl", f"--endpoints={endpoint}", *args],
-                text=True, check=True, capture_output=True, env=env,
-            )
-        except subprocess.CalledProcessError as exc:
-            raise AssertionError(
-                f"etcdctl {' '.join(args)} failed (rc={exc.returncode}): "
-                f"{exc.stderr.strip()}"
-            ) from exc
-
     # 1. Enumerate leases. Only Patroni uses etcd, so all are Patroni's.
-    raw = run_etcdctl("lease", "list").stdout
+    raw = _run_etcdctl(endpoint, "lease", "list").stdout
     # etcdctl always renders 64-bit lease IDs as 16 lowercase hex chars.
     LEASE_ID_RE = re.compile(r"^[0-9a-f]{16}$")
     leases = [line.strip() for line in raw.splitlines() if LEASE_ID_RE.match(line.strip())]
@@ -3737,7 +3801,7 @@ def impl(context, endpoint, seconds):
     # 2. Query each lease's granted TTL and compare with expected.
     errors = []
     for lease_id in leases:
-        output = run_etcdctl("lease", "timetolive", lease_id).stdout.strip()
+        output = _run_etcdctl(endpoint, "lease", "timetolive", lease_id).stdout.strip()
 
         if "already expired" in output:
             errors.append(f"{lease_id}: expired ({output!r})")
@@ -3760,6 +3824,83 @@ def impl(context, endpoint, seconds):
             f"TTL={expected_ttl}s, but found mismatches:\n  "
             + "\n  ".join(errors)
         )
+
+@when('the current coordinator process is saved')
+def impl(context):
+    pid = gp.get_postmaster_pid_locally(coordinator_data_dir)
+    if not pid:
+        raise AssertionError('No coordinator postmaster PID found in %s' % coordinator_data_dir)
+    context.saved_coordinator_process = psutil.Process(pid)
+    # Cache the start time so psutil can distinguish a reused PID.
+    context.saved_coordinator_process.create_time()
+
+
+@then('the saved coordinator process has stopped')
+def impl(context):
+    process = context.saved_coordinator_process
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        try:
+            if not process.is_running() or process.status() == psutil.STATUS_ZOMBIE:
+                return
+        except psutil.NoSuchProcess:
+            return
+        time.sleep(1)
+    raise AssertionError('Original coordinator process %s is still running' % process.pid)
+
+
+@then('the coordinator on host "{host}" port "{port}" is no longer primary')
+def impl(context, host, port):
+    try:
+        conn = dbconn.connect(dbconn.DbURL(hostname=host, port=port,
+                                          dbname='postgres', timeout=5),
+                              utility=True, unsetSearchPath=False)
+    except psycopg2.OperationalError:
+        # Startup and shutdown may reject connections. An authentication error
+        # on an otherwise accepting server must still fail the test.
+        result = subprocess.run(['pg_isready', '-h', host, '-p', port,
+                                 '-d', 'postgres', '-t', '5'],
+                                capture_output=True, text=True)
+        if result.returncode in (1, 2):
+            return
+        raise
+    with closing(conn):
+        # Patroni may restart the stopped postmaster as a read-only standby.
+        no_longer_primary = dbconn.querySingleton(conn, """
+            SELECT pg_is_in_recovery()
+               AND current_setting('transaction_read_only') = 'on'
+        """)
+    if not no_longer_primary:
+        raise AssertionError('Coordinator %s:%s is still able to act as primary' % (host, port))
+
+
+@then('the coordinator on host "{host}" port "{port}" is ready for queries')
+def impl(context, host, port):
+    deadline = time.monotonic() + 120
+    last_error = 'promotion is not complete'
+    while time.monotonic() < deadline:
+        try:
+            # Patroni can report a running leader before promotion updates the
+            # catalog. A normal backend must initialize the interconnect too.
+            with closing(dbconn.connect(dbconn.DbURL(hostname=host, port=port,
+                                                      dbname='postgres', timeout=5),
+                                        unsetSearchPath=False)) as conn:
+                ready = dbconn.querySingleton(conn, """
+                    SELECT NOT pg_is_in_recovery() AND EXISTS (
+                        SELECT dbid FROM gp_segment_configuration
+                        WHERE content = -1 AND role = 'p'
+                          AND dbid = current_setting('gp_dbid')::integer
+                    )
+                """)
+                if ready:
+                    return
+                last_error = 'promotion is not complete'
+        except psycopg2.OperationalError as exc:
+            last_error = str(exc)
+        time.sleep(1)
+    raise AssertionError('Coordinator %s:%s did not become ready for queries: %s' %
+                         (host, port, last_error))
+
 
 def _wait_for_patroni_member(has, member_name, host, role, state, observer=None):
     if has not in ('has', 'has no'):
