@@ -689,3 +689,40 @@ analyze verbose p2;
 select * from pg_stats where tablename like 'part2';
 
 drop table multipart cascade;
+
+-- Analyze of root table merges statistics from foreign tables too.
+create extension file_fdw;
+
+\! mkdir -p /tmp/test_analyze
+\! seq 1 100 | awk '{print $1","20+($1%10)}' > /tmp/test_analyze/p3.csv
+
+-- this type of server has AnalyzeForeignTable callback, so choice of table type isn't random
+create server file_server
+foreign data wrapper file_fdw;
+create foreign table p3_f (
+    a int,
+    b int
+)
+server file_server
+options (
+    filename '/tmp/test_analyze/p3.csv',
+    format 'csv'
+);
+
+create table part (a int, b int) distributed by (a) partition by range (b) (start (0) end (30) every (10));
+insert into part select i, i % 20 from generate_series(1, 10000) i;
+alter table part exchange partition for (25) with table p3_f;
+
+-- now we're analyzing root partition so stats for leaf tables will be created and merged.
+analyze part;
+
+-- we should have hll stats on this foreign leaf
+select stavalues5 from pg_statistic where starelid='part_1_prt_3'::regclass;
+
+-- and we should have all stats merged: MCV should also include numbers from 20-30 interval with according frequences
+select most_common_vals, most_common_freqs from pg_stats where tablename='part';
+
+drop table part;
+drop table p3_f;
+drop extension file_fdw;
+\! rm -rf /tmp/test_analyze
