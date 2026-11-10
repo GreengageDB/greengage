@@ -13,6 +13,7 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/base/CCostContext.h"
 #include "gpopt/base/CDistributionSpecAny.h"
 #include "gpopt/base/CDistributionSpecNonSingleton.h"
 #include "gpopt/base/CDistributionSpecReplicated.h"
@@ -189,11 +190,21 @@ CPhysicalFilter::EpetDistribution(CExpressionHandle &exprhdl,
 	if (FNonSingletonNonReplicated(ped->PdsRequired()) &&
 		!pds->FSingletonOrStrictSingleton())
 	{
-		// The requirement was not pushed down (second distribution request,
-		// see PdsRequired()) and the child turned out to be replicated or
-		// universal. Do not enforce a motion on top of the Filter: for such a
-		// child the requirement has to reach the child itself (inlined CTE),
-		// which is what the first request does.
+		// The child turned out to be replicated or universal. This can only
+		// be the second distribution request (see PdsRequired()): the first
+		// one pushes the requirement down to the child, whose best plan then
+		// satisfies it, and the Filter, which passes the distribution of its
+		// child through, returns EpetUnnecessary above. Do not enforce a
+		// motion on top of the Filter: for such a child the requirement has
+		// to reach the child itself (inlined CTE), which is what the first
+		// request does.
+#ifdef GPOS_DEBUG
+		GPOS_ASSERT(nullptr != exprhdl.Pcc());
+		COptimizationContext *pocChild = (*exprhdl.Pcc()->Pdrgpoc())[0];
+		GPOS_ASSERT(!FNonSingletonNonReplicated(
+						pocChild->Prpp()->Ped()->PdsRequired()) &&
+					"the requirement was pushed down but is not satisfied");
+#endif	// GPOS_DEBUG
 		return CEnfdProp::EpetProhibited;
 	}
 
