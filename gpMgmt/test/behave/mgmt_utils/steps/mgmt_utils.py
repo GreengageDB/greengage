@@ -3624,6 +3624,76 @@ def impl(context):
     subprocess.run(['patronictl', '-c', config_file, 'remove', 'test-cluster'],
                    input='test-cluster\nYes I am aware\n', text=True, check=True)
 
+@when('Patroni lease ticket TTL is set to "{seconds}" seconds')
+def impl(context, seconds):
+    config_file = '/home/gpadmin/gpdb_src/ci/patroni/configs/mdw.yml'
+    subprocess.run(['patronictl', '-c', config_file, 'edit-config', '--set', f'ttl={seconds}', '--force', '--quiet'],
+                   text=True, check=True)
+
+@then('verify ETCD (at endpoint="{endpoint}") lease TTL is equal to "{seconds}" seconds')
+def impl(context, endpoint, seconds):
+    """
+    Verify that every lease in etcd reports the expected granted TTL.
+
+    Assumes etcd is dedicated to Patroni, so all leases belong to
+    Patroni members and should be refreshed with the TTL from the
+    dynamic config once the config change has propagated.
+    """
+    expected_ttl = int(seconds)
+
+    # Accept both "host:port" and "http://host:port" forms.
+    if "://" not in endpoint:
+        endpoint = f"http://{endpoint}"
+
+    env = {**os.environ, "ETCDCTL_API": "3"}
+
+    def run_etcdctl(*args):
+        try:
+            return subprocess.run(
+                ["etcdctl", f"--endpoints={endpoint}", *args],
+                text=True, check=True, capture_output=True, env=env,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise AssertionError(
+                f"etcdctl {' '.join(args)} failed (rc={exc.returncode}): "
+                f"{exc.stderr.strip()}"
+            ) from exc
+
+    # 1. Enumerate leases. Only Patroni uses etcd, so all are Patroni's.
+    raw = run_etcdctl("lease", "list").stdout
+    # etcdctl always renders 64-bit lease IDs as 16 lowercase hex chars.
+    LEASE_ID_RE = re.compile(r"^[0-9a-f]{16}$")
+    leases = [line.strip() for line in raw.splitlines() if LEASE_ID_RE.match(line.strip())]
+    if not leases:
+        raise AssertionError(f"No lease IDs found in `etcdctl lease list` output:\n{raw}")
+
+    # 2. Query each lease's granted TTL and compare with expected.
+    errors = []
+    for lease_id in leases:
+        output = run_etcdctl("lease", "timetolive", lease_id).stdout.strip()
+
+        if "already expired" in output:
+            errors.append(f"{lease_id}: expired ({output!r})")
+            continue
+
+        # Example: "lease 694d7e0e2b4d5e3f granted with TTL(30s), remaining(24s)"
+        # We compare the *granted* TTL, not the remaining TTL.
+        match = re.search(r"TTL\((\d+)s\)", output)
+        if not match:
+            errors.append(f"{lease_id}: unparsable output {output!r}")
+            continue
+
+        actual_ttl = int(match.group(1))
+        if actual_ttl != expected_ttl:
+            errors.append(f"{lease_id}: got {actual_ttl}s")
+
+    if errors:
+        raise AssertionError(
+            f"Expected all {len(leases)} Patroni lease(s) to report "
+            f"TTL={expected_ttl}s, but found mismatches:\n  "
+            + "\n  ".join(errors)
+        )
+
 def _wait_for_patroni_member(has, member_name, host, role, state):
     if has not in ('has', 'has no'):
         raise ValueError('Expected "has" or "has no", got %r' % has)

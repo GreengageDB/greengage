@@ -155,6 +155,11 @@ Feature: auto failover behave tests
           | 5    | 0       | m    | m              | s    | u      | 7200 | sdw2     | sdw2    | /home/gpadmin/.data/mirror/gpseg0  |
           | 6    | 1       | m    | m              | s    | u      | 7201 | sdw3     | sdw3    | /home/gpadmin/.data/mirror/gpseg1  |
           | 7    | 2       | m    | m              | s    | u      | 7202 | sdw1     | sdw1    | /home/gpadmin/.data/mirror/gpseg2  |
+        # Test 4. - Check we can change lease ticket TTL.
+        # Change default 30 seconds TTL to 35 seconds.
+        When Patroni lease ticket TTL is set to "35" seconds
+         And waiting "35" seconds
+        Then verify ETCD (at endpoint="http://etcd1:2379") lease TTL is equal to "35" seconds
         When the user runs "gpstop --HA"
         Then gpstop should return a return code of 0
          And the user runs command "ssh cdw 'pgrep -x postgres >/dev/null; test $? -eq 1'"

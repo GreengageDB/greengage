@@ -80,6 +80,9 @@ if [ "$failed" -ne 0 ]; then
   exit 1
 fi
 
+# Run the apt install as root
+docker-compose -f ./ci/patroni/docker-compose-patroni.yaml exec -T cdw bash -c "apt update && apt install -y etcd-client"
+
 docker-compose -f ./ci/patroni/docker-compose-patroni.yaml exec -T -u gpadmin cdw bash <<'PATRONI_ETCD3'
 set -e
 cd /home/gpadmin/patroni
