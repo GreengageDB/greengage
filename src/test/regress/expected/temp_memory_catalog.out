@@ -872,3 +872,38 @@ ERROR:  cannot alter type "tempcat_ct" because it is the type of a typed table
 DROP TABLE tempcat_tt;
 DROP TYPE tempcat_ct;
 RESET gp_enable_temp_memory_catalog;
+-- Triggers and rules must fire in name order regardless of creation order.
+SET gp_enable_temp_memory_catalog = on;
+CREATE FUNCTION trig_note() RETURNS trigger LANGUAGE plpgsql AS
+  $$ BEGIN NEW.n := NEW.n || tg_name; RETURN new; END $$;
+CREATE TEMP TABLE trig_src (a int, n text) DISTRIBUTED BY (a);
+CREATE TRIGGER z_trig BEFORE INSERT ON trig_src FOR EACH ROW EXECUTE FUNCTION trig_note();
+CREATE TRIGGER a_trig BEFORE INSERT ON trig_src FOR EACH ROW EXECUTE FUNCTION trig_note();
+INSERT INTO trig_src VALUES (1, '');
+SELECT n AS trigger_firing_order FROM trig_src;
+ trigger_firing_order 
+----------------------
+ a_trigz_trig
+(1 row)
+
+DROP TABLE trig_src;
+DROP FUNCTION trig_note();
+CREATE TEMP TABLE rule_a_log (t text) DISTRIBUTED BY (t);
+CREATE TEMP TABLE rule_z_log (t text) DISTRIBUTED BY (t);
+CREATE TEMP TABLE rule_src (a int) DISTRIBUTED BY (a);
+CREATE RULE z_rule AS ON INSERT TO rule_src DO ALSO
+  INSERT INTO rule_z_log VALUES ('z');
+CREATE RULE a_rule AS ON INSERT TO rule_src DO ALSO
+  INSERT INTO rule_a_log VALUES ('a');
+INSERT INTO rule_src VALUES (1);
+SELECT t AS rule_firing_order FROM
+  (SELECT 'a' AS t, ctid FROM rule_a_log
+   UNION ALL SELECT 'z', ctid FROM rule_z_log) x ORDER BY ctid;
+ rule_firing_order 
+-------------------
+ a
+ z
+(2 rows)
+
+DROP TABLE rule_src, rule_a_log, rule_z_log;
+RESET gp_enable_temp_memory_catalog;

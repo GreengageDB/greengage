@@ -2028,6 +2028,15 @@ EnableDisableTrigger(Relation rel, const char *tgname,
  * temporary TriggerDesc in working memory and then copy the completed
  * structure into cache memory.
  */
+static int
+trigger_name_compare(const void *a, const void *b)
+{
+	const Trigger *ta = (const Trigger *) a;
+	const Trigger *tb = (const Trigger *) b;
+
+	return strcmp(ta->tgname, tb->tgname);
+}
+
 void
 RelationBuildTriggers(Relation relation)
 {
@@ -2159,6 +2168,15 @@ RelationBuildTriggers(Relation relation)
 		pfree(triggers);
 		return;
 	}
+
+	/*
+	 * Although systable_beginscan() does not promise any row order, this
+	 * caller requires name order: triggers fire in the order loaded.  The
+	 * index scan normally delivers them sorted by name, but rows merged
+	 * from the in-memory temp catalog arrive in insertion order, so sort
+	 * explicitly.
+	 */
+	qsort(triggers, numtrigs, sizeof(Trigger), trigger_name_compare);
 
 	/* Build trigdesc */
 	trigdesc = (TriggerDesc *) palloc0(sizeof(TriggerDesc));
