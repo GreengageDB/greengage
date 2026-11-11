@@ -47,6 +47,7 @@
 #include <signal.h>
 #include <unistd.h>
 
+#include "access/multixact.h"
 #include "access/tempcat.h"
 #include "miscadmin.h"
 #include "port/atomics.h"
@@ -523,9 +524,9 @@ tempcat_registry_floor(TransactionId *frozenxid, TransactionId *minmxid)
 			 TransactionIdPrecedes(slot->frozenxid, minXid)))
 			minXid = slot->frozenxid;
 
-		if (TransactionIdIsNormal(slot->minmxid) &&
-			(!TransactionIdIsNormal(minMxid) ||
-			 TransactionIdPrecedes(slot->minmxid, minMxid)))
+		if (MultiXactIdIsValid(slot->minmxid) &&
+			(!MultiXactIdIsValid(minMxid) ||
+			 MultiXactIdPrecedes(slot->minmxid, minMxid)))
 			minMxid = slot->minmxid;
 	}
 
