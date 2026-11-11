@@ -1539,6 +1539,25 @@ SELECT * FROM (SELECT a, b FROM union_local UNION ALL SELECT a, b FROM union_ft)
  5 | 5
 (2 rows)
 
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM (SELECT a, b FROM union_local UNION ALL SELECT a, b FROM union_ft) u WHERE a BETWEEN 998 AND 1002 ORDER BY a;
+                                                  QUERY PLAN                                                  
+--------------------------------------------------------------------------------------------------------------
+ Sort
+   Output: union_local.a, union_local.b
+   Sort Key: union_local.a
+   ->  Append
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               Output: union_local.a, union_local.b
+               ->  Seq Scan on postgres_fdw_gp.union_local
+                     Output: union_local.a, union_local.b
+                     Filter: ((union_local.a >= 998) AND (union_local.a <= 1002))
+         ->  Foreign Scan on postgres_fdw_gp.union_ft
+               Output: union_ft.a, union_ft.b
+               Remote SQL: SELECT a, b FROM postgres_fdw_gp.union_remote WHERE ((a >= 998)) AND ((a <= 1002))
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off'
+(14 rows)
+
 SELECT * FROM (SELECT a, b FROM union_local UNION ALL SELECT a, b FROM union_ft) u WHERE a BETWEEN 998 AND 1002 ORDER BY a;
   a   |  b   
 ------+------
