@@ -61,7 +61,6 @@ extern void      tempcat_update_inplace(Relation relation, HeapTuple htup);
 /* Scan operations for virtual tuples */
 extern TempCatScanData* tempcat_beginscan(Relation rel, int nkeys, ScanKey key);
 extern void      tempcat_endscan(TempCatScanData* scan);
-extern void      tempcat_rescan(TempCatScanData* scan, ScanKey keys, int nkeys);
 extern HeapTuple tempcat_getnext(TempCatScanData* scan, BufferHeapTupleTableSlot* bslot);
 extern bool      tempcat_is_fetched(TempCatScanData* scan);
 extern bool      tempcat_relation_has_entries(Relation rel);
@@ -75,6 +74,7 @@ extern void      tempcat_reset_xact_modified(void);
 extern void      tempcat_begin_transaction(void);
 extern void      tempcat_end_transaction(void);
 extern void      tempcat_abort_transaction(void);
+extern bool      tempcat_has_state(void);
 extern void      tempcat_prepare_transaction(void);
 extern void      tempcat_finish_prepared_transaction(bool isCommit);
 extern void      tempcat_begin_subtransaction(void);

@@ -3216,6 +3216,20 @@ PrepareTransaction(void)
 	SIMPLE_FAULT_INJECTOR("start_prepare");
 
 	/*
+	 * A user-driven PREPARE TRANSACTION (only reachable in utility mode)
+	 * would park this transaction's tempcat changes until COMMIT PREPARED,
+	 * and tempcat_finish_prepared_transaction() drops anything committed in
+	 * between: refuse instead of losing it.  Must run before anything is
+	 * written, or the transaction would survive as prepared despite the
+	 * error.
+	 */
+	if (Gp_role == GP_ROLE_UTILITY && tempcat_has_state())
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot PREPARE a transaction that has used the in-memory temporary catalog"),
+				 errhint("Commit or roll back this transaction before PREPARE, or disable gp_enable_temp_memory_catalog.")));
+
+	/*
 	 * Likewise, don't allow PREPARE after pg_export_snapshot.  This could be
 	 * supported if we added cleanup logic to twophase.c, but for now it
 	 * doesn't seem worth the trouble.
@@ -6080,6 +6094,11 @@ CommitSubTransaction(void)
 	if (s->state != TRANS_INPROGRESS)
 		elog(WARNING, "CommitSubTransaction while in %s state",
 			 TransStateAsString(s->state));
+
+	/* Pre-commit processing goes here */
+
+	CallSubXactCallbacks(SUBXACT_EVENT_PRE_COMMIT_SUB, s->subTransactionId,
+						 s->parent->subTransactionId);
 
 	/* Merge this subtransaction's tempcat changes into the parent snapshot */
 	tempcat_commit_subtransaction();

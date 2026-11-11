@@ -134,7 +134,7 @@ DROP TABLE
 1: insert into dtx_defer values (1);
 INSERT 0 1
 1: commit;
-ERROR:  duplicate key value violates unique constraint "dtx_defer_i_key"  (seg1 172.17.0.2:7003 pid=41482)
+ERROR:  duplicate key value violates unique constraint "dtx_defer_i_key"  (seg1 172.17.0.3:7003 pid=38437)
 DETAIL:  Key (i)=(1) already exists.
 1: select count(*) from dtx_victim;
  count 
@@ -154,7 +154,7 @@ TRUNCATE TABLE
 1: insert into dtx_defer values (1);
 INSERT 0 1
 1: commit;
-ERROR:  duplicate key value violates unique constraint "dtx_defer_i_key"  (seg1 172.17.0.2:7003 pid=41482)
+ERROR:  duplicate key value violates unique constraint "dtx_defer_i_key"  (seg1 172.17.0.3:7003 pid=38437)
 DETAIL:  Key (i)=(1) already exists.
 1: select count(*) from dtx_tr;
  count 
@@ -174,7 +174,7 @@ ALTER TABLE
 1: insert into dtx_defer values (1);
 INSERT 0 1
 1: commit;
-ERROR:  duplicate key value violates unique constraint "dtx_defer_i_key"  (seg1 172.17.0.2:7003 pid=41482)
+ERROR:  duplicate key value violates unique constraint "dtx_defer_i_key"  (seg1 172.17.0.3:7003 pid=38437)
 DETAIL:  Key (i)=(1) already exists.
 1: insert into dtx_al values (100);
 INSERT 0 1
@@ -187,3 +187,25 @@ LINE 1: insert into dtx_al values (100, 100);
 -------
  31    
 (1 row)
+
+-- A user-driven PREPARE TRANSACTION with tempcat state must be refused
+-- BEFORE anything is written: the prepared transaction must not survive
+-- the error.  Utility mode is the only place user PREPARE reaches.
+1: create temp table dtx_prep(a int) distributed by (a);
+CREATE TABLE
+!\retcode PGOPTIONS='-c gp_role=utility' psql -p 7000 -d isolation2test -v ON_ERROR_STOP=1 -c "set gp_enable_temp_memory_catalog = on" -c "create temp table p0(a int)" -c "begin" -c "prepare transaction 'tc_prep'" 2>&1;
+-- start_ignore
+SET
+CREATE TABLE
+BEGIN
+ERROR:  PREPARE TRANSACTION is not supported in utility mode
+
+-- end_ignore
+(exited with code 1)
+
+1: select count(*) as prepared_left from pg_prepared_xacts where gid = 'tc_prep';
+ prepared_left 
+---------------
+ 0             
+(1 row)
+1q: ... <quitting>

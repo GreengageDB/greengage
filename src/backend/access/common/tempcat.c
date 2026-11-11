@@ -340,8 +340,9 @@ TempcatRegistrySyncFromCommitted(void)
 			is_relation_catalog = (entry->relid == RelationRelationId);
 
 			/*
-			 * Rows not written by this backend (deserialized reader
-			 * state) have no cached descriptor.
+			 * All rows have a cached descriptor, deserialized ones
+			 * included.  Deserialized state never reaches this publish
+			 * path: pure readers never set TempcatPublishPending.
 			 */
 			tupDesc = TempcatDescCacheLookup(entry->relid, &hasoid);
 			if (tupDesc == NULL)
@@ -853,6 +854,13 @@ tempcat_abort_transaction(void)
 	}
 }
 
+bool
+tempcat_has_state(void)
+{
+	return !tempcat_is_empty() ||
+		TempcatSnapshotHasEntries(TempcatSnapshotGetCurrent());
+}
+
 /*
  * Perform actions related to virtual catalog on transaction prepare.
  *
@@ -868,20 +876,8 @@ tempcat_prepare_transaction(void)
 
 	Assert(TempcatTransactionInProgress());
 
-	/*
-	 * A user-driven PREPARE TRANSACTION (only reachable in utility mode)
-	 * parks this transaction's changes until COMMIT PREPARED, and
-	 * tempcat_finish_prepared_transaction() drops anything committed in
-	 * between: refuse instead of losing it.
-	 */
-	if (Gp_role == GP_ROLE_UTILITY &&
-		(!tempcat_is_empty() ||
-		 TempcatSnapshotHasEntries(TempcatSnapshotGetCurrent())))
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot PREPARE a transaction that has used the in-memory temporary catalog"),
-				 errhint("Commit or roll back this transaction before PREPARE, or disable gp_enable_temp_memory_catalog.")));
-
+	/* The user-PREPARE refusal runs early in PrepareTransaction(), before
+	 * anything is written. */
 	snapshot = TempcatSnapshotPopBack();
 
 	/* PrepareTransaction() asserts s->parent == NULL: no subtransaction
@@ -1390,27 +1386,6 @@ tempcat_endscan(TempCatScanData *scan)
 #endif
 
 	pfree(scan);
-}
-
-/*
- * Reinitialize scan for virtual catalog. Basically index_rescan
- * implementation for virtual tuples.
- */
-void
-tempcat_rescan(TempCatScanData *scan, ScanKey keys, int nkeys)
-{
-	TempcatDListFree(&scan->inmem_tuplist);
-	if (nkeys > 0)
-		scan->nkeys = nkeys;
-	/* See tempcat_beginscan(): snapshot the keys, don't alias them. */
-	if (keys)
-	{
-		Assert(scan->nkeys <= TempcatIndexMaxAttributes);
-		memcpy(scan->keyData, keys, scan->nkeys * sizeof(ScanKeyData));
-	}
-	scan->scan_finish_returned = false;
-	scan->inmem_tuplist_init_done = false;
-	dlist_init(&scan->inmem_tuplist);
 }
 
 /*

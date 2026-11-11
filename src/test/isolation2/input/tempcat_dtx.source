@@ -98,3 +98,12 @@ select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid)
 1: insert into dtx_al values (100);
 1: insert into dtx_al values (100, 100);
 1: select count(*) from dtx_al;
+
+-- A user-driven PREPARE TRANSACTION with tempcat state must be refused
+-- BEFORE anything is written: the prepared transaction must not survive
+-- the error.  Utility mode is the only place user PREPARE reaches.
+1: create temp table dtx_prep(a int) distributed by (a);
+!\retcode PGOPTIONS='-c gp_role=utility' psql -p 7000 -d isolation2test -v ON_ERROR_STOP=1 -c "set gp_enable_temp_memory_catalog = on" -c "create temp table p0(a int)" -c "begin" -c "prepare transaction 'tc_prep'" 2>&1;
+
+1: select count(*) as prepared_left from pg_prepared_xacts where gid = 'tc_prep';
+1q:
