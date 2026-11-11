@@ -48,6 +48,18 @@ class GGRebalanceMainSM:
         'STATE_REBALANCE_DONE',
     ]
 
+    # States, in which the current run has neither created the rebalance schema
+    # and saved the plan there, nor started any of the sub-state machines. There
+    # is nothing to finish or to continue later, so the shutdown request is
+    # served immediately.
+    states_interruptible = [
+        'STATE_START',
+        'STATE_OPTIONS_VALIDATION',
+        'STATE_PLANNING_STARTED',
+        'STATE_PLANNING_DONE',
+        'STATE_CHECK_PREVIOUS_RUN',
+    ]
+
     transitions = [
         {
             'trigger': 'start',
@@ -175,23 +187,21 @@ class GGRebalanceMainSM:
         self.hard_shutdown = hard_shutdown
 
     def shutdown(self) -> None:
+        if self.state in self.states_interruptible:
+            # The sub-state machines haven't been started yet, so there is nobody
+            # to check their shutdown flags. Without the exit here the planning
+            # would run to the end, and the plan would be saved to the rebalance
+            # schema before the interruption is noticed.
+            self.logger.info(f'shutdown requested in state "{self.state}", the operation was not started. Exiting...')
+            sys.exit(1)
+
         if self.hard_shutdown:
             self.logger.info('hard shutdown')
         else:
             self.logger.info('soft shutdown, waiting for critical operations to finish...')
 
-        need_exit = True
-
-        if self.gg_shrink is not None:
-            self.gg_shrink.shutdown()
-            need_exit = False
-
-        if self.gg_rebalance is not None:
-            self.gg_rebalance.shutdown(self.hard_shutdown)
-            need_exit = False
-
-        if need_exit:
-            sys.exit(1)
+        self.gg_shrink.shutdown()
+        self.gg_rebalance.shutdown(self.hard_shutdown)
 
     def is_shrink_planned(self) -> bool:
         return isinstance(self.plan, ShrinkPlan)
