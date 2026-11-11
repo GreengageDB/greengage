@@ -32,7 +32,7 @@ IDatum::StatsAreEqual(const IDatum *datum) const
 {
 	GPOS_ASSERT(nullptr != datum);
 
-	// datums can be compared based on either LINT or Doubles or BYTEA values
+	// datums can be compared based on either LINT or Doubles
 #ifdef GPOS_DEBUG
 	BOOL is_double_comparison =
 		this->IsDatumMappableToDouble() && datum->IsDatumMappableToDouble();
@@ -81,7 +81,7 @@ IDatum::StatsAreLessThan(const IDatum *datum) const
 {
 	GPOS_ASSERT(nullptr != datum);
 
-	// datums can be compared based on either LINT or Doubles or BYTEA values
+	// datums can be compared based on either LINT or Doubles
 #ifdef GPOS_DEBUG
 	BOOL is_double_comparison =
 		this->IsDatumMappableToDouble() && datum->IsDatumMappableToDouble();
@@ -130,7 +130,7 @@ IDatum::GetStatsDistanceFrom(const IDatum *datum) const
 {
 	GPOS_ASSERT(nullptr != datum);
 
-	// datums can be compared based on either LINT or Doubles or BYTEA values
+	// datums can be compared based on either LINT or Doubles
 #ifdef GPOS_DEBUG
 	BOOL is_double_comparison =
 		this->IsDatumMappableToDouble() && datum->IsDatumMappableToDouble();
@@ -203,7 +203,7 @@ IDatum::StatsAreComparable(const IDatum *datum) const
 {
 	GPOS_ASSERT(nullptr != datum);
 
-	// datums can be compared based on either LINT or Doubles or BYTEA values
+	// datums can be compared based on either LINT or Doubles
 	BOOL is_double_comparison =
 		this->IsDatumMappableToDouble() && datum->IsDatumMappableToDouble();
 	BOOL is_lint_comparison =
