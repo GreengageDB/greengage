@@ -863,3 +863,12 @@ DROP TABLE seq_t1, seq_t2, seq_t3, seq_t5;
 DROP SEQUENCE seq_owned;
 ERROR:  sequence "seq_owned" does not exist
 RESET gp_enable_temp_memory_catalog;
+-- ALTER TYPE must refuse on the type of a temp typed table, as with the GUC off
+SET gp_enable_temp_memory_catalog = on;
+CREATE TYPE tempcat_ct AS (a int);
+CREATE TEMP TABLE tempcat_tt OF tempcat_ct;
+ALTER TYPE tempcat_ct ADD ATTRIBUTE b int;
+ERROR:  cannot alter type "tempcat_ct" because it is the type of a typed table
+DROP TABLE tempcat_tt;
+DROP TYPE tempcat_ct;
+RESET gp_enable_temp_memory_catalog;

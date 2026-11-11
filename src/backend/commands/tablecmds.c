@@ -7520,7 +7520,7 @@ find_typed_table_dependencies(Oid typeOid, const char *typeName, DropBehavior be
 {
 	Relation	classRel;
 	ScanKeyData key[1];
-	TableScanDesc scan;
+	SysScanDesc scan;
 	HeapTuple	tuple;
 	List	   *result = NIL;
 
@@ -7531,9 +7531,12 @@ find_typed_table_dependencies(Oid typeOid, const char *typeName, DropBehavior be
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(typeOid));
 
-	scan = table_beginscan_catalog(classRel, 1, key);
+	/* Systable scan, so that typed tables in the in-memory catalog are
+	 * seen too: ALTER TYPE must refuse on them like on disk ones. */
+	scan = systable_beginscan(classRel, InvalidOid, false,
+							  NULL, 1, key);
 
-	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
+	while ((tuple = systable_getnext(scan)) != NULL)
 	{
 		Form_pg_class classform = (Form_pg_class) GETSTRUCT(tuple);
 
@@ -7547,7 +7550,7 @@ find_typed_table_dependencies(Oid typeOid, const char *typeName, DropBehavior be
 			result = lappend_oid(result, classform->oid);
 	}
 
-	table_endscan(scan);
+	systable_endscan(scan);
 	table_close(classRel, AccessShareLock);
 
 	return result;
