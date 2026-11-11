@@ -1905,8 +1905,9 @@ CTranslatorExprToDXL::PdxlnResult(CExpression *pexprRelational,
 		CBitSet *projected = GPOS_NEW(m_mp) CBitSet(m_mp);
 		for (ULONG ul = 0; ul < proj_list->Arity(); ul++)
 		{
-			projected->ExchangeSet(CDXLScalarProjElem::Cast(
-				(*proj_list)[ul]->GetOperator())->Id());
+			projected->ExchangeSet(
+				CDXLScalarProjElem::Cast((*proj_list)[ul]->GetOperator())
+					->Id());
 		}
 
 		CColRefSetIter crsi(*pcrsOutput);
@@ -1919,7 +1920,8 @@ CTranslatorExprToDXL::PdxlnResult(CExpression *pexprRelational,
 			{
 				CColRefArray *required = pcrsOutput->Pdrgpcr(m_mp);
 				pdxlnRelationalChild = PdxlnRemapOutputColumns(
-					pexprRelational, pdxlnRelationalChild, required, colref_array);
+					pexprRelational, pdxlnRelationalChild, required,
+					colref_array);
 				required->Release();
 				break;
 			}
