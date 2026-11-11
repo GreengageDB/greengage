@@ -28,6 +28,13 @@ in-memory catalog, so a cursor whose output type is a temporary composite
 type cannot output its columns.  Use a permanent composite type for such
 cursors.
 
+**`CLUSTER`.**  Clustering a temporary table is rejected while the setting
+is on.  The command itself is a rewrite of the tuple order and could be
+supported by copying through the in-memory storage; for now the generic
+rebuild path reads the on-disk heap, which is empty for an in-memory table,
+so running it would silently lose the data.  Set the setting off or
+recreate the table instead.
+
 **`gp_partition_template`.**  Partition template rows of an in-memory
 temporary partitioned table are written to disk and name in-memory
 relation OIDs; other sessions see them as orphans referencing missing

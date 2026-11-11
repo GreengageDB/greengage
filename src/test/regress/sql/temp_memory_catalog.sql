@@ -565,3 +565,24 @@ INSERT INTO tempcat_rr_ok VALUES (1);
 RESET default_transaction_isolation;
 DROP TABLE tempcat_rr_ok;
 RESET gp_enable_temp_memory_catalog;
+
+-- Sequences owned by temp tables (serial, IDENTITY, OWNED BY) work like with
+-- the GUC off; CLUSTER on a temp table is refused (see doc/tempcat.md).
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE seq_t1 (id serial, v text) DISTRIBUTED BY (id);
+INSERT INTO seq_t1 (v) VALUES ('a'), ('b');
+CREATE TEMP TABLE seq_t2 (id int GENERATED ALWAYS AS IDENTITY, v text) DISTRIBUTED BY (v);
+INSERT INTO seq_t2 (v) VALUES ('c');
+CREATE TEMP TABLE seq_t3 (a int) DISTRIBUTED BY (a);
+CREATE TEMP SEQUENCE seq_owned OWNED BY seq_t3.a;
+-- CLUSTER on a virtual temp table is refused: the rebuild reads the on-disk
+-- heap, which is empty, so clustering would silently lose the data.
+CREATE TEMP TABLE seq_t5 (a int, b text) WITH (appendonly=true) DISTRIBUTED BY (a);
+CREATE INDEX seq_t5_i ON seq_t5 (a);
+CLUSTER seq_t5 USING seq_t5_i;
+SELECT nextval('seq_owned') AS seq_value;
+SELECT count(*) AS serial_rows FROM seq_t1;
+DROP TABLE seq_t1, seq_t2, seq_t3, seq_t5;
+DROP SEQUENCE seq_owned;
+RESET gp_enable_temp_memory_catalog;
+

@@ -25,6 +25,7 @@
 #include "access/reloptions.h"
 #include "access/relscan.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/tuptoaster.h"
 #include "access/xact.h"
@@ -154,6 +155,15 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("cannot cluster temporary tables of other sessions")));
+
+		if (Gp_role == GP_ROLE_DISPATCH &&
+			rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+			enable_temp_memory_catalog &&
+			tempcat_relation_is_virtual(tableOid))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot cluster a temporary table while gp_enable_temp_memory_catalog is on"),
+					 errhint("Set gp_enable_temp_memory_catalog = off, or recreate the table instead of clustering it.")));
 
 		/*
 		 * Reject clustering a partitioned table.

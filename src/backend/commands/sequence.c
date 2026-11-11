@@ -1896,6 +1896,9 @@ process_owned_by(Relation seqrel, List *owned_by, bool for_identity)
 	 * OK, we are ready to update pg_depend.  First remove any existing
 	 * dependencies for the sequence, then optionally add a new one.
 	 */
+	BEGIN_TEMP_TABLE_SCOPE(seqrel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(RelationGetRelid(seqrel)));
+
 	deleteDependencyRecordsForClass(RelationRelationId, RelationGetRelid(seqrel),
 									RelationRelationId, deptype);
 
@@ -1912,6 +1915,8 @@ process_owned_by(Relation seqrel, List *owned_by, bool for_identity)
 		depobject.objectSubId = 0;
 		recordDependencyOn(&depobject, &refobject, deptype);
 	}
+
+	END_TEMP_TABLE_SCOPE();
 
 	/* Done, but hold lock until commit */
 	if (tablerel)
