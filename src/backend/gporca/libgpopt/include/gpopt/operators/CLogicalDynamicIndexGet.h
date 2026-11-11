@@ -12,7 +12,6 @@
 #define GPOPT_CLogicalDynamicIndexGet_H
 
 #include "gpos/base.h"
-#include "gpos/common/CBitSet.h"
 
 #include "gpopt/base/COrderSpec.h"
 #include "gpopt/metadata/CIndexDescriptor.h"

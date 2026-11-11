@@ -19,7 +19,6 @@
 #define GPOPT_CPhysicalDynamicBitmapTableScan_H
 
 #include "gpos/base.h"
-#include "gpos/common/CBitSet.h"
 
 #include "gpopt/operators/CPhysicalDynamicScan.h"
 
