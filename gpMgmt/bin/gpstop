@@ -858,8 +858,6 @@ class GpStop:
 
 class GpStopHA (GpStop):
 
-    COORDINATOR_STOP_TIMEOUT_SEC = 30
-
     ######
     def __init__(self, mode, coordinator_datadir=None,
                  parallel=DEFAULT_NUM_WORKERS, quiet=False,
@@ -909,7 +907,7 @@ class GpStopHA (GpStop):
             patroni.PatroniAgentsStop.remote('[cmd patroni agents stop standby]', standby_hostname)
             logger.info("coordinator-HA: standby patroni agent is stopped")
 
-            timeout = self.COORDINATOR_STOP_TIMEOUT_SEC
+            timeout = self.timeout
             while pg.DbStatus.remote('standby instance', self.gparray.standbyCoordinator, standby_hostname):
                 time.sleep(1)
                 timeout = timeout - 1
@@ -925,7 +923,7 @@ class GpStopHA (GpStop):
             patroni.PatroniAgentsStop.local('[cmd patroni agents stop local]')
             logger.info("coordinator-HA: local patroni agent is stopped")
 
-            timeout = self.COORDINATOR_STOP_TIMEOUT_SEC
+            timeout = self.timeout
             while pg.DbStatus.local('coordinator instance', self.gparray.coordinator):
                 time.sleep(1)
                 timeout = timeout - 1
