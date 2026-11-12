@@ -1535,7 +1535,6 @@ create table gg211_foo as select a::int4 from generate_series(1, 10) a distribut
 create table gg211_bar as select b::int4 from generate_series(1, 10) b distributed by (b);
 create table gg211_baz as select c::int4 from generate_series(1, 10) c distributed by (c);
 
-set optimizer = on;
 explain (costs off)
 select * from gg211_foo where
     (select c from gg211_baz where c != a limit 1) >
@@ -1563,5 +1562,4 @@ select a from gg211_foo where
     (select null::int from gg211_baz where c != a limit 1) >
     (select b from gg211_bar where b != a limit 1);
 
-reset optimizer;
 drop table gg211_foo, gg211_bar, gg211_baz;

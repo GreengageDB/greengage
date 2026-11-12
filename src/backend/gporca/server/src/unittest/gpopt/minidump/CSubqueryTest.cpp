@@ -75,6 +75,7 @@ const CHAR *rgszSubqueryFileNames[] = {
 	"../data/dxl/minidump/AnySubqueryWithVolatileFunc.mdp",
 	"../data/dxl/minidump/SubqueryOuterRefTVF.mdp",
 	"../data/dxl/minidump/SubqueryOuterRefLimit.mdp",
+	"../data/dxl/minidump/FilterWithTwoCorrelatedScalarSubqueries.mdp",
 	"../data/dxl/minidump/Subquery-ExistsAllAggregates.mdp",
 	"../data/dxl/minidump/Subquery-ExistsAllAggregatesWithDisjuncts.mdp",
 	"../data/dxl/minidump/Subquery-AnyAllAggregates.mdp",
