@@ -15,6 +15,7 @@ include $(top_builddir)/src/Makefile.global
 
 unittest-check:
 	$(MAKE) -C pg_dump/test check
+	$(MAKE) -C pg_upgrade/test check
 
 SUBDIRS = \
 	initdb \
