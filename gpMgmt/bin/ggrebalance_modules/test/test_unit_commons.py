@@ -239,6 +239,7 @@ class TestHostResolver(GpTestCase):
         
         # Should match because they share an IP
         self.assertTrue(self.resolver.hosts_match('host1', 'host2'))
+        self.assertTrue(False) # Where do we run these?
     
     @patch('socket.getaddrinfo')
     def test_hosts_match_hostname_to_hostname_no_shared_ip(self, mock_getaddrinfo):
