@@ -41,17 +41,45 @@ Follow [appropriate linux steps](README.Linux.md) for getting your system ready 
 
 ```sh
 # Initialize and update submodules in the repository
-git submodule update --init
+git submodule update --init --recursive --force
+```
 
-# Configure build environment to install at /usr/local/gpdb
-./configure --with-perl --with-python --with-libxml --with-gssapi --prefix=/usr/local/gpdb
+The following methods install the database into the home directory, which a
+regular user can write.
 
-# Compile and install
+For a development build with assertions and debug symbols, use the `devel`
+target of the `gpAux` build system.
+
+```sh
+make devel -C gpAux GPROOT="$HOME" DEVPATH="$HOME/greengage-db-devel" PARALLEL_MAKE_OPTS=-j8
+```
+
+For a release build, use the `dist` target.
+
+```sh
+make dist -C gpAux GPROOT="$HOME" PARALLEL_MAKE_OPTS=-j8
+```
+
+To choose the configure options yourself, run `configure` directly.
+
+```sh
+./configure --with-perl --with-python --with-libxml --with-gssapi --prefix="$HOME/greengage-db-devel"
 make -j8
 make -j8 install
+```
 
+The `gpAux` targets use `$GPROOT/greengage-db-devel` as the configure prefix, so
+`DEVPATH` must name the same directory. The `devel` target removes `DEVPATH`
+before it builds. It also keeps an earlier configuration, so `GPROOT` can only
+be changed after `make distclean`. Both targets append linker flags to
+`src/pl/plpython/Makefile` and `src/pl/plperl/GNUmakefile`, and `git status`
+will show those tracked files as modified.
+
+Start the demo cluster after the installation.
+
+```sh
 # Bring in greengage environment into your running shell
-source /usr/local/gpdb/greengage_path.sh
+source ~/greengage-db-devel/greengage_path.sh
 
 # Start demo cluster
 make create-demo-cluster
@@ -68,17 +96,6 @@ Instead of `make create-demo-cluster`, consider:
 DATADIRS=/tmp/gpdb-cluster PORT_BASE=5555 NUM_PRIMARY_MIRROR_PAIRS=1 WITH_MIRRORS=false make create-demo-cluster
 ```
 
-The TCP port for the regression test can be changed on the fly:
-
-```sh
-PGPORT=5555 make installcheck-world
-```
-
-To turn GPORCA off and use Postgres planner for query optimization:
-```sh
-set optimizer=off;
-```
-
 If you want to clean all generated files
 ```sh
 make distclean
@@ -90,6 +107,18 @@ make distclean
 
 ```sh
 make installcheck-world
+```
+
+* To turn GPORCA off and use the PostgreSQL planner for query optimization:
+
+```sh
+PGOPTIONS='-c optimizer=off' make installcheck-world
+```
+
+* The TCP port for the regression test can be changed:
+
+```sh
+PGPORT=5555 make installcheck-world
 ```
 
 * The top-level target __installcheck-world__ will run all regression
@@ -121,13 +150,17 @@ make installcheck-world
 ### Building GPDB without GPORCA
 
 Currently, GPDB is built with GPORCA by default. If you want to build GPDB
-without GPORCA, configure requires `--disable-orca` flag to be set.
+without GPORCA, configure requires `--disable-orca` flag to be set. The `gpAux`
+targets take it through `CONFIGURE_FLAGS`.
 ```sh
 # Clean environment
 make distclean
 
-# Configure build environment to install at /usr/local/gpdb
-./configure --disable-orca --with-perl --with-python --with-libxml --prefix=/usr/local/gpdb
+# Build with the gpAux system
+CONFIGURE_FLAGS=--disable-orca make devel -C gpAux GPROOT="$HOME" DEVPATH="$HOME/greengage-db-devel" PARALLEL_MAKE_OPTS=-j8
+
+# Or configure directly
+./configure --disable-orca --with-perl --with-python --with-libxml --prefix="$HOME/greengage-db-devel"
 ```
 
 ### Building GPDB with Python3 enabled
