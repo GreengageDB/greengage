@@ -253,9 +253,7 @@ class GGShrink:
         if prev_idx >= lower and prev_idx <= upper:
 
             #if shrink is interrupted after catalog update and before the state is logged
-            if prev_state == 'STATE_SHRINK_TABLES_DONE' and \
-                self.dumped_gparray is not None \
-                and self.gparray.get_segment_count() + self.shrink_plan.target_segment_count == self.dumped_gparray.get_segment_count():
+            if prev_state == 'STATE_SHRINK_TABLES_DONE' and self.is_gp_segment_configuration_shrinked():
                 return 'STATE_SHRINK_CATALOG_DONE'
 
             row = dbconn.queryRow(self.conn, 'SELECT gp_toolkit.gp_rebalance_numsegments_is_set();')

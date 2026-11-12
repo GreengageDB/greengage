@@ -345,6 +345,8 @@ check_data_dir(ClusterInfo *cluster)
 
 	/* get the cluster version */
 	cluster->major_version = get_major_server_version(cluster);
+	/* get the segment dbid */
+	cluster->dbid = get_dbid(cluster);
 
 	check_single_dir(pg_data, "");
 	check_single_dir(pg_data, "base");
