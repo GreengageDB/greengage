@@ -398,9 +398,9 @@ UPDATE 1
 -- procarray leads to segfiles staying in AOSEG_STATE_AWAITING_DROP
 -- and being unable to be dropped.
 5:SELECT wait_for_new_oldest_xid('crash_coordinator_before_cleanup_phase');
-wait_for_new_oldest_xid 
+ wait_for_new_oldest_xid 
 ------------
-OK                      
+ OK                     
 (1 row)
 5q: ... <quitting>
 4:VACUUM crash_coordinator_before_cleanup_phase;
