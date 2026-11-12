@@ -1145,8 +1145,21 @@ if test "$with_zstd" = yes; then
   dnl zstd_errors.h was renamed from error_public.h in v1.1.1
   dnl require static zstd library to use custom allocation functions
   PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.4.0],
-                    [AC_CHECK_LIB([:libzstd.a], [ZSTD_compressCCtx], [],
-                                  [AC_MSG_ERROR([static zstd library not found])])])
+                    [if test "$PORTNAME" = darwin; then
+                       AC_MSG_CHECKING([for static zstd library])
+                       zstd_static_lib="`$PKG_CONFIG --variable=libdir libzstd`/libzstd.a"
+                       if test ! -f "$zstd_static_lib"; then
+                         AC_MSG_RESULT([no])
+                         AC_MSG_ERROR([static zstd library not found])
+                       fi
+                       AC_MSG_RESULT([$zstd_static_lib])
+                       LIBS="$zstd_static_lib $LIBS"
+                       AC_CHECK_FUNC([ZSTD_compressCCtx], [],
+                                     [AC_MSG_ERROR([static zstd library not found])])
+                     else
+                       AC_CHECK_LIB([:libzstd.a], [ZSTD_compressCCtx], [],
+                                    [AC_MSG_ERROR([static zstd library not found])])
+                     fi])
 fi
 
 #
