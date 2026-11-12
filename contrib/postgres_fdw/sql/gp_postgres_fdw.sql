@@ -392,6 +392,30 @@ DROP TABLE sub_part;
 DROP TABLE sub_part_1_prt_1_2_prt_one_foreign;
 DROP TABLE sub_part_1_prt_1_2_prt_two_foreign;
 
+---
+--- A filter on a coordinator-executed foreign table under UNION ALL is
+--- evaluated before the motion that moves the rows to the segments, so that
+--- the qualifier is handed to the foreign data wrapper
+---
+CREATE TABLE union_local (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO union_local SELECT i, i FROM generate_series(1, 1000) i;
+CREATE TABLE union_remote (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO union_remote SELECT i, i FROM generate_series(1, 2000) i;
+CREATE FOREIGN TABLE union_ft (a int, b int)
+SERVER loopback OPTIONS (schema_name 'postgres_fdw_gp', table_name 'union_remote', mpp_execute 'coordinator');
+ANALYZE union_local;
+ANALYZE union_ft;
+
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM (SELECT a, b FROM union_local UNION ALL SELECT a, b FROM union_ft) u WHERE a = 5;
+SELECT * FROM (SELECT a, b FROM union_local UNION ALL SELECT a, b FROM union_ft) u WHERE a = 5;
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM (SELECT a, b FROM union_local UNION ALL SELECT a, b FROM union_ft) u WHERE a BETWEEN 998 AND 1002 ORDER BY a;
+SELECT * FROM (SELECT a, b FROM union_local UNION ALL SELECT a, b FROM union_ft) u WHERE a BETWEEN 998 AND 1002 ORDER BY a;
+
+--- Clean up
+DROP FOREIGN TABLE union_ft;
+DROP TABLE union_remote;
+DROP TABLE union_local;
+
 -- GPDB #16219: validate scram-sha-256 in postgres_fdw
 alter system set password_encryption = 'scram-sha-256';
 -- add created user to pg_hba.conf

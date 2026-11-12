@@ -13,9 +13,11 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/base/CCostContext.h"
 #include "gpopt/base/CDistributionSpecAny.h"
 #include "gpopt/base/CDistributionSpecNonSingleton.h"
 #include "gpopt/base/CDistributionSpecReplicated.h"
+#include "gpopt/base/COptimizationContext.h"
 #include "gpopt/base/CPartInfo.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPredicateUtils.h"
@@ -125,17 +127,129 @@ CPhysicalFilter::PdsRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
 		return pdsRequired;
 	}
 
-	if (CDistributionSpec::EdtNonSingleton == pdsRequired->Edt() &&
-		!CDistributionSpecNonSingleton::PdsConvert(pdsRequired)
-			 ->FAllowReplicated())
+	if (0 == ulOptReq && FNonSingletonNonReplicated(pdsRequired))
 	{
 		// this situation arises when we have Filter inside inlined CTE,
 		// in this case, we need to push down non-singleton with not allowed replicated through Filter
+		//
+		// The second request (1 == ulOptReq) does not push the requirement
+		// down: like for any other required distribution, the child is free to
+		// deliver its own distribution and the motion is enforced on the
+		// Filter's output. EpetDistribution() and FValidContext() keep that
+		// alternative only for a child delivering a singleton distribution,
+		// the only case where it yields a different plan: the predicate is
+		// evaluated before the motion instead of after it.
 		pdsRequired->AddRef();
 		return pdsRequired;
 	}
 
 	return CPhysical::PdsUnary(mp, exprhdl, pdsRequired, child_index, ulOptReq);
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CPhysicalFilter::FNonSingletonNonReplicated
+//
+//	@doc:
+//		Check if the required distribution is non-singleton with replicated
+//		distribution not allowed
+//
+//---------------------------------------------------------------------------
+BOOL
+CPhysicalFilter::FNonSingletonNonReplicated(const CDistributionSpec *pds)
+{
+	return CDistributionSpec::EdtNonSingleton == pds->Edt() &&
+		   !CDistributionSpecNonSingleton::PdsConvert(pds)->FAllowReplicated();
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CPhysicalFilter::EpetDistribution
+//
+//	@doc:
+//		Return the enforcing type for distribution property based on this
+//		operator
+//
+//---------------------------------------------------------------------------
+CEnfdProp::EPropEnforcingType
+CPhysicalFilter::EpetDistribution(CExpressionHandle &exprhdl,
+								  const CEnfdDistribution *ped) const
+{
+	GPOS_ASSERT(nullptr != ped);
+
+	// get distribution delivered by the filter node
+	CDistributionSpec *pds = CDrvdPropPlan::Pdpplan(exprhdl.Pdp())->Pds();
+	if (ped->FCompatible(pds))
+	{
+		// required distribution is already provided
+		return CEnfdProp::EpetUnnecessary;
+	}
+
+	if (FNonSingletonNonReplicated(ped->PdsRequired()) &&
+		!pds->FSingletonOrStrictSingleton())
+	{
+		// The child turned out to be replicated or universal. This can only
+		// be the second distribution request (see PdsRequired()): the first
+		// one pushes the requirement down to the child, whose best plan then
+		// satisfies it, and the Filter, which passes the distribution of its
+		// child through, returns EpetUnnecessary above. Do not enforce a
+		// motion on top of the Filter: for such a child the requirement has
+		// to reach the child itself (inlined CTE), which is what the first
+		// request does.
+#ifdef GPOS_DEBUG
+		GPOS_ASSERT(nullptr != exprhdl.Pcc());
+		COptimizationContext *pocChild = (*exprhdl.Pcc()->Pdrgpoc())[0];
+		GPOS_ASSERT(!FNonSingletonNonReplicated(
+						pocChild->Prpp()->Ped()->PdsRequired()) &&
+					"the requirement was pushed down but is not satisfied");
+#endif	// GPOS_DEBUG
+		return CEnfdProp::EpetProhibited;
+	}
+
+	// required distribution will be enforced on Filter's output
+	return CEnfdProp::EpetRequired;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CPhysicalFilter::FValidContext
+//
+//	@doc:
+//		Check if optimization context is valid
+//
+//---------------------------------------------------------------------------
+BOOL
+CPhysicalFilter::FValidContext(CMemoryPool *,  // mp
+							   COptimizationContext *poc,
+							   COptimizationContextArray *pdrgpocChild) const
+{
+	GPOS_ASSERT(nullptr != pdrgpocChild);
+	GPOS_ASSERT(1 == pdrgpocChild->Size());
+
+	if (!FNonSingletonNonReplicated(poc->Prpp()->Ped()->PdsRequired()))
+	{
+		return true;
+	}
+
+	COptimizationContext *pocChild = (*pdrgpocChild)[0];
+	if (FNonSingletonNonReplicated(pocChild->Prpp()->Ped()->PdsRequired()))
+	{
+		// the required distribution was passed through to the child
+		return true;
+	}
+
+	// The requirement was not pushed down (second distribution request, see
+	// PdsRequired()). A child delivering a singleton distribution gets the
+	// motion enforced on top of the Filter, see EpetDistribution(). A child
+	// that satisfies the requirement by itself gives the same plan as the
+	// first request does, drop the duplicate.
+	CCostContext *pccBest = pocChild->PccBest();
+	GPOS_ASSERT(nullptr != pccBest);
+
+	return pccBest->Pdpplan()->Pds()->FSingletonOrStrictSingleton();
 }
 
 

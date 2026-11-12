@@ -1503,6 +1503,78 @@ explain select * from sub_part;
 DROP TABLE sub_part;
 DROP TABLE sub_part_1_prt_1_2_prt_one_foreign;
 DROP TABLE sub_part_1_prt_1_2_prt_two_foreign;
+---
+--- A filter on a coordinator-executed foreign table under UNION ALL is
+--- evaluated before the motion that moves the rows to the segments, so that
+--- the qualifier is handed to the foreign data wrapper
+---
+CREATE TABLE union_local (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO union_local SELECT i, i FROM generate_series(1, 1000) i;
+CREATE TABLE union_remote (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO union_remote SELECT i, i FROM generate_series(1, 2000) i;
+CREATE FOREIGN TABLE union_ft (a int, b int)
+SERVER loopback OPTIONS (schema_name 'postgres_fdw_gp', table_name 'union_remote', mpp_execute 'coordinator');
+ANALYZE union_local;
+ANALYZE union_ft;
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM (SELECT a, b FROM union_local UNION ALL SELECT a, b FROM union_ft) u WHERE a = 5;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Append
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         Output: union_local.a, union_local.b
+         ->  Seq Scan on postgres_fdw_gp.union_local
+               Output: union_local.a, union_local.b
+               Filter: (union_local.a = 5)
+   ->  Foreign Scan on postgres_fdw_gp.union_ft
+         Output: union_ft.a, union_ft.b
+         Remote SQL: SELECT a, b FROM postgres_fdw_gp.union_remote WHERE ((a = 5))
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off'
+(11 rows)
+
+SELECT * FROM (SELECT a, b FROM union_local UNION ALL SELECT a, b FROM union_ft) u WHERE a = 5;
+ a | b 
+---+---
+ 5 | 5
+ 5 | 5
+(2 rows)
+
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM (SELECT a, b FROM union_local UNION ALL SELECT a, b FROM union_ft) u WHERE a BETWEEN 998 AND 1002 ORDER BY a;
+                                                  QUERY PLAN                                                  
+--------------------------------------------------------------------------------------------------------------
+ Sort
+   Output: union_local.a, union_local.b
+   Sort Key: union_local.a
+   ->  Append
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               Output: union_local.a, union_local.b
+               ->  Seq Scan on postgres_fdw_gp.union_local
+                     Output: union_local.a, union_local.b
+                     Filter: ((union_local.a >= 998) AND (union_local.a <= 1002))
+         ->  Foreign Scan on postgres_fdw_gp.union_ft
+               Output: union_ft.a, union_ft.b
+               Remote SQL: SELECT a, b FROM postgres_fdw_gp.union_remote WHERE ((a >= 998)) AND ((a <= 1002))
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off'
+(14 rows)
+
+SELECT * FROM (SELECT a, b FROM union_local UNION ALL SELECT a, b FROM union_ft) u WHERE a BETWEEN 998 AND 1002 ORDER BY a;
+  a   |  b   
+------+------
+  998 |  998
+  998 |  998
+  999 |  999
+  999 |  999
+ 1000 | 1000
+ 1000 | 1000
+ 1001 | 1001
+ 1002 | 1002
+(8 rows)
+
+--- Clean up
+DROP FOREIGN TABLE union_ft;
+DROP TABLE union_remote;
+DROP TABLE union_local;
 -- GPDB #16219: validate scram-sha-256 in postgres_fdw
 alter system set password_encryption = 'scram-sha-256';
 -- add created user to pg_hba.conf

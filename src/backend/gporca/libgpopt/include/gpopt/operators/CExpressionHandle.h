@@ -225,6 +225,13 @@ public:
 		return m_pgexpr;
 	}
 
+	// accessor for cost context
+	CCostContext *
+	Pcc() const
+	{
+		return m_pcc;
+	}
+
 	// check for outer references
 	BOOL
 	HasOuterRefs() const
