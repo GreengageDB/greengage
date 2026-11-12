@@ -1088,9 +1088,9 @@ class GpStartHA (GpStart):
                 raise ProgramArgumentValidationException("Standby YAML config file path should be supplied when gpstart is launched in HA mode")
         else:
             if options.config_file_coordinator:
-                raise ProgramArgumentValidationException("'--config-file-coordinator' option is nor supported in non-HA mode")
+                raise ProgramArgumentValidationException("'--config-file-coordinator' option is not supported in non-HA mode")
             if options.config_file_standby:
-                raise ProgramArgumentValidationException("'--config-file-standby' option is nor supported in non-HA mode")
+                raise ProgramArgumentValidationException("'--config-file-standby' option is not supported in non-HA mode")
 
         # -n sanity check
         if options.parallel > 128 or options.parallel < 1:
