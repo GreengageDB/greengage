@@ -881,7 +881,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 					analyze_hll_non_part_table = true;
 				}
 				if ((onerel->rd_rel->relkind == RELKIND_RELATION ||
-					 onerel->rd_rel->relkind == RELKIND_FOREIGN_TABLE) && 
+					 onerel->rd_rel->relkind == RELKIND_FOREIGN_TABLE) &&
 					(onerel->rd_rel->relispartition || analyze_hll_non_part_table))
 				{
 					MemoryContext old_context;
