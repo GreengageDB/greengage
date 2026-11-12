@@ -3787,7 +3787,8 @@ reindex_index(Oid indexId, bool skip_constraint_checks, char persistence,
 	 */
 	CheckTableNotInUse(iRel, "REINDEX INDEX");
 
-	BEGIN_TEMP_TABLE_SCOPE(iRel->rd_islocaltemp);
+	BEGIN_TEMP_TABLE_SCOPE(iRel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(RelationGetRelid(iRel)));
 
 	/*
 	 * All predicate locks on the index are about to be made invalid. Promote

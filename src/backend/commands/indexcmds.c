@@ -1766,7 +1766,8 @@ DefineIndex(Oid relationId,
 		 */
 		if (!indexInfo->ii_BrokenHotChain &&
 			!(enable_temp_memory_catalog &&
-			  rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP))
+			  rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+			  tempcat_relation_is_virtual(indexRelationId)))
 			cdb_sync_indcheckxmin_with_segments(indexRelationId);
 	}
 

@@ -649,21 +649,9 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 				 errmsg("ON COMMIT can only be used on temporary tables")));
 
-	/*
-	 * Reader gangs of a REPEATABLE READ transaction don't pick up tempcat
-	 * rows published after the transaction started, so a temp table created
-	 * inside such a transaction would be invisible to its own later
-	 * statements.  Fail the DDL upfront instead.
-	 */
-	if (stmt->relation->relpersistence == RELPERSISTENCE_TEMP
-		&& Gp_role == GP_ROLE_DISPATCH
-		&& enable_temp_memory_catalog
-		&& XactIsoLevel >= XACT_REPEATABLE_READ
-		&& IsTransactionBlock())
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot create a temporary table in a REPEATABLE READ transaction when gp_enable_temp_memory_catalog is on"),
-				 errhint("Create the table outside the transaction, or set gp_enable_temp_memory_catalog = off.")));
+	if (stmt->relation->relpersistence == RELPERSISTENCE_TEMP &&
+		Gp_role == GP_ROLE_DISPATCH)
+		tempcat_check_rr_create();
 
 	if (stmt->partspec != NULL)
 	{

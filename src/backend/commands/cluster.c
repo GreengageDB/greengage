@@ -156,8 +156,7 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("cannot cluster temporary tables of other sessions")));
 
-		if (Gp_role == GP_ROLE_DISPATCH &&
-			rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+		if (rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
 			enable_temp_memory_catalog &&
 			tempcat_relation_is_virtual(tableOid))
 			ereport(ERROR,

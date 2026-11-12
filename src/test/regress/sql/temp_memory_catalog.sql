@@ -564,6 +564,10 @@ CREATE TEMP TABLE tempcat_rr_ok (a int) DISTRIBUTED BY (a);
 INSERT INTO tempcat_rr_ok VALUES (1);
 RESET default_transaction_isolation;
 DROP TABLE tempcat_rr_ok;
+-- Temp sequences are refused inside an RR transaction as well.
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+CREATE TEMP SEQUENCE tempcat_rr_seq;
+ROLLBACK;
 RESET gp_enable_temp_memory_catalog;
 
 -- Sequences owned by temp tables (serial, IDENTITY, OWNED BY) work like with

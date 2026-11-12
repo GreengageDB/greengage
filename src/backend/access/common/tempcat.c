@@ -856,6 +856,24 @@ tempcat_abort_transaction(void)
 	}
 }
 
+/*
+ * Refuse creating a temp object inside a REPEATABLE READ transaction: reader
+ * gangs of such a transaction never pick up catalog rows published after it
+ * started, so the object would be invisible to its own later statements.
+ * Only the coordinator decides (see DefineRelation).
+ */
+void
+tempcat_check_rr_create(void)
+{
+	if (enable_temp_memory_catalog &&
+		XactIsoLevel >= XACT_REPEATABLE_READ &&
+		IsTransactionBlock())
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot create a temporary table in a REPEATABLE READ transaction when gp_enable_temp_memory_catalog is on"),
+				 errhint("Create the object outside the transaction, or set gp_enable_temp_memory_catalog = off.")));
+}
+
 /* Drop all local virtual rows (a retargeted pooled reader must not keep the
  * previous session's state). */
 void

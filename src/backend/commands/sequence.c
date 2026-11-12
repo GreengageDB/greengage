@@ -172,6 +172,10 @@ DefineSequence(ParseState *pstate, CreateSeqStmt *seq)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("unlogged sequences are not supported")));
 
+	if (seq->sequence->relpersistence == RELPERSISTENCE_TEMP &&
+		Gp_role == GP_ROLE_DISPATCH)
+		tempcat_check_rr_create();
+
 	/*
 	 * If if_not_exists was given and a relation with the same name already
 	 * exists, bail out. (Note: we needn't check this when not if_not_exists,

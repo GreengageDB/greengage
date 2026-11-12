@@ -4007,7 +4007,8 @@ heap_truncate_one_rel(Relation rel)
 	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 		return;
 
-	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
+	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(RelationGetRelid(rel)));
 
 	/* Truncate the underlying relation */
 	table_relation_nontransactional_truncate(rel);
