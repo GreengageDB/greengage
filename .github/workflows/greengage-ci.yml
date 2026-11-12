@@ -164,7 +164,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
-  # Rebuild prod-redy version without debug extensions and pack it to deb and rpm
+  # Rebuild prod-redy version without debug extensions and pack it to deb
   package:
     needs: build
     strategy:
