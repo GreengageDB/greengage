@@ -166,12 +166,16 @@ Feature: auto failover behave tests
           | 5    | 0       | m    | m              | s    | u      | 7200 | sdw2     | sdw2    | /home/gpadmin/.data/mirror/gpseg0  |
           | 6    | 1       | m    | m              | s    | u      | 7201 | sdw3     | sdw3    | /home/gpadmin/.data/mirror/gpseg1  |
           | 7    | 2       | m    | m              | s    | u      | 7202 | sdw1     | sdw1    | /home/gpadmin/.data/mirror/gpseg2  |
+        #########
         # Test 4. - Check we can change lease ticket TTL.
+        #########
         # Change default 30 seconds TTL to 35 seconds.
         When Patroni lease ticket TTL is set to "35" seconds
          And waiting "35" seconds
         Then verify ETCD (at endpoint="http://etcd1:2379") lease TTL is equal to "35" seconds
+        #########
         # Test 5 - reject manual switchover to a standby isolated from ETCD.
+        #########
         When ETCD hosts "etcd1 etcd2 etcd3" are blocked from host "scdw"
          # Allow the 35-second member lease and a 10-second HA loop to expire.
          And waiting "46" seconds
@@ -186,7 +190,9 @@ Feature: auto failover behave tests
         Then Patroni has running leader "mdw" on host "cdw"
          And the coordinator on host "cdw" port "7000" is ready for queries
          And Patroni has streaming replica "smdw" on host "scdw"
+        #########
         # Test 6 - stop the primary coordinator when it loses ETCD access.
+        #########
         When the current coordinator process is saved
          And ETCD hosts "etcd1 etcd2 etcd3" are blocked from host "cdw"
         Then the saved coordinator process has stopped
@@ -229,7 +235,9 @@ Feature: auto failover behave tests
           | 5    | 0       | m    | m              | s    | u      | 7200 | sdw2     | sdw2    | /home/gpadmin/.data/mirror/gpseg0  |
           | 6    | 1       | m    | m              | s    | u      | 7201 | sdw3     | sdw3    | /home/gpadmin/.data/mirror/gpseg1  |
           | 7    | 2       | m    | m              | s    | u      | 7202 | sdw1     | sdw1    | /home/gpadmin/.data/mirror/gpseg2  |
+        #########
         # Test 7 - stop the primary when another HA agent owns the leader ticket.
+        #########
         # Suspend the standby agent so promotion happens only after the old primary stops.
         When the current coordinator process is saved
          And Patroni HA agent on host "scdw" is suspended
