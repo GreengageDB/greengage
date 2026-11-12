@@ -6049,6 +6049,14 @@ StartSubTransaction(void)
 {
 	TransactionState s = CurrentTransactionState;
 
+	/*
+	 * Push the tempcat subtransaction snapshot before anything that can
+	 * ereport below: AbortSubTransaction pops it unconditionally, so a
+	 * failure in AtSubStart_* or the start callbacks must find it pushed,
+	 * or the pop would free the parent snapshot's rows instead.
+	 */
+	tempcat_begin_subtransaction();
+
 	if (s->state != TRANS_DEFAULT)
 		elog(WARNING, "StartSubTransaction while in %s state",
 			 TransStateAsString(s->state));
@@ -6072,8 +6080,6 @@ StartSubTransaction(void)
 	 */
 	CallSubXactCallbacks(SUBXACT_EVENT_START_SUB, s->subTransactionId,
 						 s->parent->subTransactionId);
-
-	tempcat_begin_subtransaction();
 
 	ShowTransactionState("StartSubTransaction");
 }
@@ -6100,20 +6106,20 @@ CommitSubTransaction(void)
 	CallSubXactCallbacks(SUBXACT_EVENT_PRE_COMMIT_SUB, s->subTransactionId,
 						 s->parent->subTransactionId);
 
-	/* Merge this subtransaction's tempcat changes into the parent snapshot */
-	tempcat_commit_subtransaction();
-
-	/* Pre-commit processing goes here */
-
-	CallSubXactCallbacks(SUBXACT_EVENT_PRE_COMMIT_SUB, s->subTransactionId,
-						 s->parent->subTransactionId);
-
 	/* If in parallel mode, clean up workers and exit parallel mode. */
 	if (IsInParallelMode())
 	{
 		AtEOSubXact_Parallel(true, s->subTransactionId);
 		s->parallelModeLevel = 0;
 	}
+
+	/*
+	 * Merge this subtransaction's tempcat changes into the parent snapshot
+	 * only after the last fallible pre-commit step: on a later error
+	 * AbortSubTransaction pops the working snapshot, which must still be
+	 * this subtransaction's own.
+	 */
+	tempcat_commit_subtransaction();
 
 	/* Do the actual "commit", such as it is */
 	s->state = TRANS_COMMIT;
