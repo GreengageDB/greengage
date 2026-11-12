@@ -37,7 +37,9 @@ jobs:
   pg_upgrade-test:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-pg_upgrade.yml@v56
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-pg_upgrade.yml@v63
+    with:
+      target_os_version: "24.04"
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
