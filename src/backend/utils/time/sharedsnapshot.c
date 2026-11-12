@@ -220,6 +220,8 @@ readerFillLocalTempcat(volatile SharedSnapshotSlot *slot)
 	{
 		ReaderTempcatSlot = (SharedSnapshotSlot *) slot;
 		ReaderLastTempcatVersion = 0;
+		/* Retargeted pooled reader: drop the previous session's rows. */
+		tempcat_reader_reset();
 	}
 
 	if (!enable_temp_memory_catalog ||

@@ -214,7 +214,9 @@ TempcatDescCacheInsert(Relation rel)
 		if (TempcatDescCache[i].relid == RelationGetRelid(rel))
 			return;
 
-	Assert(TempcatDescCacheLen < (int) lengthof(TempcatDescCache));
+	/* The cache is only an accelerator: skip when full. */
+	if (TempcatDescCacheLen >= (int) lengthof(TempcatDescCache))
+		return;
 
 	oldctx = MemoryContextSwitchTo(TopMemoryContext);
 	desc = CreateTupleDescCopy(RelationGetDescr(rel));
@@ -854,6 +856,14 @@ tempcat_abort_transaction(void)
 	}
 }
 
+/* Drop all local virtual rows (a retargeted pooled reader must not keep the
+ * previous session's state). */
+void
+tempcat_reader_reset(void)
+{
+	tempcat_deserialize(0, NULL);
+}
+
 bool
 tempcat_has_state(void)
 {
@@ -1268,6 +1278,15 @@ tempcat_update(Relation relation, ItemPointer otid, HeapTuple newtup)
 				 HeapTupleGetOid(dlist_tup->tup),
 				 relation_entry->tuples_num);
 #endif
+			/*
+			 * Rows of these catalogs feed the shared-memory registry;
+			 * see the matching block in tempcat_insert().
+			 */
+			if (RelationGetRelid(relation) == DependRelationId ||
+				RelationGetRelid(relation) == SharedDependRelationId ||
+				RelationGetRelid(relation) == InheritsRelationId)
+				TempcatPublishPending = true;
+
 			TempcatDirtyFlag = true;
 			TempcatXactModified = true;
 			return;

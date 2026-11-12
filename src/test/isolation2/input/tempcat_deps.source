@@ -103,6 +103,18 @@ $$ LANGUAGE plpgsql;
 1:SELECT tempcat_assert_blocked('DROP ROLE drole',
 	'because of temporary');
 
+-- ALTER TABLE ... OWNER TO rewrites the ownership edge in place
+-- (tempcat_update): the registry must follow, so dropping the OLD owner
+-- becomes possible and dropping the NEW owner is refused instead.
+2:ALTER TABLE dep_r OWNER TO drole2;
+1:SELECT tempcat_retry_drop('DROP ROLE drole');
+0:CREATE ROLE drole;
+1:SELECT tempcat_assert_blocked('DROP ROLE drole2',
+	'because of temporary');
+2:ALTER TABLE dep_r OWNER TO drole;
+1:SELECT tempcat_assert_blocked('DROP ROLE drole',
+	'because of temporary');
+
 -- Every row of a temporary object is virtual, not just its pg_class rows:
 -- while session 2 holds them, session 1 sees no pg_attrdef,
 -- pg_constraint, pg_trigger, pg_rewrite, pg_sequence or pg_description

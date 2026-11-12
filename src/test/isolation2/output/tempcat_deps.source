@@ -114,6 +114,29 @@ RESET
                         
 (1 row)
 
+-- ALTER TABLE ... OWNER TO rewrites the ownership edge in place
+-- (tempcat_update): the registry must follow, so dropping the OLD owner
+-- becomes possible and dropping the NEW owner is refused instead.
+2:ALTER TABLE dep_r OWNER TO drole2;
+ALTER TABLE
+1:SELECT tempcat_retry_drop('DROP ROLE drole');
+ERROR:  still blocked after retries: DROP ROLE drole
+CONTEXT:  PL/pgSQL function tempcat_retry_drop(text) line 12 at RAISE
+0:CREATE ROLE drole;
+ERROR:  role "drole" already exists
+1:SELECT tempcat_assert_blocked('DROP ROLE drole2', 'because of temporary');
+ tempcat_assert_blocked 
+------------------------
+                        
+(1 row)
+2:ALTER TABLE dep_r OWNER TO drole;
+ALTER TABLE
+1:SELECT tempcat_assert_blocked('DROP ROLE drole', 'because of temporary');
+ tempcat_assert_blocked 
+------------------------
+                        
+(1 row)
+
 -- Every row of a temporary object is virtual, not just its pg_class rows:
 -- while session 2 holds them, session 1 sees no pg_attrdef,
 -- pg_constraint, pg_trigger, pg_rewrite, pg_sequence or pg_description

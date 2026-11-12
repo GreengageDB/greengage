@@ -74,6 +74,7 @@ extern void      tempcat_reset_xact_modified(void);
 extern void      tempcat_begin_transaction(void);
 extern void      tempcat_end_transaction(void);
 extern void      tempcat_abort_transaction(void);
+extern void      tempcat_reader_reset(void);
 extern bool      tempcat_has_state(void);
 extern void      tempcat_prepare_transaction(void);
 extern void      tempcat_finish_prepared_transaction(bool isCommit);
