@@ -1,0 +1,97 @@
+scope: test-cluster
+namespace: /db/
+name: smdw  # unique node name
+
+restapi:
+  # listen on all interfaces: the REST API is published to the host as 8009
+  listen: 0.0.0.0:8009
+  connect_address: scdw:8009
+
+etcd3:
+  # `etcd` service of docker-compose-greengage.yml
+  host: etcd:2379
+
+# Keep in sync with mdw.yml, see the comment there.
+greengage: {}
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    postgresql:
+      use_pg_rewind: true
+      # Keep in sync with mdw.yml, see the comment there.
+      parameters:
+        max_connections: 150
+        max_prepared_transactions: 250
+        max_locks_per_transaction: 128
+        max_worker_processes: 13
+
+postgresql:
+  listen: 0.0.0.0:7001
+  connect_address: scdw:7001
+  data_dir: /home/gpadmin/.data/standby
+  # GPHOME of the unpacked bin_gpdb.tar.gz
+  bin_dir: /usr/local/greengage-db-devel/bin
+  pgpass: /tmp/pgpass1
+
+  # Keep in sync with mdw.yml -- whichever node is the leader serves the
+  # replication connection, so both need the `replicator` entry.
+  # Patroni rewrites pg_hba.conf from this list on every start and on SIGHUP;
+  # bootstrap.pg_hba would never be applied here (smdw is adopted or cloned, not initdb'd).
+  pg_hba:
+    - local all all trust
+    # gpstart/gpstop/gpstate and segment -> coordinator connections
+    - host all gpadmin 0.0.0.0/0 trust
+    - host all gpadmin ::1/128 trust
+    # Patroni's own superuser and pg_rewind connections
+    - host all patroni 0.0.0.0/0 md5
+    - host all rewind_user 0.0.0.0/0 md5
+    # Streaming replication over the container IP (host=greengage)
+    - host replication replicator 0.0.0.0/0 md5
+    - host replication gpadmin samehost trust
+    - host all all 0.0.0.0/0 md5
+
+  # Patroni's connections to the coordinators must be utility mode ones (in dispatch
+  # mode they fail on a freshly registered standby and pg_rewind silently breaks the
+  # data directory), hence `-c gp_role=utility`. Patroni refuses to start without it
+  # for the superuser and the rewind user. The replication user doesn't need it:
+  # replication connections don't depend on gp_role.
+  authentication:
+    replication:
+      username: replicator
+      password: replicator_pass
+    superuser:
+      username: patroni
+      password: patroni_pass
+      options: -c gp_role=utility
+    rewind:
+      username: rewind_user
+      password: rewind_pass
+      options: -c gp_role=utility
+
+  # See the note in mdw.yml: the dbid for pg_basebackup is assigned when
+  # the node is registered as the coordinator standby on the leader.
+
+  # See the note in mdw.yml: GUCs Patroni manages itself live in DCS, see bootstrap.dcs above.
+  parameters:
+    unix_socket_directories: '/tmp'
+
+# Greengage supports only one coordinator standby, hence this Patroni cluster must
+# consist of exactly mdw and smdw. Additional members aren't supported: they can't be
+# registered as the standby, so pg_basebackup can't create them and Greengage wouldn't
+# update gp_segment_configuration on their promotion. For the same reason the
+# `replicatefrom` tag isn't supported, the standby must replicate from the leader.
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false
+  nosync: false
+
+# Patroni logs at INFO by default. For troubleshooting, e.g. to see the exact
+# pg_basebackup command line or the DCS traffic, uncomment:
+# log:
+#   level: DEBUG
+#   traceback_level: DEBUG
