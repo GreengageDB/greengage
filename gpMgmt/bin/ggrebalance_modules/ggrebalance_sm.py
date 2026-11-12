@@ -406,9 +406,16 @@ class RebalanceSM:
         for step in error_steps:
             self.logger.info(f'Checking error status for step: {str(step)}')
             dbid = step.getMove().seg.getSegmentDbId()
-            target_hostname = step.getMove().dstHost.hostname
-            target_datadir = step.getMove().target_datadir
-            target_port = step.getMove().target_port
+            move = step.getMove()
+
+            if step.isRollback():
+                target_hostname = move.seg.getSegmentHostName()
+                target_datadir = move.seg.getSegmentDataDirectory()
+                target_port = move.seg.getSegmentPort()
+            else:
+                target_hostname = move.dstHost.hostname
+                target_datadir = move.target_datadir
+                target_port = move.target_port
 
             catalog_segment_info = self.get_catalog_gp_segment_configuration_for_dbid(dbid)
             self.logger.info(f'Segment info from catalog: {str(catalog_segment_info)}')
