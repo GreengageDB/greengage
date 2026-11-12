@@ -2,8 +2,8 @@
 
 ## Quick reference
 
-Use these commands in the selected build environment, from the checkout root,
-after dependencies and the configured installation prefix are available.
+From the checkout root in the selected build environment, after the
+dependencies and the configured installation prefix are available:
 
 ```bash
 ./configure --with-perl --with-python --with-libxml --with-gssapi \
@@ -17,7 +17,7 @@ make -C src/test/regress installcheck-tests TESTS="test_name"
 make -C src/backend/utils/mmgr/test check
 ```
 
-Build the isolation2 runner and run one test from `src/test/isolation2`.
+Build the `isolation2` runner and run one test from `src/test/isolation2`:
 
 ```bash
 make -C src/test/isolation2 install
@@ -26,166 +26,170 @@ cd src/test/isolation2
   --init-file=./init_file_isolation2 test_name
 ```
 
-Keep an existing build's prefix and configure flags.
-
-For optional in-depth guidance, install the gg-agent plugin.
-
-```text
-/plugin marketplace add GreengageDB/gg-agent
-/plugin install greengage@greengage-agent-skills
-```
+Keep an existing build's prefix and `configure` flags. For optional in-depth
+guidance, install the `gg-agent` plugin with
+`/plugin marketplace add GreengageDB/gg-agent` and
+`/plugin install greengage@greengage-agent-skills`.
 
 ## Branch context
 
-Greengage 6.x is based on PostgreSQL 9.4.26. Do not assume that APIs from
-later PostgreSQL releases exist. This branch uses `master`,
-`MASTER_DATA_DIRECTORY`, and `qddir` in code and scripts.
+Greengage 6.x is based on PostgreSQL 9.4.26; do not assume that APIs from
+later PostgreSQL releases exist. Code and scripts use `master`,
+`MASTER_DATA_DIRECTORY`, and `qddir`.
 
-A Greengage cluster has one master and multiple segment instances. The master
-holds the catalog, plans queries, dispatches plans, and gathers results. User
-data is stored on segments. A plan is divided into slices. A slice is a part of
-the plan that one group of processes executes, on the master, on one segment,
-or on every segment. Motion nodes connect slices and move tuples between
-segments or back to the master.
+A Greengage cluster has one master and multiple segments. The master holds
+the catalog, plans queries, dispatches plans, and gathers results; user data
+lives on the segments. A plan splits into slices, and one group of processes
+executes each slice on the master, on one segment, or on every segment.
+Motion nodes connect slices and move tuples between segments or back to the
+master.
 
-A change to planning, execution, snapshots, transactions, catalogs, or error
-handling can behave differently in distributed execution, in utility mode, and
-in master-only execution. Test each of these modes that the changed code can
-reach.
+Changes to planning, execution, snapshots, transactions, catalogs, or error
+handling behave differently in distributed execution, utility mode, and
+master-only execution; test every mode the changed code can reach.
 
-- `src/backend/cdb` contains dispatch, Motion, distributed snapshots and
-  transactions, distribution hashing, plan parallelization, and endpoints.
-- `src/backend/gpopt` translates PostgreSQL trees and metadata to and from the
-  DXL representation used by GPORCA.
-- `src/backend/gporca` contains GPORCA. Its libraries include `libgpos`,
-  `libgpopt`, `libgpdbcost`, and `libnaucrates`.
-- `src/backend/access/appendonly` contains append optimized row storage.
-  Column storage is in `src/backend/access/aocs`.
-- `src/backend/fts` contains segment fault detection.
-- `src/backend/utils/gdd` contains the global deadlock detector.
-- `src/backend/utils/mmgr` contains memory accounting, virtual memory limits,
-  runaway query cleanup, and red-zone handling.
-- `gpMgmt` contains the Python cluster administration commands and Behave
-  tests.
-- `gpAux` contains the release build, packaging, dependency, and demo cluster
-  makefiles.
-- `gpcontrib` contains Greengage extensions. PostgreSQL extensions remain in
+- `src/backend/cdb`: dispatch, Motion, distributed snapshots and
+  transactions, distribution hashing, plan parallelization, endpoints.
+- `src/backend/gpopt`: translation of PostgreSQL trees and metadata to and
+  from the DXL representation used by GPORCA.
+- `src/backend/gporca`: GPORCA and the `libgpos`, `libgpopt`, `libgpdbcost`,
+  and `libnaucrates` libraries.
+- `src/backend/access/appendonly`: append optimized row storage; column
+  storage is in `src/backend/access/aocs`.
+- `src/backend/fts`: segment fault detection.
+- `src/backend/utils/gdd`: global deadlock detector.
+- `src/backend/utils/mmgr`: memory accounting, virtual memory limits,
+  runaway query cleanup, red-zone handling.
+- `gpMgmt`: Python cluster administration commands and Behave tests.
+- `gpAux`: release build, packaging, dependency, and demo cluster makefiles.
+- `gpcontrib`: Greengage extensions; PostgreSQL extensions remain in
   `contrib`.
 
-Read the subsystem documentation before changing a subsystem. Start with
-`src/backend/cdb/dispatcher/README.md`,
-`src/backend/cdb/motion/README.ic-proxy.md`,
-`src/backend/cdb/endpoint/README`, `src/backend/fts/README`,
-`src/backend/utils/gdd/README.md`,
-`src/backend/access/appendonly/README.md`, and
-`src/backend/utils/resscheduler/README`.
+Read the subsystem documentation before changing a subsystem; start with:
+
+- `src/backend/cdb/dispatcher/README.md`
+- `src/backend/cdb/motion/README.ic-proxy.md`
+- `src/backend/cdb/endpoint/README`
+- `src/backend/fts/README`
+- `src/backend/utils/gdd/README.md`
+- `src/backend/access/appendonly/README.md`
+- `src/backend/utils/resscheduler/README`
 
 ## Development environments
 
-Prefer a development container. Use an existing one, or build one from the
-repository Docker files. Use a native build only when the checkout is already
-configured. A configured checkout has `config.status` in its build directory.
-Do not audit the host to decide whether it can build Greengage. If
-neither a container nor a configured build exists, report the missing
-environment. Do not install tools, provision cloud machines, or pull private
-images automatically.
+Prefer a Docker development container when developing and testing changes;
+use an existing one or build one from the repository Dockerfiles. Use a
+native build only in a configured checkout, which contains `config.status`
+in its build directory. Do not audit the host to decide whether it can build
+Greengage, and do not install tools, provision cloud machines, or pull
+private images automatically. If neither a container nor a configured build
+exists, report the missing environment.
 
-Use the current checkout. Confirm whether commands run on the host or
-inside a container. If that remains unknown, stop before process termination,
-cgroup changes, or privileged operations. Scripts that kill server processes
-must run inside a disposable container. Privileged containers with writable
+Use the current checkout. Confirm whether commands run on the host or inside
+a container; if that is unknown, stop before process termination, cgroup
+changes, or privileged operations. Scripts that terminate server processes
+must run in a disposable container, and privileged containers with writable
 host mounts can affect the host.
-
-### Reproduction environment
-
-Reproduce bugs on the available development cluster. Use cloud machines only
-when access and the reproduction environment have been provided. Community
-packages and matching debug symbols are published at
-<https://github.com/GreengageDB/greengage/releases>. Install both packages from
-the same version when reproducing a packaged release.
-
-### Native build
-
-`README.md` describes configure, build, install, and demo cluster commands.
-`README.linux.md` describes Linux dependency setup. `README.macOS.md` covers
-Intel and Apple processors. CI does not test macOS. Do not install host
-dependencies unless environment setup is part of the task.
-
-### Container images
-
-The Ubuntu 22.04 development image is
-`ghcr.io/greengagedb/greengage/ggdb6_ubuntu:latest`. The Ubuntu 24.04 image is
-`ghcr.io/greengagedb/greengage/ggdb6_ubuntu24.04:latest`. Prefer an existing
-local image. Private pulls require authenticated GHCR access with
-`read:packages`.
-
-Images are amd64. ARM hosts require amd64 emulation and
-`--platform linux/amd64`. Docker Desktop provides emulation on macOS.
-Linux ARM hosts require QEMU registered through `binfmt_misc`.
-Without emulation, use an existing native build or report the limitation.
-
-Repository containers install under `/usr/local/greengage-db-devel`. Source
-`greengage_path.sh` from the installation whose binaries are in use. Demo
-clusters need the semaphore setting and sshd.
-
-### Repository Docker files
-
-Use `ci/Dockerfile.ubuntu` or `ci/Dockerfile.rockylinux` and the local test
-procedures in `ci/readme.md`. Build from a separate clean checkout if the
-current tree contains configured or compiled files. Never clean user work
-automatically. The Dockerfile copies the checkout, including build leftovers.
-
-Image source is at `/home/gpadmin/gpdb_src`, and its compiled archive is at
-`/home/gpadmin/bin_gpdb/bin_gpdb.tar.gz`. A source mount hides the image
-source but leaves the archive unchanged. Use matching source and binaries.
 
 ### Unofficial helper tools
 
-Some developers manage development containers with
-[envman](https://github.com/toiletbril/envman),
-[gpdb.docker](https://github.com/RekGRpth/gpdb.docker), and
-[arenadata.sh](https://github.com/RekGRpth/arenadata.sh). GreengageDB does not
-ship or maintain these tools. Use one only when the user asks for it, and
-follow its own documentation.
+GreengageDB does not ship or maintain these unofficial tools for managing
+development containers. Prefer them for Docker work and follow each tool's
+documentation.
+
+- [envman](https://github.com/toiletbril/envman)
+- [gpdb.docker](https://github.com/RekGRpth/gpdb.docker)
+- [arenadata.sh](https://github.com/RekGRpth/arenadata.sh)
+
+### Reproduction environment
+
+Reproduce bugs on the available development cluster; use cloud machines only
+with provided access and a prepared reproduction environment. Community
+packages and matching debug symbols are published at
+<https://github.com/GreengageDB/greengage/releases>. When reproducing a
+packaged release, install the server package and the debug symbols from the
+same version.
+
+### Native build
+
+- `README.md`: configure, build, install, and demo cluster commands.
+- `README.linux.md`: Linux dependencies.
+- `README.macOS.md`: Intel and Apple silicon.
+
+CI does not test macOS. Do not install host dependencies unless the task
+explicitly includes environment setup.
+
+### Container images
+
+- `ghcr.io/greengagedb/greengage/ggdb6_ubuntu:latest`: Ubuntu 22.04
+  development image.
+- `ghcr.io/greengagedb/greengage/ggdb6_ubuntu24.04:latest`: Ubuntu 24.04
+  development image.
+- `gpdb6_regress:latest`: local image for the Compose Behave runner and
+  GPORCA unit tests.
+
+Prefer an existing local image; private pulls require GitHub Container
+Registry authentication with the `read:packages` scope.
+
+Images are `amd64` only; ARM hosts need `amd64` emulation and the
+`--platform linux/amd64` flag. Docker Desktop provides the emulation on
+macOS, and Linux ARM hosts need QEMU registered through `binfmt_misc`.
+Without emulation, use an existing native build or report the limitation.
+
+Repository containers install under `/usr/local/greengage-db-devel`. Source
+the environment in every `docker exec`: `greengage_path.sh` from the
+installation whose binaries are in use, then the demo env; without it
+`$GPHOME` is empty. Demo clusters need adequate kernel semaphores and a
+running `sshd`, and `gpstart -a` refuses when `sshd` is down.
+
+### Repository Dockerfiles
+
+Use `ci/Dockerfile.ubuntu` or `ci/Dockerfile.rockylinux`; see `ci/readme.md`
+for local test procedures. Build images from a separate clean checkout when
+the working tree contains configured or compiled files, because the
+Dockerfile copies the whole checkout including build leftovers. Never clean
+user work automatically.
+
+The image keeps source at `/home/gpadmin/gpdb_src` and the compiled archive
+at `/home/gpadmin/bin_gpdb/bin_gpdb.tar.gz`. For development, mount the host
+checkout at `/home/gpadmin/gpdb_src`; the mount hides the baked-in source
+but not the archive, so use source and binaries from the same commit. The
+image also treats `src/test` as a volume, which shadows the mounted
+checkout at that path, so mount `src/test` explicitly as well. The mounted
+tree allows rebuilding on demand: run `make` and `make install` inside the
+container. The helper tools above mount the checkout; their documentation
+has the commands.
 
 ## Builds
 
-Initialize submodules before building.
+Initialize submodules with `git submodule update --init --recursive --force`.
 
-```bash
-git submodule update --init --recursive --force
-```
-
-Add `--enable-debug --enable-cassert` to the configure command in the quick
-reference for a debugging build. `--enable-debug-extensions` builds the fault
-injector and is disabled by default. The quick reference passes it. Release
-builds use the `dist` target in `gpAux/Makefile`. Do not create a release
+`gpAux/Makefile` provides `dist` for release builds and `devel` for
+development builds; `devel` enables assertions, debug symbols, debug
+extensions, and dependency tracking. `--enable-debug-extensions` compiles
+the fault injector, is disabled by default, and is required by fault
+injection tests, so the quick reference passes it. Do not create a release
 build unless the task requires one.
 
-Do not edit generated `configure` or `src/include/pg_config.h.in` directly.
-Edit `configure.in`, regenerate both, and commit tracked generated changes
-with their source. Do not commit ignored build products or generated catalog
-JSON.
+Do not edit the generated `configure` or `src/include/pg_config.h.in`; edit
+`configure.in`, regenerate both, and commit tracked generated files with
+their source. Do not commit ignored build products or generated catalog
+JSON; regenerate with `make -C gpAux autoconf`.
 
-```bash
-make -C gpAux autoconf
-```
-
-Do not add targets to the top-level `Makefile`. It only locates GNU make.
-Project targets belong in `GNUmakefile.in`, `gpAux/Makefile`, or a subsystem
-makefile.
+The top-level `Makefile` only locates GNU make; put project targets in
+`GNUmakefile.in`, `gpAux/Makefile`, or a subsystem makefile.
 
 ## Regression tests
 
-Regression tests require a running cluster, and `make check` does not provide
-one. Create the demo cluster explicitly. The quick reference shows how to run
-one regression test and one isolation2 test. `src/test/isolation2/Makefile`
-provides schedule targets such as
-`installcheck-parallel-retrieve-cursor`, `installcheck-resgroup`, and
-`installcheck-mirrorless`. It has no `installcheck-tests` target. Use
-`installcheck-world` for the full installed tree. Start with the narrowest
-relevant test. Full regression and Behave suites can take hours, so run them
-only when requested or required by the change.
+Regression tests need a running cluster; `make check` does not provide one,
+so create the demo cluster explicitly. The quick reference shows single-test
+commands for regress and `isolation2`. `src/test/isolation2/Makefile`
+defines schedule targets such as `installcheck-parallel-retrieve-cursor`,
+`installcheck-resgroup`, and `installcheck-mirrorless`, but no
+`installcheck-tests`; `installcheck-world` covers the full installed tree.
+Start with the narrowest relevant test. Full regression and Behave suites
+take hours and run in CI, not on the host. When the specific tests for a
+change pass, ask the user to push and let CI run the full suite.
 
 ```bash
 make installcheck-world
@@ -195,82 +199,90 @@ make installcheck-mirrorless
 ```
 
 `installcheck-world` also runs `gpcheckcat -A`, `gp_replica_check`, and the
-`pg_upgrade` checks. Errors can appear late if an earlier test leaves
+`pg_upgrade` checks; errors can appear late when an earlier test leaves
 inconsistent catalog data.
 
-Add Greengage regression tests to `src/test/regress/greengage_schedule`.
-Do not add them to an inherited PostgreSQL schedule. Keep groups near 20 tests
-or smaller. A test that injects a fault must have its own schedule group.
-`installcheck-icudp` is skipped when `BUILD_TYPE=prod`.
+Add new tests to `src/test/regress/greengage_schedule`, never to an
+inherited PostgreSQL schedule. Keep groups near 20 tests, give each
+fault-injection test its own group; `BUILD_TYPE=prod` skips
+`installcheck-icudp`.
 
-Regression output passes through `gpdiff.pl`, `gpstringsubs.pl`, `explain.pl`,
-and `atmsort.pl`. When output differs, inspect `regression.diffs`, the raw
-result, and matching rules in these normalizers and `src/test/regress/init_file`
-before editing an expected file. `atmsort` removes costs and row estimates
-from text EXPLAIN output. A test of a row estimate must return the value as a
-query result.
+Output passes through `gpdiff.pl`, `gpstringsubs.pl`, `explain.pl`, and
+`atmsort.pl`. When output differs, inspect `regression.diffs`, the raw
+result, and the matching rules in those scripts and
+`src/test/regress/init_file` before editing an expected file. `atmsort`
+strips costs and row estimates from text `EXPLAIN` output, so return a row
+estimate as a query result when testing one.
 
-Leave representative objects for new object types in the regression database.
-The gpbackup and gpupgrade integration tests use that database. Follow
-`src/test/regress/README` when deciding which objects must remain.
+Leave representative objects for new object types in the regression
+database; the `gpbackup` and `gpupgrade` integration suites test against
+them. Follow the retention rules in `src/test/regress/README`.
 
-The isolation2 suite uses multiple sessions and its own syntax. Read
-`src/test/isolation2/sql_isolation_testcase.py` before editing an isolation2
-test.
+The `isolation2` suite uses multiple sessions and its own syntax; read
+`src/test/isolation2/sql_isolation_testcase.py` before editing its tests.
 
 ### Regression output names and resource group modes
 
-`pg_regress` first checks `src/test/regress/resultmap` for a platform-specific
-expected file. It then checks `<test>_optimizer_resgroup.out` when ORCA and
-resource groups are enabled, `<test>_optimizer.out` with ORCA,
-`<test>_resgroup.out` with resource groups, and finally `<test>.out`. The same
-order applies to other expected file extensions.
+For expected files, `pg_regress` checks `src/test/regress/resultmap` for a
+platform-specific match first, then `<test>_optimizer_resgroup.out` with
+ORCA and resource groups, `<test>_optimizer.out` with ORCA,
+`<test>_resgroup.out` with resource groups, and `<test>.out`. The same
+order applies to other expected extensions.
 
-Files such as `xml_1.out` and `xml_2.out` are alternative expected outputs for
-the test `xml`. `pg_regress` compares the result with every `_0` through `_9`
-alternative and reports the closest one. A test whose own name ends in a
-number, such as `create_function_3`, has an ordinary expected file.
+`xml_1.out` and `xml_2.out` are alternative expected outputs for the test
+`xml`; `pg_regress` compares every `_0` through `_9` alternative and reports
+the closest. A test name ending in a digit, such as `create_function_3`, has
+an ordinary expected file.
 
 Append optimized source tests can generate `_row`, `_column`,
-`_row_optimizer`, and `_column_optimizer` files. Update the generated variant
-that corresponds to the changed source test.
+`_row_optimizer`, and `_column_optimizer` files; update the variant matching
+the changed source test.
 
-Greengage 6.x supports resource groups with cgroups v1 only. The resource group
-target is `installcheck-resgroup`, and its isolation2 schedule is
-`isolation2_resgroup_schedule`.
+Greengage 6.x supports resource groups on cgroups v1 only; the target is
+`installcheck-resgroup` and its schedule is `isolation2_resgroup_schedule`.
+The setup creates writable `cpuset`, `cpu`, `cpuacct`, and `memory`
+controller directories under `/sys/fs/cgroup` plus the `gpdb` directory for
+`gpadmin`; it is implemented by `concourse/scripts/ic_gpdb_resgroup.bash`.
+The Compose run in `ci/scripts/run_resgroup_test.bash` prepares only
+`cpuset`, `cpu`, and `memory`.
 
-The resource group test setup creates writable `cpuset`, `cpu`, `cpuacct`, and
-`memory` controller directories under `/sys/fs/cgroup`, then creates the `gpdb`
-directory for `gpadmin`. The setup is implemented by
-`concourse/scripts/ic_gpdb_resgroup.bash`. The Compose run in
-`ci/scripts/run_resgroup_test.bash` prepares only the `cpuset`, `cpu`, and
-`memory` controllers.
+### Isolation2 syntax
 
-Isolation2 lines use `<session><flags>: <sql>`. A numeric session runs
-synchronously. `&` starts a command that must block, `>` starts a background
-command, `<` joins a background command, and `q` quits a session. Add `U` for a
-utility connection and `R` for a retrieve connection. A `U` or `R` line takes a
-content ID in place of the session number. `*U` and `*R` target the master and
-all primary segments. Use `@db_name` at the start of a session to select its
-database. Use `@pre_run` and `@post_run` for shell substitutions.
+Isolation2 lines use `<session><flags>: <sql>`. Numeric sessions run
+synchronously; `&` marks a command that must block, `>` a background
+command, `<` joins it, and `q` quits the session. `U` and `R` open utility
+and retrieve connections, taking a content ID in place of the session
+number; `*U` and `*R` target the master and all primary segments.
+`@db_name` at the start of a session selects its database; `@pre_run` and
+`@post_run` run shell substitutions. Each run recreates the test database,
+so a test that needs `setup.sql` helpers must name `setup` first in the
+same invocation.
 
 ## Unit and management tests
 
-Run backend cmockery tests from the subsystem's `test` directory.
+Run backend `cmockery` tests from the subsystem's `test` directory, for
+example `make -C src/backend/utils/mmgr/test check`.
+`make -C src/backend/utils/mmgr check` exits without running tests. GPORCA
+unit-test guidance is in `src/backend/gporca/AGENTS.md`.
 
-```bash
-make -C src/backend/utils/mmgr/test check
-```
+When a change modifies a `gpMgmt` management utility, run the Behave
+features covering the command and add or update a scenario for the new
+behavior. Run selected features or tags from `gpMgmt` with the database
+environment sourced (`make -f Makefile.behave behave tags=smoke`); the make
+target requires `tags` or `flags`.
 
-`make -C src/backend/utils/mmgr check` exits without running tests.
-GPORCA unit-test guidance is in `src/backend/gporca/AGENTS.md`.
-Management and Behave guidance is in `gpMgmt/AGENTS.md`.
+Prefer a Docker container when testing management utilities: from the
+repository root, the Compose runner provisions a multi-host cluster with an
+existing local image and runs the named feature files
+(`export IMAGE='gpdb6_regress:latest'`;
+`bash ci/scripts/run_behave_tests.bash gpstart gpstop`). Management and
+Behave guidance is in `gpMgmt/AGENTS.md`.
 
 ## Catalog changes
 
-Greengage functions are declared in `src/include/catalog/pg_proc.sql` and
-generated into `pg_proc_gp.h`. PostgreSQL functions remain in `pg_proc.h`.
-Follow `src/include/catalog/README.add_catalog_function`.
+Greengage SQL functions are declared in `src/include/catalog/pg_proc.sql`
+and generated into `pg_proc_gp.h`; PostgreSQL functions remain in
+`pg_proc.h`. Follow `src/include/catalog/README.add_catalog_function`.
 
 ```bash
 cd src/include/catalog
@@ -280,92 +292,89 @@ cd ../../..
 make -C src/backend/catalog
 ```
 
-Claim the selected OID, update `pg_proc.sql`, regenerate `pg_proc_gp.h`, and
-bump `CATALOG_VERSION_NO` in `src/include/catalog/catversion.h`. Commit
-`pg_proc_gp.h` together with `pg_proc.sql` and `catversion.h`.
+Claim an unused OID, update `pg_proc.sql`, regenerate `pg_proc_gp.h`, bump
+`CATALOG_VERSION_NO` in `src/include/catalog/catversion.h`, and commit
+`pg_proc_gp.h` with `pg_proc.sql` and `catversion.h`.
 
-The catalog make generates `gpMgmt/bin/gppylib/data/6.json`, and `gpcheckcat`
-reads catalog metadata from that file. The JSON embeds `CATALOG_VERSION_NO`.
-The file is ignored by Git and must not be committed, although step 4 of
+`gpMgmt/bin/gppylib/data/6.json` is not in the repository; the catalog make
+generates it from the catalog headers and `catversion.h`. The JSON embeds
+`CATALOG_VERSION_NO` and feeds `gpcheckcat` its catalog metadata. Git
+ignores the file; do not commit it, although step 4 of
 `README.add_catalog_function` still says otherwise.
 
-Use `GPDB_COLUMN_DEFAULT` and `GPDB_EXTRA_COL` for Greengage additions to
-PostgreSQL catalog rows. They avoid rewriting inherited `DATA` declarations.
-`gpcheckcat` reads catalog `FOREIGN_KEY` declarations. The server ignores them.
+Use `GPDB_COLUMN_DEFAULT` and `GPDB_EXTRA_COL` to add Greengage columns to
+PostgreSQL catalog rows without rewriting inherited `DATA` declarations.
+`gpcheckcat` reads catalog `FOREIGN_KEY` declarations; the server ignores
+them.
 
 ## ABI compatibility
 
-Preserve exported symbols and public types in minor releases. When a change
-affects them, use the dump and comparison commands in `.abi-check/README.md`
-or inspect the existing ABI job report. The baseline is the newest upstream
-`6.*` tag. Do not infer that an ABI break is safe from tests or an unknown set
-of consumers. Exceptions in `.abi-check/<baseline>/postgres.symbols.ignore` or
-`postgres.types.ignore` require review and an explanation of compatibility.
+Preserve exported symbols and public types across minor releases. When a
+patch touches them, run the dump and comparison commands in
+`.abi-check/README.md` or inspect the CI ABI report; the baseline is the
+newest upstream `6.*` tag. Do not infer that an ABI break is safe from
+passing tests or unknown consumers. Exceptions in
+`.abi-check/<baseline>/postgres.symbols.ignore` or `postgres.types.ignore`
+need reviewer approval and a written compatibility analysis.
 
 ## Coding and review rules
 
-When a concrete problem is specified, search a local PostgreSQL Git checkout
-for relevant upstream commits and code before designing the fix. Ask the user
-for the checkout path when it is unknown. Inspect each candidate commit and
-verify that it is compatible with this PostgreSQL 9.4-based branch. Cherry-pick
-a commit only when its complete change is compatible and limited to the
-specified problem. Otherwise, adapt only the required parts.
+For a specific bug, search a local upstream PostgreSQL checkout for related
+commits before designing the fix; ask the user for its path if unknown.
+Verify each candidate against this PostgreSQL 9.4-based branch, and
+cherry-pick only when the whole change is compatible and limited to the
+bug; otherwise adapt the needed parts.
 
-Follow `CONTRIBUTING.md`. Limit fixes to the requested behavior and tests.
-Remove unrequested refactoring. Match surrounding style and preserve formatting
-in upstream-derived code to reduce merge conflicts.
+Follow `CONTRIBUTING.md`. Restrict patches to the requested behavior and
+its tests, and remove unrequested refactoring. In files inherited from
+upstream PostgreSQL, match surrounding style and preserve formatting to
+avoid merge conflicts.
 
-- PostgreSQL-derived files must use the pgindent version appropriate for their
-  newest upstream code. Do not reindent an inherited file with a newer tool.
+- PostgreSQL-derived files use the `pgindent` version matching their newest
+  upstream code; never reindent an inherited file with a newer tool.
 - Greengage-only directories such as `src/backend/cdb` and
-  `src/backend/access/appendonly` use current pgindent rules.
-- Use this repository's `src/tools/pgindent/typedefs.list`, and regenerate it
-  when accurate typedef coverage is required.
-- GPORCA formatting rules are in `src/backend/gporca/AGENTS.md`.
-- Python uses four spaces and Pylint. Go uses gofmt.
+  `src/backend/access/appendonly` use current `pgindent` rules.
+- Regenerate `src/tools/pgindent/typedefs.list` when accurate typedef
+  coverage is required.
+- GPORCA rules are in `src/backend/gporca/AGENTS.md`; Python uses four
+  spaces and Pylint, and Go uses gofmt.
 
-Where surrounding code permits, prefer `enum`, `static const`, or
-`static inline` over macros. Keep scope narrow, unchanged values `const`, and
-private symbols `static`. Prefer typed interfaces to `void *` and casts.
-Add format attributes to printf-like functions. Put shared declarations in a
-header included by the definition and callers. Use `snprintf` and `strlcpy`
-when overflow is possible. Declare no-argument C functions as `function(void)`.
-Keep comments accurate and within 80 columns. End files with one newline and
-remove trailing whitespace.
+Where surrounding code permits, prefer `enum`, `static const`, and `static
+inline` over macros. Keep scope narrow, mark unchanged values `const` and
+file-local symbols `static`, and prefer typed interfaces over `void *` and
+casts. Give printf-like functions a format attribute, put shared
+declarations in a header included by the definition and all callers, use
+`snprintf` and `strlcpy` where overflow is possible, and declare
+no-argument C functions as `function(void)`. Keep comments accurate within
+80 columns, end files with one newline, and remove trailing whitespace.
 
-Keep patches focused. Tests must reproduce the bug without the fix and cover
-the required cases. Add them to an existing suitable test file and match that
-file's style. Explain a missing test in the pull request. A minor release patch
-must preserve ABI unless a reviewed exception is required. A build must add no
-compiler warnings.
+Keep patches focused. Tests must reproduce the failure without the fix and
+pass with it. Add new cases to an existing suitable test file in its style,
+explain any missing test in the pull request, preserve ABI in minor-release
+patches unless a reviewed exception is approved, and add no compiler
+warnings.
 
-Write the pull request title in the imperative mood. Describe the wrong
-behavior, the solution, and why it is correct. Keep the description current
-with the patch and wrap commit-ready prose at 80 columns. Preserve external
-authorship and licensing headers. Credit human co-authors with
-`Co-authored-by` trailers. Follow `CONTRIBUTING.md` for licensing and review.
+Write pull request titles in the imperative mood; describe the broken
+behavior, the fix, and why the fix is correct. Keep the description current
+with the patch, wrap commit-ready prose at 80 columns, preserve external
+authorship and license headers, credit human co-authors with
+`Co-authored-by` trailers, and follow `CONTRIBUTING.md` for licensing and
+review.
 
-Review the whole behavior described by the pull request. Reproduce the failure,
-confirm the fix, check the task and description against the code, inspect side
-effects, and check that variables are initialized before use. Two architectural
-committee approvals are required before merge unless the project sets another
-rule.
-
-Record workflow mistakes in `MISTAKES.md` at the repository root, and read it
-before starting a task. Git ignores the file, and it must not be committed.
+Record workflow mistakes in the repository-root `MISTAKES.md` and read it
+before starting a task; Git ignores it, so never commit it.
 
 ## Common traps
 
 - Generated headers such as `pg_config.h`, `gram.h`, `errcodes.h`, and
   `fmgroids.h` do not exist until configure and build targets generate them.
-- `configure` is generated. Edit `configure.in` and run `make -C gpAux
+- `configure` is generated: edit `configure.in` and run `make -C gpAux
   autoconf`.
-- Put each fault-injection test on a separate `test:` line in its schedule.
-  Tests on one line run concurrently. The build must be configured with
+- Fault-injection tests each need their own `test:` schedule line because
+  tests on one line run concurrently; the build must be configured with
   `--enable-debug-extensions`.
 - `gp_use_legacy_hashops` changes distribution hash operator classes and
   matters for upgraded databases and distribution tests.
-- ORCA-only plan changes normally update `<test>_optimizer.out`.
-  PostgreSQL planner runs use `optimizer=off` and normally `<test>.out`.
-  Apply the expected-file selection rules above for resource groups and
-  platform overrides.
+- ORCA-only changes normally update `<test>_optimizer.out`; planner runs
+  use `optimizer=off` and normally `<test>.out`. Apply the expected-file
+  rules above for resource groups and platforms.
