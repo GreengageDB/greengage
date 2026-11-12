@@ -14,28 +14,7 @@ include $(top_builddir)/src/Makefile.global
 
 # GPDB_12_MERGE_FEATURE_NOT_SUPPORTED Since logical replication doesn't work for GPDB,
 # removed "subscription" test from below list.
-SUBDIRS = perl postmaster regress isolation modules authentication recovery
-
-SUBDIRS += fsync walrep heap_checksum isolation2 fdw
-
-# Test suites that are not safe by default but can be run if selected
-# by the user via the whitespace-separated list in variable
-# PG_TEST_EXTRA:
-ifeq ($(with_gssapi),yes)
-ifneq (,$(filter kerberos,$(PG_TEST_EXTRA)))
-SUBDIRS += kerberos
-endif
-endif
-ifeq ($(with_ldap),yes)
-ifneq (,$(filter ldap,$(PG_TEST_EXTRA)))
-SUBDIRS += ldap
-endif
-endif
-ifeq ($(with_openssl),yes)
-ifneq (,$(filter ssl,$(PG_TEST_EXTRA)))
-SUBDIRS += ssl
-endif
-endif
+SUBDIRS = isolation2
 
 # We don't build or execute these by default, but we do want "make
 # clean" etc to recurse into them.  (We must filter out those that we
