@@ -928,10 +928,11 @@ SELECT count(*) FROM radix_text_tbl WHERE starts_with(t, 'Worth');
                          QUERY PLAN                         
 ------------------------------------------------------------
  Aggregate
-   ->  Index Only Scan using sp_radix_ind on radix_text_tbl
-         Index Cond: (t ^@ 'Worth'::text)
-         Filter: starts_with(t, 'Worth'::text)
-(4 rows)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Index Only Scan using sp_radix_ind on radix_text_tbl
+               Index Cond: (t ^@ 'Worth'::text)
+               Filter: starts_with(t, 'Worth'::text)
+(6 rows)
 
 SELECT count(*) FROM radix_text_tbl WHERE starts_with(t, 'Worth');
  count 
@@ -1555,20 +1556,17 @@ SELECT count(*) FROM radix_text_tbl WHERE t ^@	 'Worth';
      2
 (1 row)
 
-<<<<<<< HEAD
-RESET optimizer_enable_tablescan;
-||||||| 3b231596ccf
-=======
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM radix_text_tbl WHERE starts_with(t, 'Worth');
                    QUERY PLAN                   
 ------------------------------------------------
  Aggregate
-   ->  Bitmap Heap Scan on radix_text_tbl
-         Filter: starts_with(t, 'Worth'::text)
-         ->  Bitmap Index Scan on sp_radix_ind
-               Index Cond: (t ^@ 'Worth'::text)
-(5 rows)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Bitmap Heap Scan on radix_text_tbl
+               Filter: starts_with(t, 'Worth'::text)
+               ->  Bitmap Index Scan on sp_radix_ind
+                     Index Cond: (t ^@ 'Worth'::text)
+(7 rows)
 
 SELECT count(*) FROM radix_text_tbl WHERE starts_with(t, 'Worth');
  count 
@@ -1576,7 +1574,7 @@ SELECT count(*) FROM radix_text_tbl WHERE starts_with(t, 'Worth');
      2
 (1 row)
 
->>>>>>> c4cc2850f4d
+RESET optimizer_enable_tablescan;
 RESET enable_seqscan;
 RESET enable_indexscan;
 RESET enable_bitmapscan;

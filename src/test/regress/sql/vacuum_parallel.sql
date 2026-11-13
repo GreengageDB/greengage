@@ -18,6 +18,8 @@ CREATE INDEX vacuum_in_leader_small_index ON parallel_vacuum_table((1));
 -- Verify (as best we can) that the cost model for parallel VACUUM
 -- will make our VACUUM run in parallel, while always leaving it up to the
 -- parallel leader to handle the vacuum_in_leader_small_index index:
+-- GGDB: pg_relation_size() on the coordinator sums sizes from all segments,
+-- so the small index is not below min_parallel_index_scan_size here.
 SELECT EXISTS (
 SELECT 1
 FROM pg_class

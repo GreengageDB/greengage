@@ -72,12 +72,11 @@ SELECT explain_memoize('
 SELECT COUNT(*),AVG(t1.unique1) FROM tenk1 t1
 INNER JOIN tenk1 t2 ON t1.unique1 = t2.thousand
 WHERE t2.unique1 < 1200;', true);
-<<<<<<< HEAD
 RESET enable_sort;
-||||||| 3b231596ccf
-=======
 
-CREATE TABLE flt (f float);
+-- GGDB: replicate the table so the planner keeps the upstream Memoize nodes
+-- instead of replacing them with motions around a distributed join.
+CREATE TABLE flt (f float) DISTRIBUTED REPLICATED;
 CREATE INDEX flt_f_idx ON flt (f);
 INSERT INTO flt VALUES('-0.0'::float),('+0.0'::float);
 ANALYZE flt;
@@ -135,7 +134,6 @@ WHERE unique1 < 3
 	WHERE t0.ten = t1.twenty AND t0.two <> t2.four OFFSET 0);
 
 RESET enable_seqscan;
->>>>>>> c4cc2850f4d
 RESET enable_mergejoin;
 RESET work_mem;
 

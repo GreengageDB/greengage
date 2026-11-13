@@ -1901,14 +1901,14 @@ from generate_series(1,5) x,
      (values (0::float8),(0.1),(0.25),(0.4),(0.5),(0.6),(0.75),(0.9),(1)) v(p)
 group by p order by p;
 ERROR:  sum is not an ordered-set aggregate, so it cannot have WITHIN GROUP
-LINE 1: select p, sum() within group (order by x::float8)  
+LINE 1: select p, sum() within group (order by x::float8)  -- error
                   ^
 select p, percentile_cont(p,p)  -- error
 from generate_series(1,5) x,
      (values (0::float8),(0.1),(0.25),(0.4),(0.5),(0.6),(0.75),(0.9),(1)) v(p)
 group by p order by p;
 ERROR:  WITHIN GROUP is required for ordered-set aggregate percentile_cont
-LINE 1: select p, percentile_cont(p,p)  
+LINE 1: select p, percentile_cont(p,p)  -- error
                   ^
 select percentile_cont(0.5) within group (order by b) from aggtest;
  percentile_cont  
@@ -2602,6 +2602,12 @@ select pg_typeof(cleast_agg(variadic array[4.5,f1])) from int4_tbl;
 (1 row)
 
 -- test aggregates with common transition functions share the same states
+-- GGDB: with optimizer=on, every plan of the plpgsql transition functions'
+-- statements is an ORCA fallback (Query Parameter), and how often they are
+-- re-planned depends on plan cache invalidations from the tests running in
+-- parallel.  The NOTICEs show the state sharing, so don't trace fallbacks in
+-- this and the next block.
+SET optimizer_trace_fallback = off;
 begin work;
 create type avg_state as (total bigint, count bigint);
 create or replace function avg_transfn(state avg_state, n int) returns avg_state as
@@ -2847,6 +2853,7 @@ NOTICE:  sum_transfn called with 4
 (1 row)
 
 rollback;
+SET optimizer_trace_fallback = on;
 -- test that the aggregate transition logic correctly handles
 -- transition / combine functions returning NULL
 -- First test the case of a normal transition function returning NULL

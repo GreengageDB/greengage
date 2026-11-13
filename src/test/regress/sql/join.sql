@@ -1772,10 +1772,8 @@ select i8.*, ss.v, t.unique2
     left join tenk1 t on t.unique2 = ss.v
 where q2 = 456;
 
-<<<<<<< HEAD
 reset enable_hashjoin;
-||||||| 3b231596ccf
-=======
+
 -- and check a related issue where we miscompute required relids for
 -- a PHV that's been translated to a child rel
 create temp table parttbl (a integer primary key) partition by range (a);
@@ -1791,7 +1789,6 @@ select * from
   (select *, 12 as phv from parttbl) as ss
   right join int4_tbl on true
 where ss.a = ss.phv and f1 = 0;
->>>>>>> c4cc2850f4d
 
 -- bug #8444: we've historically allowed duplicate aliases within aliased JOINs
 

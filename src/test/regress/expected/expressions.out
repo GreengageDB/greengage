@@ -237,12 +237,14 @@ View definition:
 
 explain (verbose, costs off) select * from bpchar_view
   where f1::bpchar = 'foo';
-                                                                   QUERY PLAN                                                                   
-------------------------------------------------------------------------------------------------------------------------------------------------
- Index Scan using bpchar_tbl_f1_key on public.bpchar_tbl
-   Output: bpchar_tbl.f1, (bpchar_tbl.f1)::character(14), (bpchar_tbl.f1)::bpchar, bpchar_tbl.f2, (bpchar_tbl.f2)::character(14), bpchar_tbl.f2
-   Index Cond: ((bpchar_tbl.f1)::bpchar = 'foo'::bpchar)
-(3 rows)
+                                                                      QUERY PLAN                                                                      
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   Output: bpchar_tbl.f1, ((bpchar_tbl.f1)::character(14)), ((bpchar_tbl.f1)::bpchar), bpchar_tbl.f2, ((bpchar_tbl.f2)::character(14)), bpchar_tbl.f2
+   ->  Index Scan using bpchar_tbl_f1_key on public.bpchar_tbl
+         Output: bpchar_tbl.f1, (bpchar_tbl.f1)::character(14), (bpchar_tbl.f1)::bpchar, bpchar_tbl.f2, (bpchar_tbl.f2)::character(14), bpchar_tbl.f2
+         Index Cond: ((bpchar_tbl.f1)::bpchar = 'foo'::bpchar)
+(7 rows)
 
 rollback;
 --
