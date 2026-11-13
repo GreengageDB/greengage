@@ -10822,16 +10822,14 @@ SELECT t1.a,t2.b,t2.c FROM fprt1 t1 LEFT JOIN (SELECT * FROM fprt2 WHERE a < 10)
                Hash Cond: ((t1.a = fprt2.b) AND (t1.b = fprt2.a))
                ->  Redistribute Motion 1:3  (slice2)
                      Output: t1.a, t1.b
-                     Hash Key: t1.a, t1.b
                      ->  Dynamic Foreign Scan on public.fprt1 t1
                            Output: t1.a, t1.b
                            Filter: (t1.a < 10)
                            Number of partitions to scan: 1 (out of 2)
                ->  Hash
                      Output: fprt2.a, fprt2.b, fprt2.c
-                     ->  Redistribute Motion 1:3  (slice3)
+                     ->  Broadcast Motion 1:3  (slice3)
                            Output: fprt2.a, fprt2.b, fprt2.c
-                           Hash Key: fprt2.b, fprt2.a
                            ->  Dynamic Foreign Scan on public.fprt2
                                  Output: fprt2.a, fprt2.b, fprt2.c
                                  Filter: ((fprt2.a < 10) AND (fprt2.b < 10))
