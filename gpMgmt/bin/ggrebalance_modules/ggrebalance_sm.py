@@ -405,8 +405,8 @@ class RebalanceSM:
         steps_left_todo = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
         for step in error_steps:
             self.logger.info(f'Checking error status for step: {str(step)}')
-            dbid = step.getMove().seg.getSegmentDbId()
             move = step.getMove()
+            dbid = move.seg.getSegmentDbId()
 
             if step.isRollback():
                 target_hostname = move.seg.getSegmentHostName()
