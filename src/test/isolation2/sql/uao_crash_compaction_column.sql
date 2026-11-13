@@ -89,7 +89,7 @@
 2:DROP TABLE IF EXISTS crash_coordinator_before_cleanup_phase CASCADE;
 -- Function that:
 --
--- 1. Finds oldest xid that leaves segfiles in 
+-- 1. Finds oldest xid that leaves segfiles in
 --    AOSEG_STATE_AWAITING_DROP.
 --
 -- 2. Waits until procarry progresses to newer oldest xid.
@@ -97,8 +97,54 @@
 --    after recreation of procarray during recovery both on coordinator
 --    and segments.
 --
--- (All on one line because of limitations in the isolation2 test language.)
-2:CREATE OR REPLACE FUNCTION wait_for_new_oldest_xid(tbl regclass, timeout_secs int DEFAULT 10) RETURNS text AS $$ DECLARE blocking_xid xid; n int; diag text; BEGIN EXECUTE format('SELECT min(xmin::text::bigint)::text::xid FROM gp_dist_random(%L) WHERE state = 2', (SELECT segrelid::regclass::text FROM pg_catalog.pg_appendonly WHERE relid = $1)) INTO blocking_xid; IF blocking_xid IS NULL THEN RETURN 'OK'; END IF; FOR i IN 1..timeout_secs*10 LOOP SELECT count(*) INTO n FROM gp_dist_random('pg_stat_activity') WHERE backend_xmin IS NOT NULL AND backend_xmin::text::bigint <= blocking_xid::text::bigint AND sess_id <> (SELECT sess_id FROM pg_stat_activity WHERE pid = pg_backend_pid()); IF n = 0 THEN RETURN 'OK'; END IF; PERFORM pg_sleep(0.1); END LOOP; SELECT string_agg(format('pid=%s xmin=%s state=%s query=%s', pid, backend_xmin, state, query), ' | ') INTO diag FROM gp_dist_random('pg_stat_activity') WHERE backend_xmin IS NOT NULL AND backend_xmin::text::bigint <= blocking_xid::text::bigint AND sess_id <> (SELECT sess_id FROM pg_stat_activity WHERE pid = pg_backend_pid()); RETURN format('FAIL: still blocked by %s txns at or below xid %s [%s]', n, blocking_xid, coalesce(diag, 'no rows')); END; $$ LANGUAGE plpgsql;
+2:CREATE OR REPLACE FUNCTION wait_for_new_oldest_xid(tbl regclass, timeout_secs int DEFAULT 10)
+RETURNS text AS $$
+DECLARE
+    blocking_xid xid; /*in func*/
+    own_sess_id bigint; /*in func*/
+    n int; /*in func*/
+    msg text; /*in func*/
+BEGIN
+    -- Find the oldest xmin among rows which are in AOSEG_STATE_AWAITING_DROP state.
+    EXECUTE format(
+        'SELECT min(xmin::text::bigint)::text::xid FROM gp_dist_random(%L) WHERE state = 2',
+        (SELECT segrelid::regclass::text
+           FROM pg_catalog.pg_appendonly
+          WHERE relid = $1)
+    ) INTO blocking_xid; /*in func*/
+
+    IF blocking_xid IS NULL THEN
+        RETURN 'OK'; /*in func*/
+    END IF; /*in func*/
+
+    -- Wait until procarray synchronizes, so there is a new oldest xmin across 
+    -- all segments, which is the last normally commited transaction.
+    -- Don't be blocked by transactions going because of the wait function.
+    SELECT sess_id::bigint FROM pg_stat_activity WHERE pid = pg_backend_pid() INTO own_sess_id; /*in func*/
+    FOR i IN 1..timeout_secs*10 LOOP
+        SELECT count(*) INTO n
+        FROM gp_dist_random('pg_stat_activity')
+        WHERE backend_xmin IS NOT NULL
+          AND backend_xmin::text::bigint <= blocking_xid::text::bigint
+          AND sess_id <> own_sess_id; /*in func*/
+
+        IF n = 0 THEN
+            RETURN 'OK'; /*in func*/
+        END IF; /*in func*/
+        PERFORM pg_sleep(0.1); /*in func*/
+    END LOOP; /*in func*/
+
+    SELECT string_agg(format('pid=%s xmin=%s state=%s query=%s',
+                             pid, backend_xmin, state, query), ' | ')
+    INTO msg
+    FROM gp_dist_random('pg_stat_activity')
+    WHERE backend_xmin IS NOT NULL
+      AND backend_xmin::text::bigint <= blocking_xid::text::bigint
+      AND sess_id <> own_sess_id; /*in func*/
+    RETURN format('FAIL: still blocked by %s txns at or below xid %s [%s]',
+                  n, blocking_xid, coalesce(msg, 'no rows')); /*in func*/
+END; /*in func*/
+$$ LANGUAGE plpgsql;
 2:CREATE TABLE crash_coordinator_before_cleanup_phase (a INT, b INT, c CHAR(20));
 2:CREATE INDEX crash_coordinator_before_cleanup_phase_index ON crash_coordinator_before_cleanup_phase(b);
 2:INSERT INTO crash_coordinator_before_cleanup_phase SELECT i AS a, 1 AS b, 'hello world' AS c FROM generate_series(1, 10) AS i;
