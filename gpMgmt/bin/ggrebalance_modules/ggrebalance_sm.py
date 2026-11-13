@@ -420,8 +420,8 @@ class RebalanceSM:
             catalog_segment_info = self.get_catalog_gp_segment_configuration_for_dbid(dbid)
             self.logger.info(f'Segment info from catalog: {str(catalog_segment_info)}')
 
-            gp_segment_configuration_updated = (catalog_segment_info.hostname == target_hostname and
-                                                catalog_segment_info.datadir == target_datadir)
+            gp_segment_configuration_updated = (catalog_segment_info.hostname == target_hostname \
+                                                and catalog_segment_info.datadir == target_datadir)
 
             port_updated = False
             if gp_segment_configuration_updated:
