@@ -4239,3 +4239,99 @@ INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL c
 reset test_print_direct_dispatch_info;
 reset optimizer;
 drop table foo;
+-- A filter must read correlated subplan outputs from its child projection.
+create table subquery_outer as select a::int4 from generate_series(1, 10) a distributed by (a);
+create table subquery_right as select b::int4 from generate_series(1, 10) b distributed by (b);
+create table subquery_left as select c::int4 from generate_series(1, 10) c distributed by (c);
+explain (costs off)
+select * from subquery_outer where
+    (select c from subquery_left where c != a limit 1) >
+    (select b from subquery_right where b != a limit 1);
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
+         Filter: (((SubPlan 1)) > (SubPlan 2))
+         ->  Seq Scan on subquery_outer
+               SubPlan 1
+                 ->  Limit
+                       ->  Result
+                             Filter: (subquery_left.c <> subquery_outer.a)
+                             ->  Materialize
+                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                         ->  Seq Scan on subquery_left
+         SubPlan 2
+           ->  Limit
+                 ->  Result
+                       Filter: (subquery_right.b <> subquery_outer.a)
+                       ->  Materialize
+                             ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                   ->  Seq Scan on subquery_right
+ Optimizer: GPORCA
+(19 rows)
+
+-- Ordering makes the scalar subquery results deterministic across segments.
+select a from subquery_outer where
+    (select c from subquery_left where c != a order by c limit 1) >
+    (select b from subquery_right where b != a order by b desc limit 1) order by a;
+ a 
+---
+(0 rows)
+
+select a from subquery_outer where
+    (select c from subquery_left where c != a order by c limit 1) =
+    (select b from subquery_right where b != a order by b limit 1) order by a;
+ a  
+----
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+(10 rows)
+
+select a from subquery_outer where
+    (select c from subquery_left where c != a order by c limit 1) !=
+    (select b from subquery_right where b != a order by b desc limit 1) order by a;
+ a  
+----
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+(10 rows)
+
+select a from subquery_outer where
+    (select c from subquery_left where c != a order by c limit 1) not in
+    (select b from subquery_right where b != a order by b limit 1) order by a;
+ a 
+---
+(0 rows)
+
+-- Empty scalar subqueries return NULL; NULL comparisons must reject the row.
+select a from subquery_outer where
+    (select c from subquery_left where c > a + 10 limit 1) >
+    (select b from subquery_right where b != a limit 1);
+ a 
+---
+(0 rows)
+
+select a from subquery_outer where
+    (select null::int from subquery_left where c != a limit 1) >
+    (select b from subquery_right where b != a limit 1);
+ a 
+---
+(0 rows)
+
+drop table subquery_outer, subquery_right, subquery_left;

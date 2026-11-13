@@ -1529,3 +1529,37 @@ select (select (select count(*) from foo) from foo t1 where t1.i = t2.i) from fo
 reset test_print_direct_dispatch_info;
 reset optimizer;
 drop table foo;
+
+-- A filter must read correlated subplan outputs from its child projection.
+create table subquery_outer as select a::int4 from generate_series(1, 10) a distributed by (a);
+create table subquery_right as select b::int4 from generate_series(1, 10) b distributed by (b);
+create table subquery_left as select c::int4 from generate_series(1, 10) c distributed by (c);
+
+explain (costs off)
+select * from subquery_outer where
+    (select c from subquery_left where c != a limit 1) >
+    (select b from subquery_right where b != a limit 1);
+
+-- Ordering makes the scalar subquery results deterministic across segments.
+select a from subquery_outer where
+    (select c from subquery_left where c != a order by c limit 1) >
+    (select b from subquery_right where b != a order by b desc limit 1) order by a;
+select a from subquery_outer where
+    (select c from subquery_left where c != a order by c limit 1) =
+    (select b from subquery_right where b != a order by b limit 1) order by a;
+select a from subquery_outer where
+    (select c from subquery_left where c != a order by c limit 1) !=
+    (select b from subquery_right where b != a order by b desc limit 1) order by a;
+select a from subquery_outer where
+    (select c from subquery_left where c != a order by c limit 1) not in
+    (select b from subquery_right where b != a order by b limit 1) order by a;
+
+-- Empty scalar subqueries return NULL; NULL comparisons must reject the row.
+select a from subquery_outer where
+    (select c from subquery_left where c > a + 10 limit 1) >
+    (select b from subquery_right where b != a limit 1);
+select a from subquery_outer where
+    (select null::int from subquery_left where c != a limit 1) >
+    (select b from subquery_right where b != a limit 1);
+
+drop table subquery_outer, subquery_right, subquery_left;
