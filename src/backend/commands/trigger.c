@@ -19,6 +19,7 @@
 #include "access/sysattr.h"
 #include "access/table.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
@@ -776,6 +777,9 @@ CreateTriggerFiringOn(CreateTrigStmt *stmt, const char *queryString,
 		return InvalidObjectAddress;
 	}
 
+	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(RelationGetRelid(rel)));
+
 	/*
 	 * If it's a user-entered CREATE CONSTRAINT TRIGGER command, make a
 	 * corresponding pg_constraint entry.
@@ -1282,6 +1286,8 @@ CreateTriggerFiringOn(CreateTrigStmt *stmt, const char *queryString,
 
 	/* Keep lock on target rel until end of xact */
 	table_close(rel, NoLock);
+
+	END_TEMP_TABLE_SCOPE();
 
 	return myself;
 }
@@ -2022,6 +2028,15 @@ EnableDisableTrigger(Relation rel, const char *tgname,
  * temporary TriggerDesc in working memory and then copy the completed
  * structure into cache memory.
  */
+static int
+trigger_name_compare(const void *a, const void *b)
+{
+	const Trigger *ta = (const Trigger *) a;
+	const Trigger *tb = (const Trigger *) b;
+
+	return strcmp(ta->tgname, tb->tgname);
+}
+
 void
 RelationBuildTriggers(Relation relation)
 {
@@ -2153,6 +2168,15 @@ RelationBuildTriggers(Relation relation)
 		pfree(triggers);
 		return;
 	}
+
+	/*
+	 * Although systable_beginscan() does not promise any row order, this
+	 * caller requires name order: triggers fire in the order loaded.  The
+	 * index scan normally delivers them sorted by name, but rows merged
+	 * from the in-memory temp catalog arrive in insertion order, so sort
+	 * explicitly.
+	 */
+	qsort(triggers, numtrigs, sizeof(Trigger), trigger_name_compare);
 
 	/* Build trigdesc */
 	trigdesc = (TriggerDesc *) palloc0(sizeof(TriggerDesc));

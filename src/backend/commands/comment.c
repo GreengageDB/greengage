@@ -18,8 +18,10 @@
 #include "access/htup_details.h"
 #include "access/relation.h"
 #include "access/table.h"
+#include "access/tempcat.h"
 #include "catalog/indexing.h"
 #include "catalog/objectaddress.h"
+#include "catalog/pg_constraint.h"
 #include "catalog/pg_description.h"
 #include "catalog/pg_shdescription.h"
 #include "commands/comment.h"
@@ -27,7 +29,9 @@
 #include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 
 #include "cdb/cdbvars.h"
 #include "cdb/cdbdisp_query.h"
@@ -39,6 +43,47 @@
  * This routine is used to add the associated comment into
  * pg_description for the object specified by the given SQL command.
  */
+
+/*
+ * Relation owning the commented object, if any: the relation itself, its
+ * rowtype, one of its attributes, or a constraint on it.
+ */
+static Oid
+comment_temp_relid(Oid classid, Oid objid)
+{
+	switch (classid)
+	{
+		case RelationRelationId:
+			return objid;
+		case TypeRelationId:
+			return get_typ_typrelid(objid);
+		case AttributeRelationId:
+			return objid;			/* pg_attribute is addressed by relid */
+		case ConstraintRelationId:
+			{
+				HeapTuple	tuple;
+
+				tuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(objid));
+				if (HeapTupleIsValid(tuple))
+				{
+					Form_pg_constraint	con;
+
+					con = (Form_pg_constraint) GETSTRUCT(tuple);
+					if (OidIsValid(con->conrelid))
+					{
+						ReleaseSysCache(tuple);
+						return con->conrelid;
+					}
+					ReleaseSysCache(tuple);
+				}
+			}
+			break;
+		default:
+			break;
+	}
+	return InvalidOid;
+}
+
 ObjectAddress
 CommentObject(CommentStmt *stmt)
 {
@@ -134,8 +179,18 @@ CommentObject(CommentStmt *stmt)
 			CreateSharedComments(address.objectId, address.classId, stmt->comment);
 			break;
 		default:
-			CreateComments(address.objectId, address.classId, address.objectSubId,
-						   stmt->comment);
+			{
+				Oid	relid = comment_temp_relid(address.classId, address.objectId);
+
+				BEGIN_TEMP_TABLE_SCOPE(OidIsValid(relid) &&
+										get_rel_persistence(relid) == RELPERSISTENCE_TEMP &&
+										tempcat_relation_is_virtual(relid));
+
+				CreateComments(address.objectId, address.classId, address.objectSubId,
+							   stmt->comment);
+
+				END_TEMP_TABLE_SCOPE();
+			}
 			break;
 	}
 
@@ -172,6 +227,10 @@ CreateComments(Oid oid, Oid classoid, int32 subid, const char *comment)
 	bool		nulls[Natts_pg_description];
 	bool		replaces[Natts_pg_description];
 	int			i;
+
+	BEGIN_TEMP_TABLE_SCOPE(classoid == RelationRelationId &&
+						  get_rel_persistence(oid) == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(oid));
 
 	/* Reduce empty-string to NULL case */
 	if (comment != NULL && strlen(comment) == 0)
@@ -244,6 +303,7 @@ CreateComments(Oid oid, Oid classoid, int32 subid, const char *comment)
 	/* Done */
 
 	table_close(description, NoLock);
+	END_TEMP_TABLE_SCOPE();
 }
 
 /*

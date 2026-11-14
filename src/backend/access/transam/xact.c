@@ -24,6 +24,7 @@
 #include "access/multixact.h"
 #include "access/parallel.h"
 #include "access/subtrans.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/twophase.h"
 #include "access/xact.h"
@@ -248,6 +249,7 @@ typedef struct TransactionStateData
 	Oid			prevUser;		/* previous CurrentUserId setting */
 	int			prevSecContext; /* previous SecurityRestrictionContext */
 	bool		prevXactReadOnly;	/* entry-time xact r/o state */
+	bool		prevTempTableScope; /* entry-time tempcat temp-table scope */
 	bool		startedInRecovery;	/* did we start in recovery? */
 	bool		didLogXid;		/* has xid been included in WAL record? */
 	int			parallelModeLevel;	/* Enter/ExitParallelMode counter */
@@ -2462,6 +2464,7 @@ StartTransaction(void)
 	s->didLogXid = false;
 	TopXactexecutorDidWriteXLog = false;
 	xactWroteWalForPermanentRel = false;
+	tempcat_reset_xact_modified();
 
 	/*
 	 * must initialize resource-management stuff first
@@ -2745,6 +2748,9 @@ StartTransaction(void)
 
 	initialize_wal_bytes_written();
 	ShowTransactionState("StartTransaction");
+
+	/* Prepare virtual catalog for this transaction */
+	tempcat_begin_transaction();
 
 	ereportif(Debug_print_full_dtm, LOG,
 			  (errmsg("StartTransaction in DTX Context = '%s', "
@@ -3075,6 +3081,10 @@ CommitTransaction(void)
 	 */
 	s->state = TRANS_DEFAULT;
 
+	/* Commit virtual catalog changes */
+	tempcat_end_transaction();
+	temp_table_scope = false;
+
 	/* we're now in a consistent state to handle an interrupt. */
 	RESUME_INTERRUPTS();
 
@@ -3206,6 +3216,20 @@ PrepareTransaction(void)
 	SIMPLE_FAULT_INJECTOR("start_prepare");
 
 	/*
+	 * A user-driven PREPARE TRANSACTION (only reachable in utility mode)
+	 * would park this transaction's tempcat changes until COMMIT PREPARED,
+	 * and tempcat_finish_prepared_transaction() drops anything committed in
+	 * between: refuse instead of losing it.  Must run before anything is
+	 * written, or the transaction would survive as prepared despite the
+	 * error.
+	 */
+	if (Gp_role == GP_ROLE_UTILITY && tempcat_has_state())
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot PREPARE a transaction that has used the in-memory temporary catalog"),
+				 errhint("Commit or roll back this transaction before PREPARE, or disable gp_enable_temp_memory_catalog.")));
+
+	/*
 	 * Likewise, don't allow PREPARE after pg_export_snapshot.  This could be
 	 * supported if we added cleanup logic to twophase.c, but for now it
 	 * doesn't seem worth the trouble.
@@ -3290,6 +3314,12 @@ PrepareTransaction(void)
 	 * a global transaction.
 	 */
 	EndPrepare(gxact);
+
+	/*
+	 * Park the tempcat snapshot only now: until EndPrepare() succeeds, an
+	 * error still unwinds the live snapshot stack through AbortTransaction().
+	 */
+	tempcat_prepare_transaction();
 
 	/*
 	 * Now we clean up backend-internal state and release internal resources.
@@ -3653,6 +3683,10 @@ AbortTransaction(void)
 		AtEOXact_WorkFile();
 		pgstat_report_xact_timestamp(0);
 	}
+
+	/* Abort virtual catalog changes */
+	tempcat_abort_transaction();
+	temp_table_scope = false;
 
 	/*
 	 * Exported snapshots must be cleared before transaction ID is reset.  In
@@ -6015,6 +6049,14 @@ StartSubTransaction(void)
 {
 	TransactionState s = CurrentTransactionState;
 
+	/*
+	 * Push the tempcat subtransaction snapshot before anything that can
+	 * ereport below: AbortSubTransaction pops it unconditionally, so a
+	 * failure in AtSubStart_* or the start callbacks must find it pushed,
+	 * or the pop would free the parent snapshot's rows instead.
+	 */
+	tempcat_begin_subtransaction();
+
 	if (s->state != TRANS_DEFAULT)
 		elog(WARNING, "StartSubTransaction while in %s state",
 			 TransStateAsString(s->state));
@@ -6070,6 +6112,14 @@ CommitSubTransaction(void)
 		AtEOSubXact_Parallel(true, s->subTransactionId);
 		s->parallelModeLevel = 0;
 	}
+
+	/*
+	 * Merge this subtransaction's tempcat changes into the parent snapshot
+	 * only after the last fallible pre-commit step: on a later error
+	 * AbortSubTransaction pops the working snapshot, which must still be
+	 * this subtransaction's own.
+	 */
+	tempcat_commit_subtransaction();
 
 	/* Do the actual "commit", such as it is */
 	s->state = TRANS_COMMIT;
@@ -6252,6 +6302,14 @@ AbortSubTransaction(void)
 	 */
 	if (s->curTransactionOwner)
 	{
+		/*
+		 * Discard this subtransaction's tempcat changes.  Done inside the
+		 * curTransactionOwner guard so it fires only when StartSubTransaction
+		 * actually ran (and thus pushed a snapshot); a subtransaction aborted
+		 * from TBLOCK_SUBBEGIN never started, so there is nothing to pop.
+		 */
+		tempcat_abort_subtransaction();
+
 		AfterTriggerEndSubXact(false);
 		AtSubAbort_Portals(s->subTransactionId,
 						   s->parent->subTransactionId,
@@ -6309,6 +6367,20 @@ AbortSubTransaction(void)
 	 * with the commit case.
 	 */
 	XactReadOnly = s->prevXactReadOnly;
+
+	/*
+	 * Restore the tempcat temp-table scope flag.  BEGIN_TEMP_TABLE_SCOPE does
+	 * not install a catch block of its own, so an error that unwinds out of an
+	 * open scope relies on this (or on AbortTransaction at the top level) to
+	 * put the flag back.
+	 *
+	 * Note this is a save/restore, not a plain reset to false: a subtransaction
+	 * can be started *inside* an open scope -- e.g. an index expression that
+	 * calls a PL/pgSQL function with an EXCEPTION block, evaluated by
+	 * index_build() within index_create()'s scope -- and when such a subxact
+	 * aborts, the enclosing scope is still open and must stay on.
+	 */
+	temp_table_scope = s->prevTempTableScope;
 
 	RESUME_INTERRUPTS();
 }
@@ -6403,6 +6475,7 @@ PushTransaction(void)
 	s->blockState = TBLOCK_SUBBEGIN;
 	GetUserIdAndSecContext(&s->prevUser, &s->prevSecContext);
 	s->prevXactReadOnly = XactReadOnly;
+	s->prevTempTableScope = temp_table_scope;
 	s->startedInRecovery = p->startedInRecovery;
 	s->parallelModeLevel = 0;
 	s->executorSaysXactDoesWrites = false;

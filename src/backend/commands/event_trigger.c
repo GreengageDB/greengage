@@ -15,6 +15,7 @@
 
 #include "access/htup_details.h"
 #include "access/table.h"
+#include "access/tempcat.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
@@ -1038,10 +1039,11 @@ EventTriggerTableRewrite(Node *parsetree, Oid tableOid, int reason)
 static void
 EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata)
 {
-	MemoryContext context;
-	MemoryContext oldcontext;
+	MemoryContext	context;
+	MemoryContext	oldcontext;
 	ListCell   *lc;
 	bool		first = true;
+	bool		save_temp_table_scope;
 
 	/* Guard against stack overflow due to recursive event trigger */
 	check_stack_depth();
@@ -1054,6 +1056,14 @@ EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata)
 									"event trigger context",
 									ALLOCSET_DEFAULT_SIZES);
 	oldcontext = MemoryContextSwitchTo(context);
+
+	/*
+	 * DDL in an event trigger body is not part of the enclosing temp table
+	 * scope: an ordinary table created by a trigger firing during ALTER
+	 * TABLE of a temporary table must keep its catalog rows on disk.
+	 */
+	save_temp_table_scope = temp_table_scope;
+	temp_table_scope = false;
 
 	/* Call each event trigger. */
 	foreach(lc, fn_oid_list)
@@ -1089,6 +1099,8 @@ EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata)
 		/* Reclaim memory. */
 		MemoryContextReset(context);
 	}
+
+	temp_table_scope = save_temp_table_scope;
 
 	/* Restore old memory context and delete the temporary one. */
 	MemoryContextSwitchTo(oldcontext);

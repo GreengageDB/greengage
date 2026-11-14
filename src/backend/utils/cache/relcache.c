@@ -783,6 +783,14 @@ RelationBuildTupleDesc(Relation relation)
  * manageable.  The other subsidiary data structures are simple enough
  * to be easy to free explicitly, anyway.
  */
+static int
+rule_name_compare(const void *a, const void *b, void *arg)
+{
+	char	  **names = (char **) arg;
+
+	return strcmp(names[*(const int *) a], names[*(const int *) b]);
+}
+
 static void
 RelationBuildRuleLock(Relation relation)
 {
@@ -797,6 +805,8 @@ RelationBuildRuleLock(Relation relation)
 	int			numlocks;
 	RewriteRule **rules;
 	int			maxlocks;
+	char	  **rulenames;
+	int			maxnames;
 
 	/*
 	 * Make the private context.  Assume it'll not contain much data.
@@ -813,8 +823,10 @@ RelationBuildRuleLock(Relation relation)
 	 * necessary)
 	 */
 	maxlocks = 4;
+	maxnames = 4;
 	rules = (RewriteRule **)
 		MemoryContextAlloc(rulescxt, sizeof(RewriteRule *) * maxlocks);
+	rulenames = (char **) palloc(sizeof(char *) * maxnames);
 	numlocks = 0;
 
 	/*
@@ -904,9 +916,12 @@ RelationBuildRuleLock(Relation relation)
 		if (numlocks >= maxlocks)
 		{
 			maxlocks *= 2;
+			maxnames = maxlocks;
 			rules = (RewriteRule **)
 				repalloc(rules, sizeof(RewriteRule *) * maxlocks);
+			rulenames = (char **) repalloc(rulenames, sizeof(char *) * maxnames);
 		}
+		rulenames[numlocks] = pstrdup(NameStr(rewrite_form->rulename));
 		rules[numlocks++] = rule;
 	}
 
@@ -926,6 +941,34 @@ RelationBuildRuleLock(Relation relation)
 		MemoryContextDelete(rulescxt);
 		return;
 	}
+
+	/*
+	 * Although systable_beginscan() does not promise any row order, this
+	 * caller requires name order: rules fire in the order loaded.  The
+	 * index scan normally delivers them sorted by name, but rows merged
+	 * from the in-memory temp catalog arrive in insertion order, so sort
+	 * explicitly.
+	 */
+	if (numlocks > 1)
+	{
+		RewriteRule **sorted;
+		int		   *order;
+		int			i;
+
+		order = (int *) palloc(numlocks * sizeof(int));
+		for (i = 0; i < numlocks; i++)
+			order[i] = i;
+		qsort_arg(order, numlocks, sizeof(int), rule_name_compare, rulenames);
+
+		sorted = (RewriteRule **)
+			MemoryContextAlloc(rulescxt, sizeof(RewriteRule *) * numlocks);
+		for (i = 0; i < numlocks; i++)
+			sorted[i] = rules[order[i]];
+		rules = sorted;
+	}
+	for (int i = 0; i < numlocks; i++)
+		pfree(rulenames[i]);
+	pfree(rulenames);
 
 	/*
 	 * form a RuleLock and insert into relation

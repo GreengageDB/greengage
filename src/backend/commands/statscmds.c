@@ -17,6 +17,7 @@
 #include "access/relation.h"
 #include "access/relscan.h"
 #include "access/table.h"
+#include "access/tempcat.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
@@ -341,6 +342,9 @@ CreateStatistics(CreateStatsStmt *stmt)
 	Assert(ntypes > 0 && ntypes <= lengthof(types));
 	stxkind = construct_array(types, ntypes, CHAROID, 1, true, 'c');
 
+	BEGIN_TEMP_TABLE_SCOPE(get_rel_persistence(relid) == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(relid));
+
 	statrel = table_open(StatisticExtRelationId, RowExclusiveLock);
 
 	/*
@@ -428,6 +432,8 @@ CreateStatistics(CreateStatsStmt *stmt)
 	if (stmt->stxcomment != NULL)
 		CreateComments(statoid, StatisticExtRelationId, 0,
 					   stmt->stxcomment);
+
+	END_TEMP_TABLE_SCOPE();
 
 	/* Return stats object's address */
 	return myself;

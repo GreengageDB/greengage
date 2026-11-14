@@ -149,6 +149,7 @@
 #include "postgres.h"
 
 #include "access/distributedlog.h"
+#include "access/tempcat.h"
 #include "access/twophase.h"  /*max_prepared_xacts*/
 #include "access/xact.h"
 #include "cdb/cdbtm.h"
@@ -156,6 +157,7 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "lib/stringinfo.h"
+#include "storage/dsm.h"
 #include "storage/proc.h"
 #include "storage/procarray.h"
 #include "utils/builtins.h"
@@ -187,6 +189,85 @@ static HTAB *dumpHtab = NULL;
 static bool created_dump = false;
 
 static ResourceOwner DumpResOwner = NULL;	/* shared snapshot dump resources */
+
+/*
+ * Process-local copy of the slot's tempcat_version, to skip redundant
+ * deserialization.  A pooled reader can be re-targeted to a different
+ * session and so to a different slot whose version counter starts over;
+ * ReaderTempcatSlot remembers which slot the version belongs to, and a
+ * slot change invalidates the cached version.
+ */
+uint64 ReaderLastTempcatVersion = 0;
+static SharedSnapshotSlot *ReaderTempcatSlot = NULL;
+
+/* Payload copied by readerFillLocalTempcat, consumed by readerApplyLocalTempcat. */
+static char *ReaderTempcatPendingData = NULL;
+static int	ReaderTempcatPendingLen = 0;
+static uint64 ReaderTempcatPendingVersion = 0;
+
+/*
+ * Copy the tempcat payload published by the writer QE for this slot,
+ * unless already loaded.  The caller must hold the slot's shared lock;
+ * readerApplyLocalTempcat() deserializes the copy after the lock is
+ * released, so that relation_open() stays cancelable.
+ */
+void
+readerFillLocalTempcat(volatile SharedSnapshotSlot *slot)
+{
+	dsm_segment *seg;
+
+	if (ReaderTempcatSlot != (SharedSnapshotSlot *) slot)
+	{
+		ReaderTempcatSlot = (SharedSnapshotSlot *) slot;
+		ReaderLastTempcatVersion = 0;
+		/* Retargeted pooled reader: drop the previous session's rows. */
+		tempcat_reader_reset();
+	}
+
+	if (!enable_temp_memory_catalog ||
+		slot->tempcat_dsm == DSM_HANDLE_INVALID ||
+		slot->tempcat_version == ReaderLastTempcatVersion)
+		return;
+
+	seg = dsm_attach(slot->tempcat_dsm);
+	if (seg)
+	{
+		int		len = dsm_segment_map_length(seg);
+
+		if (ReaderTempcatPendingData != NULL)
+			pfree(ReaderTempcatPendingData);
+		ReaderTempcatPendingLen = len;
+		ReaderTempcatPendingData = MemoryContextAlloc(TopMemoryContext, len);
+		memcpy(ReaderTempcatPendingData, dsm_segment_address(seg), len);
+		ReaderTempcatPendingVersion = slot->tempcat_version;
+		dsm_detach(seg);
+
+		ereport((Debug_print_full_dtm ? LOG : DEBUG5),
+				(errmsg("readerFillLocalTempcat: copied tempcat from DSM, version=%lu",
+						(unsigned long) ReaderTempcatPendingVersion)));
+	}
+}
+
+/* Deserialize what readerFillLocalTempcat() copied; no LWLock held. */
+void
+readerApplyLocalTempcat(void)
+{
+	if (ReaderTempcatPendingData == NULL)
+		return;
+
+	tempcat_deserialize(ReaderTempcatPendingLen, ReaderTempcatPendingData);
+	pfree(ReaderTempcatPendingData);
+	ReaderTempcatPendingData = NULL;
+	ReaderTempcatPendingLen = 0;
+
+	/* Count the version only once loaded; a failure retries next time. */
+	ReaderLastTempcatVersion = ReaderTempcatPendingVersion;
+	ReaderTempcatPendingVersion = 0;
+
+	ereport((Debug_print_full_dtm ? LOG : DEBUG5),
+			(errmsg("readerApplyLocalTempcat: deserialized tempcat, version=%lu",
+					(unsigned long) ReaderLastTempcatVersion)));
+}
 
 /* MPP Shared Snapshot. */
 typedef struct SharedSnapshotStruct
@@ -560,12 +641,26 @@ SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription
 		sharedSnapshotArray->nextSlot = slot->slotindex;
 	}
 
+	/* Release tempcat DSM if present. */
+	if (slot->tempcat_dsm != DSM_HANDLE_INVALID)
+	{
+		dsm_segment *seg = dsm_find_mapping(slot->tempcat_dsm);
+		if (seg)
+			dsm_detach(seg);
+		slot->tempcat_dsm = DSM_HANDLE_INVALID;
+	}
+
 	/* reset the slotid which marks it as being unused. */
 	slot->slotid = -1;
 	slot->fullXid = InvalidFullTransactionId;
 	slot->startTimestamp = 0;
 	slot->distributedXid = InvalidDistributedTransactionId;
 	slot->segmateSync = 0;
+	/*
+	 * tempcat_version keeps counting: a reused slot must never repeat a
+	 * version, or a pooled reader QE that cached (slot, version) from the
+	 * previous slot owner would skip the new owner's publish.
+	 */
 
 	sharedSnapshotArray->numSlots -= 1;
 
@@ -736,7 +831,15 @@ readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext distributedTrans
 
 		dsm_detach(segment);
 
+		/*
+		 * Cursor slices run on reader gangs: pick up the writer's tempcat
+		 * state as well; readerApplyLocalTempcat() deserializes it after
+		 * the lock is released.
+		 */
+		readerFillLocalTempcat(src);
+
 		LWLockRelease(SharedLocalSnapshotSlot->slotLock);
+		readerApplyLocalTempcat();
 	}
 
 	Snapshot dumpsnapshot = entry->snapshot;

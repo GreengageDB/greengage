@@ -21,8 +21,10 @@
 #include <sys/unistd.h>
 
 #include "access/reloptions.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/url.h"
+#include "access/xact.h"
 #include "access/xlog_internal.h"
 #include "cdb/cdbappendonlyam.h"
 #include "cdb/cdbendpoint.h"
@@ -82,6 +84,7 @@ static bool check_optimizer(bool *newval, void **extra, GucSource source);
 static bool check_verify_gpfdists_cert(bool *newval, void **extra, GucSource source);
 static bool check_dispatch_log_stats(bool *newval, void **extra, GucSource source);
 static bool check_gp_workfile_compression(bool *newval, void **extra, GucSource source);
+static bool check_enable_temp_memory_catalog(bool *newval, void **extra, GucSource source);
 
 /* Helper function for guc setter */
 bool gpvars_check_gp_resqueue_priority_default_value(char **newval,
@@ -632,6 +635,23 @@ struct config_bool ConfigureNamesBool_gp[] =
 		&gp_enable_blkdir_sampling,
 		true,
 		NULL, NULL, NULL
+	},
+	{
+		{"gp_enable_temp_memory_catalog", PGC_USERSET, CUSTOM_OPTIONS,
+			gettext_noop("Use in-memory virtual catalog for temporary tables."),
+			gettext_noop("When enabled, temporary table metadata is stored in "
+						 "backend-private memory instead of pg_catalog, "
+						 "preventing catalog bloating from frequent temp table "
+						 "creation and deletion.  Metadata of such tables is "
+						 "not visible to plain queries on pg_catalog, and "
+						 "temporary tables cannot be created inside "
+						 "REPEATABLE READ transactions.  See doc/tempcat.md "
+						 "for the full list of known limitations."),
+			GUC_NOT_IN_SAMPLE | GUC_CHECK_HOOK_ON_RESET | GUC_NO_PROCONFIG
+		},
+		&enable_temp_memory_catalog,
+		false,
+		check_enable_temp_memory_catalog, NULL, NULL
 	},
 	{
 		{"gp_enable_hashjoin_size_heuristic", PGC_USERSET, QUERY_TUNING_METHOD,
@@ -3125,6 +3145,20 @@ struct config_bool ConfigureNamesBool_gp[] =
 struct config_int ConfigureNamesInt_gp[] =
 {
 	{
+		{"gp_tempcat_registry_capacity", PGC_POSTMASTER, CUSTOM_OPTIONS,
+			gettext_noop("Capacity of the in-memory temporary catalog dependency registry."),
+			gettext_noop("Hard limit of entries in the shared dependency-edge and "
+						 "OID-reservation hashes. Sessions that exceed it keep "
+						 "working: further cross-session dependency checks skip "
+						 "overflow entries with a WARNING. Changing it requires "
+						 "a restart.")
+		},
+		&tempcat_registry_capacity,
+		16384, 1024, 1048576,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"readable_external_table_timeout", PGC_USERSET, EXTERNAL_TABLES,
 			gettext_noop("Cancel the query if no data read within N seconds."),
 			gettext_noop("A value of 0 turns off the timeout."),
@@ -5319,6 +5353,50 @@ check_gp_workfile_compression(bool *newval, void **extra, GucSource source)
 		return false;
 	}
 #endif
+	return true;
+}
+
+/*
+ * A toggle is refused while the in-memory catalog still holds temporary
+ * table metadata: those rows stay backend-private and invisible to the
+ * on-disk catalog path that later statements use.
+ */
+static bool
+check_enable_temp_memory_catalog(bool *newval, void **extra, GucSource source)
+{
+	/* A SET to the current value changes nothing: always allow it. */
+	if (*newval == enable_temp_memory_catalog)
+		return true;
+
+	/*
+	 * On QEs (Gp_role == GP_ROLE_EXECUTE) the value only arrives through
+	 * QD-driven GUC synchronization, after this hook already validated the
+	 * toggle on the QD.  Reader QEs may also still hold a deserialized
+	 * tempcat copy that lags behind the QD state, so re-checking here
+	 * would reject legitimate synchronization.
+	 */
+	if (Gp_role == GP_ROLE_EXECUTE)
+		return true;
+
+	/*
+	 * Refuse any toggle inside a transaction block: statements before and
+	 * after the switch would mix on-disk and in-memory catalog rows for
+	 * the same transaction.
+	 */
+	if (IsTransactionBlock())
+	{
+		GUC_check_errmsg("gp_enable_temp_memory_catalog cannot be changed inside a transaction block");
+		return false;
+	}
+
+	if (!*newval && !tempcat_is_empty())
+	{
+		GUC_check_errmsg("cannot disable gp_enable_temp_memory_catalog while the in-memory catalog holds temporary table metadata");
+		GUC_check_errdetail("Temporary tables created while the setting was enabled still have their metadata in backend-private memory.");
+		GUC_check_errhint("Drop those temporary tables before disabling the setting.");
+		return false;
+	}
+
 	return true;
 }
 

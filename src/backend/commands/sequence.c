@@ -21,6 +21,7 @@
 #include "access/multixact.h"
 #include "access/relation.h"
 #include "access/table.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/xact.h"
 #include "access/xlog.h"
@@ -171,6 +172,10 @@ DefineSequence(ParseState *pstate, CreateSeqStmt *seq)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("unlogged sequences are not supported")));
 
+	if (seq->sequence->relpersistence == RELPERSISTENCE_TEMP &&
+		Gp_role == GP_ROLE_DISPATCH)
+		tempcat_check_rr_create();
+
 	/*
 	 * If if_not_exists was given and a relation with the same name already
 	 * exists, bail out. (Note: we needn't check this when not if_not_exists,
@@ -288,6 +293,7 @@ DefineSequence(ParseState *pstate, CreateSeqStmt *seq)
 	table_close(rel, NoLock);
 
 	/* fill in pg_sequence */
+	BEGIN_TEMP_TABLE_SCOPE(seq->sequence->relpersistence == RELPERSISTENCE_TEMP);
 	rel = table_open(SequenceRelationId, RowExclusiveLock);
 	tupDesc = RelationGetDescr(rel);
 
@@ -307,6 +313,7 @@ DefineSequence(ParseState *pstate, CreateSeqStmt *seq)
 
 	heap_freetuple(tuple);
 	table_close(rel, RowExclusiveLock);
+	END_TEMP_TABLE_SCOPE();
 
 	return address;
 }
@@ -1893,6 +1900,9 @@ process_owned_by(Relation seqrel, List *owned_by, bool for_identity)
 	 * OK, we are ready to update pg_depend.  First remove any existing
 	 * dependencies for the sequence, then optionally add a new one.
 	 */
+	BEGIN_TEMP_TABLE_SCOPE(seqrel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+						  tempcat_relation_is_virtual(RelationGetRelid(seqrel)));
+
 	deleteDependencyRecordsForClass(RelationRelationId, RelationGetRelid(seqrel),
 									RelationRelationId, deptype);
 
@@ -1909,6 +1919,8 @@ process_owned_by(Relation seqrel, List *owned_by, bool for_identity)
 		depobject.objectSubId = 0;
 		recordDependencyOn(&depobject, &refobject, deptype);
 	}
+
+	END_TEMP_TABLE_SCOPE();
 
 	/* Done, but hold lock until commit */
 	if (tablerel)
