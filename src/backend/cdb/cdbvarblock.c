@@ -20,18 +20,11 @@
 
 #include "cdb/cdbvarblock.h"
 
-static VarBlockByteLen VarBlockGetItemLen(
-				   VarBlockReader *varBlockReader,
-				   int itemIndex);
 static void VarBlockGetItemPtrAndLen(
 						 VarBlockReader *varBlockReader,
 						 int itemIndex,
 						 uint8 **itemPtr,
 						 VarBlockByteLen *itemLen);
-static VarBlockByteOffset VarBlockGetOffset(
-				  VarBlockHeader *header,
-				  VarBlockByteOffset offsetToOffsetArray,
-				  int itemIndex);
 
 
 /*
@@ -351,37 +344,6 @@ VarBlockMakerFinish(
 	return bufferLen;
 }
 
-static VarBlockByteOffset
-VarBlockGetOffset(
-				  VarBlockHeader *header,
-				  VarBlockByteOffset offsetToOffsetArray,
-				  int itemIndex)
-{
-	uint8	   *offsetArray;
-
-	Assert(header != NULL);
-	Assert(offsetToOffsetArray >= VARBLOCK_HEADER_LEN);
-	Assert(itemIndex >= 0);
-	Assert(itemIndex < VarBlockGet_itemCount(header));
-
-	offsetArray = ((uint8 *) header) + offsetToOffsetArray;
-
-	if (VarBlockGet_offsetsAreSmall(header))
-	{
-		return ((VarBlockByteOffset16 *) offsetArray)[itemIndex];
-	}
-	else
-	{
-		VarBlockByteOffset24 offset24;
-
-		memcpy(&offset24,
-			   offsetArray + (itemIndex * VARBLOCK_BYTE_OFFSET_24_LEN),
-			   VARBLOCK_BYTE_OFFSET_24_LEN);
-
-		return offset24.byteOffset24;
-	}
-}
-
 #define MAX_VARBLOCK_CHECK_ERROR_STR 200
 static char VarBlockCheckErrorStr[MAX_VARBLOCK_CHECK_ERROR_STR] = "\0";
 
@@ -669,50 +631,6 @@ VarBlockReaderInit(
 	varBlockReader->nextItemPtr = &buffer[VARBLOCK_HEADER_LEN];
 }
 
-static VarBlockByteLen
-VarBlockGetItemLen(
-				   VarBlockReader *varBlockReader,
-				   int itemIndex)
-{
-	VarBlockHeader *header;
-	VarBlockByteLen itemLen;
-	VarBlockByteOffset offset;
-
-	Assert(varBlockReader != NULL);
-	Assert(itemIndex >= 0);
-
-	header = varBlockReader->header;
-
-	offset = VarBlockGetOffset(
-							   header,
-							   varBlockReader->offsetToOffsetArray,
-							   itemIndex);
-	if (itemIndex < VarBlockGet_itemCount(header) - 1)
-	{
-		VarBlockByteOffset nextOffset;
-
-		nextOffset = VarBlockGetOffset(
-									   header,
-									   varBlockReader->offsetToOffsetArray,
-									   itemIndex + 1);
-
-		itemLen = nextOffset - offset;
-		Assert(itemLen >= 0);
-	}
-	else
-	{
-		Assert(itemIndex == VarBlockGet_itemCount(header) - 1);
-
-		itemLen =
-			VARBLOCK_HEADER_LEN +
-			VarBlockGet_itemLenSum(header) -
-			offset;
-		Assert(itemLen >= 0);
-	}
-
-	return itemLen;
-}
-
 static void
 VarBlockGetItemPtrAndLen(
 						 VarBlockReader *varBlockReader,
@@ -770,24 +688,7 @@ VarBlockReaderGetNextItemPtr(
 							 VarBlockReader *varBlockReader,
 							 VarBlockByteLen *itemLen)
 {
-	uint8	   *nextItemPtr;
-
-	Assert(varBlockReader != NULL);
-	Assert(itemLen != NULL);
-
-	if (varBlockReader->nextIndex >=
-		VarBlockGet_itemCount(varBlockReader->header))
-	{
-		return NULL;
-	}
-
-	*itemLen = VarBlockGetItemLen(varBlockReader, varBlockReader->nextIndex);
-	nextItemPtr = varBlockReader->nextItemPtr;
-
-	varBlockReader->nextItemPtr += *itemLen;
-	varBlockReader->nextIndex++;
-
-	return nextItemPtr;
+	return VarBlockReaderGetNextItemPtrInline(varBlockReader, itemLen);
 }
 
 /*

@@ -193,7 +193,7 @@ typedef DatumStreamFetchDescData *DatumStreamFetchDesc;
 
 /* Stream access method */
 extern void datumstreamread_getlarge(DatumStreamRead * ds, Datum *datum, bool *null);
-inline static void
+static pg_attribute_always_inline void
 datumstreamread_get(DatumStreamRead * acc, Datum *datum, bool *null)
 {
 	if (acc->largeObjectState == DatumStreamLargeObjectState_None)
@@ -210,7 +210,7 @@ datumstreamread_get(DatumStreamRead * acc, Datum *datum, bool *null)
 }
 
 extern int	datumstreamread_advancelarge(DatumStreamRead * ds);
-inline static int
+static pg_attribute_always_inline int
 datumstreamread_advance(DatumStreamRead * acc)
 {
 	if (acc->largeObjectState == DatumStreamLargeObjectState_None)

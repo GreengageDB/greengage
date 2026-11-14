@@ -1214,7 +1214,7 @@ extern void DatumStreamBlockRead_CheckDenseGetInvariant(
 #endif
 
 /* Stream access method */
-inline static void
+static pg_attribute_always_inline void
 DatumStreamBlockRead_Get(DatumStreamBlockRead * dsr, Datum *datum, bool *null)
 {
 	/*
@@ -1370,19 +1370,20 @@ DatumStreamBlockRead_Get(DatumStreamBlockRead * dsr, Datum *datum, bool *null)
 			/*
 			 * Performance is so critical we don't use a switch statement here.
 			 */
+			/* The same Datum as fetch_att gives, with its sign extended. */
 			if (dsr->typeInfo.datumlen == 1)
 			{
-				*datum = *(uint8 *) dsr->datump;
+				*datum = CharGetDatum(*(char *) dsr->datump);
 			}
 			else if (dsr->typeInfo.datumlen == 2)
 			{
 				Assert(IsAligned(dsr->datump, 2));
-				*datum = *(uint16 *) dsr->datump;
+				*datum = Int16GetDatum(*(int16 *) dsr->datump);
 			}
 			else if (dsr->typeInfo.datumlen == 4)
 			{
 				Assert(IsAligned(dsr->datump, 4));
-				*datum = *(uint32 *) dsr->datump;
+				*datum = Int32GetDatum(*(int32 *) dsr->datump);
 			}
 			else if (dsr->typeInfo.datumlen == 8)
 			{
@@ -1421,7 +1422,7 @@ DatumStreamBlockRead_Get(DatumStreamBlockRead * dsr, Datum *datum, bool *null)
 		{
 			if (dsr->typeInfo.datumlen == 4)
 			{
-				*datum = (uint32) dsr->delta_datum_p;
+				*datum = Int32GetDatum((int32) dsr->delta_datum_p);
 			}
 			else if (dsr->typeInfo.datumlen == 8)
 			{
@@ -1436,7 +1437,7 @@ DatumStreamBlockRead_Get(DatumStreamBlockRead * dsr, Datum *datum, bool *null)
 	}
 }
 
-inline static int
+static pg_attribute_always_inline int
 DatumStreamBlockRead_AdvanceOrig(DatumStreamBlockRead * dsr)
 {
 	Assert(dsr);
@@ -1719,7 +1720,7 @@ DatumStreamBlockRead_AdvanceDenseDelta(DatumStreamBlockRead * dsr)
 	return DELTA_COMPRESSION_OK;
 }
 
-inline static int
+static pg_attribute_always_inline int
 DatumStreamBlockRead_AdvanceDense(DatumStreamBlockRead * dsr)
 {
 	Assert(dsr);
@@ -2033,7 +2034,7 @@ DatumStreamBlockRead_AdvanceDense(DatumStreamBlockRead * dsr)
 	return 1;
 }
 
-inline static int
+static pg_attribute_always_inline int
 DatumStreamBlockRead_Advance(DatumStreamBlockRead * dsr)
 {
 	/*
