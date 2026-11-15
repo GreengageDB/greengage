@@ -112,11 +112,17 @@ CParseHandlerHint::StartElement(const XMLCh *const,	 //element_uri,
 	ULONG skew_factor = CDXLOperatorFactory::ExtractConvertAttrValueToUlong(
 		m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenSkewFactor,
 		EdxltokenHint, true, SKEW_FACTOR);
+	ULONG join_arity_for_associativity =
+		CDXLOperatorFactory::ExtractConvertAttrValueToUlong(
+			m_parse_handler_mgr->GetDXLMemoryManager(), attrs,
+			EdxltokenJoinArityForAssociativity, EdxltokenHint, true,
+			gpos::int_max);
 
 	m_hint = GPOS_NEW(m_mp) CHint(
 		join_arity_for_associativity_commutativity, array_expansion_threshold,
 		join_order_dp_threshold, broadcast_threshold, enforce_constraint_on_dml,
-		push_group_by_below_setop_threshold, xform_bind_threshold, skew_factor);
+		push_group_by_below_setop_threshold, xform_bind_threshold, skew_factor,
+		join_arity_for_associativity);
 }
 
 //---------------------------------------------------------------------------

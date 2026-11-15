@@ -29,10 +29,18 @@ ULONG CEscapeMechanismTest::m_ulEscapeMechanismTestCounter =
 	0;	// start from first test
 
 // minidump files
+//
+// An xform disabled during optimization of a minidump above its join arity
+// limit stays disabled for the following minidumps, so the minidumps that
+// expect JoinAssociativity to be explored go first.
 const CHAR *rgszEscapeMechanismFileNames[] = {
+	"../data/dxl/minidump/JoinArityAssociativityAtLimit.mdp",
+	"../data/dxl/minidump/JoinArityAssociativityBelowLimit.mdp",
 	"../data/dxl/minidump/JoinArityAssociativityCommutativityAtLimit.mdp",
 	"../data/dxl/minidump/JoinArityAssociativityCommutativityAboveLimit.mdp",
 	"../data/dxl/minidump/JoinArityAssociativityCommutativityBelowLimit.mdp",
+	"../data/dxl/minidump/JoinArityAssociativityAboveLimit.mdp",
+	"../data/dxl/minidump/JoinArityAssociativityTotalAboveLimit.mdp",
 };
 
 

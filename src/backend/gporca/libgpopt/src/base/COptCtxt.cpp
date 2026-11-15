@@ -50,7 +50,8 @@ COptCtxt::COptCtxt(CMemoryPool *mp, CColumnFactory *col_factory,
 	  m_fDMLQuery(false),
 	  m_has_master_only_tables(false),
 	  m_has_volatile_func(false),
-	  m_has_replicated_tables(false)
+	  m_has_replicated_tables(false),
+	  m_ulJoinArityForAssociativity(0)
 {
 	GPOS_ASSERT(NULL != mp);
 	GPOS_ASSERT(NULL != col_factory);
