@@ -136,7 +136,7 @@ typedef struct TempcatSnapshotData *TempcatSnapshot;
 static MemoryContext LocalMemoryContextPrivate = NULL;
 
 /* Whether in-memory catalog feature is enabled */
-bool enable_temp_memory_catalog = false;
+bool enable_temp_memory_catalog = true;
 /* Whether current DDL operation targets a temp table (see tempcat.h) */
 bool temp_table_scope = false;
 /* Counters used to generate unique virtual ItemPointers */
