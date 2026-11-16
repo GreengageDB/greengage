@@ -1102,7 +1102,7 @@ class TestResourceEstimator(GpTestCase):
             available_kb = {'sdw3': 1024, 'sdw4': 8 * 1024 * 1024, 'sdw5': 1024}
             return (True, available_kb[hostname], '')
         def reserve_space_size_side_effect(hostname, *args, **kwargs):
-            self.assertEqual(hostname, 'sdw4') # Space should be reseved on the correct host
+            self.assertEqual(hostname, 'sdw4') # Space should be reserved on the correct host
 
         mock_resource_estimator = Mock()
         mock_resource_estimator.check_space.side_effect = check_space_side_effect
@@ -1131,9 +1131,7 @@ class TestResourceEstimator(GpTestCase):
         mirror_move.segment_size = size
 
         intermediate_host = Planner.select_intermediate_host(planner, primary_move, mirror_move, {}, mock_resource_estimator)
-        self.assertEqual(intermediate_host.hostname, 'sdw4') # Check that the returned host it correct too
-
-
+        self.assertEqual(intermediate_host.hostname, 'sdw4') # Check that the returned host is correct too
 
 class TestPortAllocator(GpTestCase):
     """
