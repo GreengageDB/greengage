@@ -84,6 +84,12 @@ typedef enum {
 	FINC_OS_MEM_INTERFACE = 20,
 	FINC_OS_CREATE_THREAD = 21,
 	FINC_PKT_TOO_LONG = 22,
+	/*
+	 * TEST ONLY: emulate an error unwinding out of SendChunkUDPIFC with the
+	 * connection buffer unset (pBuff == NULL), followed by a swallower above
+	 * (elog_demote/elog_dismiss) resuming execution on the poisoned state.
+	 */
+	FINC_SEND_DISMISS = 26,
 
 	/* These are used to inject network faults. */
 	FINC_NET_PKT_DUP = 24,
