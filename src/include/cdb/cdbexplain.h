@@ -20,6 +20,7 @@
 struct CdbDispatchResults;              /* #include "cdb/cdbdispatchresult.h" */
 struct PlanState;                       /* #include "nodes/execnodes.h" */
 struct QueryDesc;                       /* #include "executor/execdesc.h" */
+struct StringInfoData;                  /* #include "lib/stringinfo.h" */
 
 struct CdbExplain_ShowStatCtx;          /* private, in "cdb/cdbexplain.c" */
 
@@ -81,6 +82,54 @@ cdbexplain_agg_avg(CdbExplain_Agg *agg)
 void
 cdbexplain_localExecStats(struct PlanState                 *planstate,
                           struct CdbExplain_ShowStatCtx    *showstatctx);
+
+/*
+ * Hooks for extensions to send statistics of their own from each qExec to
+ * the qDisp, with the statistics of the qExec's slice that EXPLAIN ANALYZE
+ * collects, and auto_explain with log_analyze too: the hooks cannot tell
+ * which one asked, and a qExec does not know the options of an EXPLAIN,
+ * those of extensions included.  A slice that the qDisp runs itself sends
+ * no message.
+ *
+ * On a qExec, cdbexplain_send_hook runs while the statistics of its slice
+ * are written, in ExecutorEnd of each statement whose slice table asks for
+ * INSTRUMENT_CDB, so an extension can tell at ExecutorStart that it will
+ * run; queryDesc is that of the statement.  It adds its data to buf with
+ * cdbexplain_appendExtensionData, under a name that tells it from the data
+ * of other extensions.
+ *
+ * On the qDisp, cdbexplain_recv_hook runs where the qDisp takes in the
+ * statistics of a slice: for each qExec's message once with name NULL,
+ * data NULL and len 0, so that an extension can tell a qExec that sent
+ * nothing of its own, then once for each piece of data the qExec sent.
+ * The qDisp takes in the statistics of an initplan dispatched on its own
+ * when the initplan ends, and those of the main plan when EXPLAIN prints
+ * the plan, before explain_per_plan_hook runs for it, or when auto_explain
+ * logs it; each at most once, so each message reaches the hook at most
+ * once, and those of the main plan of a statement that auto_explain does
+ * not log never do.  showstatctx is that of the statement, queryDesc->showstatctx,
+ * which EXPLAIN sets before ExecutorStart and auto_explain in its
+ * ExecutorStart hook, and which lives as long as the QueryDesc; sliceIndex,
+ * segindex and qe_identifier are those of the qExec, segindex -1 for one
+ * on the coordinator.  The data is not aligned and lives only during the
+ * call.
+ *
+ * Each hook calls the one it replaced, if any.
+ */
+typedef void (*cdbexplain_send_hook_type) (struct QueryDesc *queryDesc,
+										   struct StringInfoData *buf);
+extern PGDLLIMPORT cdbexplain_send_hook_type cdbexplain_send_hook;
+
+typedef void (*cdbexplain_recv_hook_type) (struct CdbExplain_ShowStatCtx *showstatctx,
+										   int sliceIndex, int segindex,
+										   int qe_identifier,
+										   const char *name,
+										   const char *data, int len);
+extern PGDLLIMPORT cdbexplain_recv_hook_type cdbexplain_recv_hook;
+
+extern void cdbexplain_appendExtensionData(struct StringInfoData *buf,
+										   const char *name,
+										   const void *data, int len);
 
 /*
  * cdbexplain_sendExecStats
