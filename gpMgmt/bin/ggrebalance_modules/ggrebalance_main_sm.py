@@ -192,7 +192,7 @@ class GGRebalanceMainSM:
             # to check their shutdown flags. Without the exit here the planning
             # would run to the end, and the plan would be saved to the rebalance
             # schema before the interruption is noticed.
-            self.logger.info(f'shutdown requested in state "{self.state}", the operation was not started. Exiting...')
+            self.logger.info(f'shutdown requested in state "{self.state}", no shrink/expand/rebalance operation was started yet. Exiting...')
             sys.exit(1)
 
         if self.hard_shutdown:
