@@ -20,6 +20,7 @@
 #include "catalog/pg_inherits.h"
 #include "commands/createas.h"
 #include "commands/defrem.h"
+#include "commands/explain_state.h"
 #include "commands/prepare.h"
 #include "commands/queue.h"
 #include "executor/execUtils.h"
@@ -235,7 +236,7 @@ ExplainQuery(ParseState *pstate, ExplainStmt *stmt, const char *queryString,
 			es->dxl = defGetBoolean(opt);
 		else if (strcmp(opt->defname, "slicetable") == 0)
 			es->slicetable = defGetBoolean(opt);
-		else
+		else if (!ApplyExtensionExplainOption(es, opt, pstate))
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
 					 errmsg("unrecognized EXPLAIN option \"%s\"",
@@ -262,6 +263,10 @@ ExplainQuery(ParseState *pstate, ExplainStmt *stmt, const char *queryString,
 
 	if (explain_memory_verbosity >= EXPLAIN_MEMORY_VERBOSITY_DETAIL)
 		es->memory_detail = true;
+
+	/* plugin specific option validation */
+	if (explain_validate_options_hook)
+		(*explain_validate_options_hook) (es, stmt->options, pstate);
 
 	/*
 	 * Parse analysis was done already, but we still have to run the rule

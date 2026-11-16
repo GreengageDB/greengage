@@ -56,6 +56,10 @@ typedef struct ExplainState
 	bool		subplanDispatchedSeparately;
 
 	PlanState  *parentPlanState;
+
+	/* extensions, see explain_state.h */
+	void	  **extension_state;
+	int			extension_state_allocated;
 } ExplainState;
 
 /* Hook for plugins to get control in ExplainOneQuery() */
