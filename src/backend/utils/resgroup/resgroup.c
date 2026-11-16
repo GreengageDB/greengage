@@ -661,14 +661,15 @@ ResGroupDropFinish(const ResourceGroupCallbackContext *callbackCtx,
 				   bool isCommit)
 {
 	ResGroupData	*group;
-	volatile int	savedInterruptHoldoffCount;
+	int32			savedInterruptHoldoffCount;
+	MemoryContext	oldcontext = CurrentMemoryContext;
 
 	LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
 
+	savedInterruptHoldoffCount = InterruptHoldoffCount;
+
 	PG_TRY();
 	{
-		savedInterruptHoldoffCount = InterruptHoldoffCount;
-
 		group = groupHashFind(callbackCtx->groupid, true);
 
 		if (Gp_role == GP_ROLE_DISPATCH)
@@ -698,6 +699,7 @@ ResGroupDropFinish(const ResourceGroupCallbackContext *callbackCtx,
 	}
 	PG_CATCH();
 	{
+		MemoryContextSwitchTo(oldcontext);
 		InterruptHoldoffCount = savedInterruptHoldoffCount;
 		if (elog_demote(WARNING))
 		{
@@ -723,12 +725,15 @@ ResGroupDropFinish(const ResourceGroupCallbackContext *callbackCtx,
 void
 ResGroupCreateOnAbort(const ResourceGroupCallbackContext *callbackCtx)
 {
-	volatile int savedInterruptHoldoffCount;
+	int32			savedInterruptHoldoffCount;
+	MemoryContext	oldcontext = CurrentMemoryContext;
 
 	LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
+
+	savedInterruptHoldoffCount = InterruptHoldoffCount;
+
 	PG_TRY();
 	{
-		savedInterruptHoldoffCount = InterruptHoldoffCount;
 		removeGroup(callbackCtx->groupid);
 		/* remove the os dependent part for this resource group */
 		cgroupOpsRoutine->destroycgroup(callbackCtx->groupid, true);
@@ -749,6 +754,7 @@ ResGroupCreateOnAbort(const ResourceGroupCallbackContext *callbackCtx)
 	}
 	PG_CATCH();
 	{
+		MemoryContextSwitchTo(oldcontext);
 		InterruptHoldoffCount = savedInterruptHoldoffCount;
 		if (elog_demote(WARNING))
 		{
@@ -835,15 +841,17 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 	ResGroupData	*group;
 	ResGroupCaps	oldCaps;
 	ResGroupCaps	newCaps;
-	volatile int	savedInterruptHoldoffCount;
+	int32			savedInterruptHoldoffCount;
+	MemoryContext	oldcontext = CurrentMemoryContext;
 
 	SIMPLE_FAULT_INJECTOR("resgroup_alter_on_commit");
 
 	LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
 
+	savedInterruptHoldoffCount = InterruptHoldoffCount;
+
 	PG_TRY();
 	{
-		savedInterruptHoldoffCount = InterruptHoldoffCount;
 		group = groupHashFind(callbackCtx->groupid, true);
 
 		oldCaps = group->caps;
@@ -923,6 +931,7 @@ ResGroupAlterOnCommit(const ResourceGroupCallbackContext *callbackCtx)
 	}
 	PG_CATCH();
 	{
+		MemoryContextSwitchTo(oldcontext);
 		InterruptHoldoffCount = savedInterruptHoldoffCount;
 		if (elog_demote(WARNING))
 		{

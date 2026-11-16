@@ -353,6 +353,15 @@ select count(distinct a) filter (where a > 3),count( distinct b) filter (where a
 -- fix hang of multi-dqa with filter (https://github.com/GreengageDB/greengage/issues/14728)
 select count(distinct a) filter (where a > 3), count(distinct b) from dqa_f1;
 
+-- filter of a non-first DQA must not see columns nulled out by the previous
+-- split of the same input tuple
+select count(distinct b), count(distinct a) filter (where a > 3) from dqa_f1;
+select count(distinct a), count(distinct b) filter (where b > 3) from dqa_f1;
+select c, count(distinct b) from dqa_f1 group by c
+  having count(distinct a) filter (where a > 3) > 1 order by c;
+select count(distinct a), count(distinct b) filter (where b > 3),
+       count(distinct c) filter (where b < 2) from dqa_f1;
+
 explain select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1;
 
 explain select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1 group by b;
@@ -381,6 +390,18 @@ set enable_groupagg = off;
 -- the following SQL should use two stage agg
 explain select count(distinct a), sum(b), sum(c) from dqa_f1;
 select count(distinct a), sum(b), sum(c) from dqa_f1;
+
+-- MultiDQA with filter in HAVING. Building the multi-stage paths must not
+-- strip the filter from the HAVING qual shared with the single-stage paths.
+-- The filtered DQA is 1, so no rows are expected.
+set enable_hashagg = off;
+select count(distinct b) from dqa_f1 having count(distinct a) filter (where a > 15) > 1;
+explain (verbose, costs off) select count(distinct b) from dqa_f1 having count(distinct a) filter (where a > 15) > 1;
+
+-- Same with the multi-stage plan, the filter is evaluated in TupleSplit
+set enable_hashagg = on;
+select count(distinct b) from dqa_f1 having count(distinct a) filter (where a > 15) > 1;
+explain (verbose, costs off) select count(distinct b) from dqa_f1 having count(distinct a) filter (where a > 15) > 1;
 
 -- multi DQA with primary key
 create table dqa_unique(a int, b int, c int, d int, primary key(a, b));

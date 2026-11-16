@@ -155,7 +155,7 @@ static void split_data(ini_t *ini) {
 }
 
 #define S3MAXPGPATH 1024
-const static int extssl_protocol  = CURL_SSLVERSION_TLSv1;
+const static long extssl_protocol  = CURL_SSLVERSION_TLSv1;
 static const char* extssl_cert = "gpfdists/client.crt";
 static const char* extssl_key = "gpfdists/client.key";
 static const char* extssl_ca = "gpfdists/root.crt";
@@ -189,9 +189,9 @@ static CURL *create_curl_from_url(const char *url, const char *datadir) {
         /* set the file with the CA certificates, for validating the server */
         INICURL_EASY_SETOPT(curl, CURLOPT_CAINFO, extssl_cas_full);
         /* set cert verification */
-        INICURL_EASY_SETOPT(curl, CURLOPT_SSL_VERIFYPEER, 1);
+        INICURL_EASY_SETOPT(curl, CURLOPT_SSL_VERIFYPEER, 1L);
         /* set host verification */
-        INICURL_EASY_SETOPT(curl, CURLOPT_SSL_VERIFYHOST, 2);
+        INICURL_EASY_SETOPT(curl, CURLOPT_SSL_VERIFYHOST, 2L);
         /* set protocol */
         INICURL_EASY_SETOPT(curl, CURLOPT_SSLVERSION, extssl_protocol);
     }

@@ -130,6 +130,7 @@ DROP TABLE public.test_issue_12936;
 -- Missing support function for partitions
 \c regression
 DROP SCHEMA equal_operator_not_in_search_path_schema CASCADE;
+DROP TABLE equal_operator_not_in_search_path_table;
 
 
 -- Incompatible GUC settings

@@ -618,6 +618,39 @@ my %tests = (
 		like => { binary_upgrade => 1, },
 	},
 
+	'CREATE TABLE regress_pg_dump_schema.parttab' => {
+		regexp => qr/^
+			\QCREATE TABLE regress_pg_dump_schema.parttab (\E
+			\n\s+\Qcol1 integer,\E
+			\n\s+\Qcol2 integer\E
+			\n\)\n\QPARTITION BY RANGE (col2)\E/xm,
+		like => { binary_upgrade => 1, },
+	},
+
+	'CREATE INDEX parttab_col1_col2_idx' => {
+		regexp => qr/^
+			\QCREATE UNIQUE INDEX parttab_col1_col2_idx ON ONLY regress_pg_dump_schema.parttab USING btree (col1, col2);\E
+			/xm,
+		like => { binary_upgrade => 1, },
+	},
+
+	'CREATE TABLE regress_pg_dump_schema.parttab_pk' => {
+		regexp => qr/^
+			\QCREATE TABLE regress_pg_dump_schema.parttab_pk (\E
+			\n\s+\Qcol1 integer NOT NULL,\E
+			\n\s+\Qcol2 integer NOT NULL\E
+			\n\)\n\QPARTITION BY RANGE (col2)\E/xm,
+		like => { binary_upgrade => 1, },
+	},
+
+	'ADD CONSTRAINT parttab_pk_pkey' => {
+		regexp => qr/^
+			\QALTER TABLE ONLY regress_pg_dump_schema.parttab_pk\E
+			\n\s+\QADD CONSTRAINT parttab_pk_pkey PRIMARY KEY (col1, col2);\E
+			/xm,
+		like => { binary_upgrade => 1, },
+	},
+
 	'ALTER INDEX pkey DEPENDS ON extension' => {
 		create_order => 11,
 		create_sql =>

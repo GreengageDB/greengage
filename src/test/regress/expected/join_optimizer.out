@@ -2376,16 +2376,19 @@ select * from
   j1_tbl full join
   (select * from j2_tbl order by j2_tbl.i desc, j2_tbl.k asc) j2_tbl
   on j1_tbl.i = j2_tbl.i and j1_tbl.i = j2_tbl.k;
-                              QUERY PLAN                              
-----------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Full Join
-         Hash Cond: ((j1_tbl.i = j2_tbl.i) AND (j1_tbl.i = j2_tbl.k))
-         ->  Seq Scan on j1_tbl
-         ->  Hash
+   ->  Merge Full Join
+         Merge Cond: ((j1_tbl.i = j2_tbl.i) AND (j1_tbl.i = j2_tbl.k))
+         ->  Sort
+               Sort Key: j1_tbl.i, j1_tbl.i
+               ->  Seq Scan on j1_tbl
+         ->  Sort
+               Sort Key: j2_tbl.i, j2_tbl.k
                ->  Seq Scan on j2_tbl
  Optimizer: GPORCA
-(7 rows)
+(10 rows)
 
 select * from
   j1_tbl full join
@@ -2654,33 +2657,38 @@ where not exists (
               ) a1 on t3.c2 = a1.c1
   where t1.c1 = t2.c2
 );
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Hash Anti Join
-   Hash Cond: (t1.c1 = t2.c2)
-   ->  Gather Motion 3:1  (slice1; segments: 3)
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Anti Join
+         Hash Cond: (t1.c1 = t2.c2)
          ->  Seq Scan on tt4x t1
-   ->  Hash
-         ->  Hash Left Join
-               Hash Cond: (t3.c2 = t5.c1)
-               ->  Gather Motion 3:1  (slice2; segments: 3)
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: t2.c2
                      ->  Hash Left Join
-                           Hash Cond: (t2.c3 = t3.c1)
+                           Hash Cond: (t3.c2 = t5.c1)
                            ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                 Hash Key: t2.c3
-                                 ->  Seq Scan on tt4x t2
+                                 Hash Key: t3.c2
+                                 ->  Hash Left Join
+                                       Hash Cond: (t2.c3 = t3.c1)
+                                       ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                             Hash Key: t2.c3
+                                             ->  Seq Scan on tt4x t2
+                                       ->  Hash
+                                             ->  Seq Scan on tt4x t3
                            ->  Hash
-                                 ->  Seq Scan on tt4x t3
-               ->  Hash
-                     ->  Hash Left Join
-                           Hash Cond: (t4.c2 = t5.c1)
-                           ->  Gather Motion 3:1  (slice4; segments: 3)
-                                 ->  Seq Scan on tt4x t4
-                           ->  Hash
-                                 ->  Gather Motion 3:1  (slice5; segments: 3)
-                                       ->  Seq Scan on tt4x t5
+                                 ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                       Hash Key: t5.c1
+                                       ->  Hash Left Join
+                                             Hash Cond: (t4.c2 = t5.c1)
+                                             ->  Redistribute Motion 3:3  (slice6; segments: 3)
+                                                   Hash Key: t4.c2
+                                                   ->  Seq Scan on tt4x t4
+                                             ->  Hash
+                                                   ->  Seq Scan on tt4x t5
  Optimizer: Pivotal Optimizer (GPORCA)
-(24 rows)
+(29 rows)
 
 --
 -- regression test for problems of the sort depicted in bug #3494

@@ -266,6 +266,41 @@ get_major_server_version(ClusterInfo *cluster)
 	}
 }
 
+/*
+ * get_dbid()
+ *
+ * gets the dbid (in unsigned int) for the given datadir. Assumes
+ * that datadir is an absolute path to a valid pgdata directory. The dbid is
+ * retrieved by reading the internal.auto.conf file.
+ */
+uint32
+get_dbid(ClusterInfo *cluster)
+{
+	FILE	   *internal_fd;
+	char		internal_filename[MAXPGPATH];
+	char 		line[MAX_STRING];
+	uint32 		dbid = 0;
+
+	snprintf(internal_filename, sizeof(internal_filename), "%s/internal.auto.conf",
+			 cluster->pgdata);
+	if ((internal_fd = fopen(internal_filename, "r")) == NULL)
+		pg_fatal("could not open file \"%s\": %m\n", internal_filename);
+
+	while (fgets(line, sizeof(line), internal_fd))
+	{
+		int ret = sscanf(line, "gp_dbid = %u", &dbid);
+		if (ret == 1)
+			break;
+	}
+
+	if (ferror(internal_fd))
+		pg_fatal("An error occurred during %s file read: %m\n", internal_filename);
+	fclose(internal_fd);
+
+	if (dbid == 0)
+		pg_fatal("could not find dbid in %s\n", internal_filename);
+	return dbid;
+}
 
 static void
 stop_postmaster_atexit(void)
