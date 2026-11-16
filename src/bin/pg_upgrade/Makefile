@@ -35,6 +35,7 @@ uninstall:
 	rm -f '$(DESTDIR)$(bindir)/pg_upgrade$(X)'
 
 clean distclean maintainer-clean:
+	$(MAKE) -C test clean
 	rm -f pg_upgrade$(X) $(OBJS)
 	rm -rf analyze_new_cluster.sh delete_old_cluster.sh log/ tmp_check/ \
 				 reindex_hash.sql clusterConfigPostgresAddonsFile clusterConfigFile \

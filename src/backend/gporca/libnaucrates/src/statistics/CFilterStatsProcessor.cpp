@@ -361,6 +361,28 @@ CFilterStatsProcessor::MakeHistHashMapConjFilter(
 			scale_factors->Append(
 				GPOS_NEW(mp) CDouble(unsupported_pred_stats->ScaleFactor()));
 
+			// This predicate has no single associated column, but still
+			// mark every column it actually touches: their row count was
+			// just reduced by the scale factor above without their
+			// histogram's value range being narrowed, so downstream
+			// value-range reasoning (e.g. LASJ coverage checks) shouldn't
+			// over-trust them.
+			const ULongPtrArray *used_colids =
+				unsupported_pred_stats->GetUsedColIds();
+			if (nullptr != used_colids)
+			{
+				for (ULONG uli = 0; uli < used_colids->Size(); uli++)
+				{
+					ULONG used_colid = *(*used_colids)[uli];
+					CHistogram *used_col_histogram =
+						result_histograms->Find(&used_colid);
+					if (nullptr != used_col_histogram)
+					{
+						used_col_histogram->SetUnsupportedPredDerived();
+					}
+				}
+			}
+
 			continue;
 		}
 
@@ -474,6 +496,81 @@ CFilterStatsProcessor::MakeHistHashMapConjFilter(
 	return result_histograms;
 }
 
+// for each real column id targeted by two or more direct unsupported
+// branches of a disjunction (each eligible to union its own histogram in,
+// per direct_child_real_colids), combine those branches' own scale
+// factors into one, the same way the whole disjunction's branches combine
+// otherwise. A column with only one such branch gets no entry here - it
+// keeps using its own scale factor, unchanged.
+UlongToDoubleMap *
+CFilterStatsProcessor::MakeCombinedUnsupportedSFByColId(
+	CMemoryPool *mp, const CStatisticsConfig *stats_config,
+	CStatsPredDisj *disjunctive_pred_stats, CDouble input_rows,
+	CBitSet *direct_child_real_colids)
+{
+	UlongToDoubleMap *combined_sf_by_colid = GPOS_NEW(mp) UlongToDoubleMap(mp);
+	CBitSet *grouped_colids = GPOS_NEW(mp) CBitSet(mp);
+	const ULONG arity = disjunctive_pred_stats->GetNumPreds();
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		CStatsPred *pred = disjunctive_pred_stats->GetPredStats(ul);
+		if (!CStatsPredUtils::IsUnsupportedPredOnDefinedCol(pred))
+		{
+			continue;
+		}
+		CStatsPredUnsupported *unsupported_pred =
+			CStatsPredUnsupported::ConvertPredStats(pred);
+		const ULongPtrArray *used_colids = unsupported_pred->GetUsedColIds();
+		if (nullptr == used_colids || 1 != used_colids->Size())
+		{
+			continue;
+		}
+		ULONG target_colid = *(*used_colids)[0];
+		if (!direct_child_real_colids->Get(target_colid) ||
+			grouped_colids->Get(target_colid))
+		{
+			continue;
+		}
+
+		CDoubleArray *group_scale_factors = GPOS_NEW(mp) CDoubleArray(mp);
+		group_scale_factors->Append(
+			GPOS_NEW(mp) CDouble(unsupported_pred->ScaleFactor()));
+		for (ULONG uj = ul + 1; uj < arity; uj++)
+		{
+			CStatsPred *other_pred = disjunctive_pred_stats->GetPredStats(uj);
+			if (!CStatsPredUtils::IsUnsupportedPredOnDefinedCol(other_pred))
+			{
+				continue;
+			}
+			CStatsPredUnsupported *other_unsupported_pred =
+				CStatsPredUnsupported::ConvertPredStats(other_pred);
+			const ULongPtrArray *other_used_colids =
+				other_unsupported_pred->GetUsedColIds();
+			if (nullptr != other_used_colids &&
+				1 == other_used_colids->Size() &&
+				target_colid == *(*other_used_colids)[0])
+			{
+				group_scale_factors->Append(GPOS_NEW(mp) CDouble(
+					other_unsupported_pred->ScaleFactor()));
+			}
+		}
+
+		if (1 < group_scale_factors->Size())
+		{
+			CDouble combined_sf =
+				CScaleFactorUtils::CalcScaleFactorCumulativeDisj(
+					stats_config, group_scale_factors, input_rows);
+			combined_sf_by_colid->Insert(GPOS_NEW(mp) ULONG(target_colid),
+										 GPOS_NEW(mp) CDouble(combined_sf));
+		}
+		group_scale_factors->Release();
+		(void) grouped_colids->ExchangeSet(target_colid);
+	}
+	grouped_colids->Release();
+
+	return combined_sf_by_colid;
+}
+
 // create new hash map of histograms after applying disjunctive predicates
 UlongToHistogramMap *
 CFilterStatsProcessor::MakeHistHashMapDisjFilter(
@@ -498,6 +595,45 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 	UlongToHistogramMap *disjunctive_result_histograms =
 		GPOS_NEW(mp) UlongToHistogramMap(mp);
 
+	// columns touched by an unsupported predicate anywhere in this
+	// disjunction, direct child or nested arbitrarily deep inside a further
+	// conjunction or disjunction below it. disjunctive_result_histograms is
+	// only filled in incrementally as the loop below runs, so these columns
+	// are not guaranteed to have an entry yet; the actual marking happens
+	// once AddHistograms() has backfilled every column further down.
+	CBitSet *unsupported_pred_used_colids = GPOS_NEW(mp) CBitSet(mp);
+	CStatisticsUtils::CollectUnsupportedPredUsedColIds(
+		unsupported_pred_used_colids, disjunctive_pred_stats);
+
+	// real column ids some direct child's own GetColId() reports - used
+	// below so a same-column unsupported branch only unions in its own
+	// histogram when it has a genuine sibling to merge with, rather than
+	// collapsing the OR's row count to a single branch's selectivity
+	CBitSet *direct_child_real_colids = GPOS_NEW(mp) CBitSet(mp);
+	for (ULONG ul = 0; ul < disjunctive_pred_stats->GetNumPreds(); ul++)
+	{
+		ULONG child_colid =
+			disjunctive_pred_stats->GetPredStats(ul)->GetColId();
+		if (gpos::ulong_max != child_colid)
+		{
+			(void) direct_child_real_colids->ExchangeSet(child_colid);
+		}
+	}
+
+	// for a real column id with two or more eligible unsupported branches,
+	// their combined scale factor - each such branch gets an identical
+	// full-range histogram, so unioning more than one adds no rows
+	// regardless of branch count. A single eligible branch is unaffected
+	// and keeps its own scale factor.
+	UlongToDoubleMap *combined_unsupported_sf_by_colid =
+		MakeCombinedUnsupportedSFByColId(mp, stats_config,
+										 disjunctive_pred_stats, input_rows,
+										 direct_child_real_colids);
+	// columns above whose combined scale factor a representative branch
+	// has already contributed - every other branch on that column is
+	// then skipped
+	CBitSet *unsupported_group_contributed = GPOS_NEW(mp) CBitSet(mp);
+
 	CHistogram *previous_histogram = nullptr;
 	ULONG previous_colid = gpos::ulong_max;
 	// This is set to input_rows since SF = 1 / selectivity. So if SF is large, then we are less selective.
@@ -515,14 +651,46 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 		// get the components of the statistics filter
 		ULONG colid = child_pred_stats->GetColId();
 
+		// set only for a group's representative branch, so the override
+		// below can't also match a supported sibling on the same colid
+		ULONG combined_group_colid = gpos::ulong_max;
+
 		if (CStatsPredUtils::IsUnsupportedPredOnDefinedCol(child_pred_stats))
 		{
 			CStatsPredUnsupported *unsupported_pred_stats =
 				CStatsPredUnsupported::ConvertPredStats(child_pred_stats);
-			scale_factors->Append(
-				GPOS_NEW(mp) CDouble(unsupported_pred_stats->ScaleFactor()));
+			const ULongPtrArray *used_colids =
+				unsupported_pred_stats->GetUsedColIds();
+			if (nullptr == used_colids || 1 != used_colids->Size() ||
+				!direct_child_real_colids->Get(*(*used_colids)[0]))
+			{
+				// no single column to attribute a histogram contribution
+				// to, or no sibling branch shares that column's own real
+				// colid - just the scale factor's effect on the row count
+				scale_factors->Append(GPOS_NEW(mp) CDouble(
+					unsupported_pred_stats->ScaleFactor()));
 
-			continue;
+				continue;
+			}
+
+			// GetColId() is ulong_max, but this predicate touches exactly
+			// one real column - use it so this branch's full value range
+			// participates in the union below, instead of contributing no
+			// buckets at all and leaving the disjunction's result
+			// histogram for that column narrower than the true range
+			colid = *(*used_colids)[0];
+
+			if (nullptr != combined_unsupported_sf_by_colid->Find(&colid))
+			{
+				if (unsupported_group_contributed->Get(colid))
+				{
+					// a sibling already contributed this group's combined
+					// scale factor and histogram - this one would add
+					// nothing, so skip it
+					continue;
+				}
+				combined_group_colid = colid;
+			}
 		}
 
 		if (IsNewStatsColumn(colid, previous_colid))
@@ -559,6 +727,16 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 				// input histogram is empty so scaling factor does not make sense.
 				// if the input itself is empty, then scaling factor is of no effect
 				child_scale_factor = 1 / CHistogram::DefaultSelectivity;
+			}
+
+			if (gpos::ulong_max != combined_group_colid)
+			{
+				// the group's representative - use its combined scale
+				// factor instead of just this branch's own
+				(void) unsupported_group_contributed->ExchangeSet(
+					combined_group_colid);
+				child_scale_factor = *(combined_unsupported_sf_by_colid->Find(
+					&combined_group_colid));
 			}
 		}
 		else
@@ -600,6 +778,15 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 					cumulative_rows, disjunctive_child_col_histogram,
 					num_rows_disj_child, &output_rows);
 				cumulative_rows = output_rows;
+
+				// a union can't undo either side's unsupported-predicate
+				// imprecision on this column, unless the other, unmarked
+				// side's own range already covers the marked side's
+				if (CStatisticsUtils::ShouldMarkUnsupportedPredDerived(
+						previous_histogram, disjunctive_child_col_histogram))
+				{
+					new_histogram->SetUnsupportedPredDerived();
+				}
 
 				GPOS_DELETE(previous_histogram);
 				GPOS_DELETE(disjunctive_child_col_histogram);
@@ -651,6 +838,25 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 	CHistogram::AddHistograms(mp, input_histograms,
 							  disjunctive_result_histograms);
 
+	// every column is now guaranteed to have an entry (backfilled above from
+	// a copy of the input histogram where no disjunct touched it directly),
+	// so mark the ones touched by an unsupported multi-column predicate
+	CBitSetIter used_colid_iter(*unsupported_pred_used_colids);
+	while (used_colid_iter.Advance())
+	{
+		ULONG used_colid = used_colid_iter.Bit();
+		CHistogram *used_col_histogram =
+			disjunctive_result_histograms->Find(&used_colid);
+		if (nullptr != used_col_histogram)
+		{
+			used_col_histogram->SetUnsupportedPredDerived();
+		}
+	}
+	unsupported_pred_used_colids->Release();
+	direct_child_real_colids->Release();
+	combined_unsupported_sf_by_colid->Release();
+	unsupported_group_contributed->Release();
+
 	non_updatable_cols->Release();
 
 	// clean up
@@ -670,39 +876,57 @@ CFilterStatsProcessor::MakeHistSimpleFilter(CMemoryPool *mp,
 											CDouble *last_scale_factor,
 											ULONG *target_last_colid)
 {
+	CHistogram *result_histogram = nullptr;
+
 	if (CStatsPred::EsptPoint == pred_stats->GetPredStatsType())
 	{
 		CStatsPredPoint *point_pred_stats =
 			CStatsPredPoint::ConvertPredStats(pred_stats);
-		return MakeHistPointFilter(point_pred_stats, filter_colids, hist_before,
-								   last_scale_factor, target_last_colid);
+		result_histogram =
+			MakeHistPointFilter(point_pred_stats, filter_colids, hist_before,
+								last_scale_factor, target_last_colid);
 	}
-
-	if (CStatsPred::EsptLike == pred_stats->GetPredStatsType())
+	else if (CStatsPred::EsptLike == pred_stats->GetPredStatsType())
 	{
 		CStatsPredLike *like_pred_stats =
 			CStatsPredLike::ConvertPredStats(pred_stats);
 
-		return MakeHistLikeFilter(like_pred_stats, filter_colids, hist_before,
-								  last_scale_factor, target_last_colid);
+		result_histogram =
+			MakeHistLikeFilter(like_pred_stats, filter_colids, hist_before,
+							   last_scale_factor, target_last_colid);
 	}
-
-	if (CStatsPred::EsptArrayCmp == pred_stats->GetPredStatsType())
+	else if (CStatsPred::EsptArrayCmp == pred_stats->GetPredStatsType())
 	{
 		CStatsPredArrayCmp *arraycmp_pred_stats =
 			CStatsPredArrayCmp::ConvertPredStats(pred_stats);
 
-		return MakeHistArrayCmpAnyFilter(mp, arraycmp_pred_stats, filter_colids,
-										 hist_before, last_scale_factor,
-										 target_last_colid);
+		result_histogram = MakeHistArrayCmpAnyFilter(
+			mp, arraycmp_pred_stats, filter_colids, hist_before,
+			last_scale_factor, target_last_colid);
+	}
+	else
+	{
+		CStatsPredUnsupported *unsupported_pred_stats =
+			CStatsPredUnsupported::ConvertPredStats(pred_stats);
+
+		result_histogram = MakeHistUnsupportedPred(
+			unsupported_pred_stats, filter_colids, hist_before,
+			last_scale_factor, target_last_colid);
 	}
 
-	CStatsPredUnsupported *unsupported_pred_stats =
-		CStatsPredUnsupported::ConvertPredStats(pred_stats);
+	// a filter on this column narrows its value range or scales its row
+	// count, but it can't undo an earlier, unsupported predicate in this
+	// same conjunction/disjunction having already scaled this column's row
+	// count by a guess without genuinely narrowing it - most of the
+	// concrete histogram builders above construct a brand-new CHistogram
+	// rather than deriving one from hist_before, so that earlier mark isn't
+	// carried over on its own and has to be propagated here explicitly.
+	if (nullptr != result_histogram && hist_before->IsUnsupportedPredDerived())
+	{
+		result_histogram->SetUnsupportedPredDerived();
+	}
 
-	return MakeHistUnsupportedPred(unsupported_pred_stats, filter_colids,
-								   hist_before, last_scale_factor,
-								   target_last_colid);
+	return result_histogram;
 }
 
 // create a new histograms after applying the point filter
@@ -757,6 +981,11 @@ CFilterStatsProcessor::MakeHistUnsupportedPred(
 	// generate after histogram
 	CHistogram *result_histogram = hist_before->CopyHistogram();
 	GPOS_ASSERT(nullptr != result_histogram);
+
+	// row count is scaled by a default selectivity guess below, but the
+	// bucket content is left unchanged/unnarrowed - flag it so downstream
+	// value-range reasoning (e.g. LASJ coverage checks) doesn't over-trust it
+	result_histogram->SetUnsupportedPredDerived();
 
 	*last_scale_factor = *last_scale_factor * pred_stats->ScaleFactor();
 	*target_last_colid = colid;

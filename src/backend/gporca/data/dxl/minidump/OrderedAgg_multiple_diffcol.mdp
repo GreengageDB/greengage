@@ -437,7 +437,7 @@ EXPLAIN SELECT percentile_cont(0.5) WITHIN GROUP(ORDER BY a1), percentile_cont(0
     <dxl:Plan Id="0" SpaceSize="106000">
       <dxl:Sequence>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="2712060318.787369" Rows="1.000000" Width="16"/>
+          <dxl:Cost StartupCost="0" TotalCost="2712060318.787588" Rows="1.000000" Width="16"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="12" Alias="percentile_cont">
@@ -449,7 +449,7 @@ EXPLAIN SELECT percentile_cont(0.5) WITHIN GROUP(ORDER BY a1), percentile_cont(0
         </dxl:ProjList>
         <dxl:CTEProducer CTEId="0" Columns="15,16">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="431.000145" Rows="1.000000" Width="1"/>
+            <dxl:Cost StartupCost="0" TotalCost="431.000239" Rows="1.000000" Width="1"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="15" Alias="a1">
@@ -461,7 +461,7 @@ EXPLAIN SELECT percentile_cont(0.5) WITHIN GROUP(ORDER BY a1), percentile_cont(0
           </dxl:ProjList>
           <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="431.000144" Rows="1.000000" Width="12"/>
+              <dxl:Cost StartupCost="0" TotalCost="431.000238" Rows="1.000000" Width="12"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="15" Alias="a1">
@@ -475,7 +475,7 @@ EXPLAIN SELECT percentile_cont(0.5) WITHIN GROUP(ORDER BY a1), percentile_cont(0
             <dxl:SortingColumnList/>
             <dxl:Aggregate AggregationStrategy="Sorted" StreamSafe="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="431.000100" Rows="1.000000" Width="12"/>
+                <dxl:Cost StartupCost="0" TotalCost="431.000104" Rows="1.000000" Width="12"/>
               </dxl:Properties>
               <dxl:GroupingColumns>
                 <dxl:GroupingColumn ColId="15"/>
@@ -541,7 +541,7 @@ EXPLAIN SELECT percentile_cont(0.5) WITHIN GROUP(ORDER BY a1), percentile_cont(0
         </dxl:CTEProducer>
         <dxl:Sequence>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="2712059887.787207" Rows="1.000000" Width="16"/>
+            <dxl:Cost StartupCost="0" TotalCost="2712059887.787332" Rows="1.000000" Width="16"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="12" Alias="percentile_cont">
@@ -553,7 +553,7 @@ EXPLAIN SELECT percentile_cont(0.5) WITHIN GROUP(ORDER BY a1), percentile_cont(0
           </dxl:ProjList>
           <dxl:CTEProducer CTEId="1" Columns="55,56">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="431.000193" Rows="1.000000" Width="1"/>
+              <dxl:Cost StartupCost="0" TotalCost="431.000319" Rows="1.000000" Width="1"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="55" Alias="a2">
@@ -565,7 +565,7 @@ EXPLAIN SELECT percentile_cont(0.5) WITHIN GROUP(ORDER BY a1), percentile_cont(0
             </dxl:ProjList>
             <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="431.000192" Rows="1.000000" Width="16"/>
+                <dxl:Cost StartupCost="0" TotalCost="431.000318" Rows="1.000000" Width="16"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="55" Alias="a2">
@@ -579,7 +579,7 @@ EXPLAIN SELECT percentile_cont(0.5) WITHIN GROUP(ORDER BY a1), percentile_cont(0
               <dxl:SortingColumnList/>
               <dxl:Aggregate AggregationStrategy="Sorted" StreamSafe="false">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="431.000133" Rows="1.000000" Width="16"/>
+                  <dxl:Cost StartupCost="0" TotalCost="431.000139" Rows="1.000000" Width="16"/>
                 </dxl:Properties>
                 <dxl:GroupingColumns>
                   <dxl:GroupingColumn ColId="55"/>

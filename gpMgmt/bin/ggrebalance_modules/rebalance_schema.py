@@ -410,7 +410,13 @@ SELECT * FROM rebalance_progress_rollback_flow WHERE (SELECT rollback_in_progres
         dbconn.execSQL(self.conn,
                        f'''INSERT INTO {self.schema_name}.{self.table_rebalance_status_detail}
                        VALUES ('{escape_string(db)}', '{escape_string(schema_name)}', '{escape_string(rel_name)}', '{status}',
-                                'SHRINK', NULL, NULL, {rel_size} )''')
+                                'SHRINK', NULL, NULL, {rel_size} )
+                       ON CONFLICT (db_name, schema_name, rel_name) DO UPDATE
+                       SET status = EXCLUDED.status,
+                           rebalance_type = EXCLUDED.rebalance_type,
+                           rebalance_started = NULL,
+                           rebalance_finished = NULL,
+                           source_bytes = EXCLUDED.source_bytes''')
 
     def setTableRebalanceStartTime(self, db: str, schema_name: str, rel_name: str) -> None:
         dbconn.execSQL(self.conn,

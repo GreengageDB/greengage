@@ -70,6 +70,7 @@ dnf -y install \
     python3-setuptools \
     readline-devel \
     rpm-build \
+    rpmlint \
     rsync \
     snappy-devel \
     sudo \

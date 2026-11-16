@@ -399,6 +399,26 @@ flagInhTables(Archive *fout, TableInfo *tblinfo, int numTables,
 }
 
 /*
+ * findExtensionAncestorIndex -
+ *	 Return idx or its nearest ancestor that is an undumped extension table's
+ *	 index, or NULL if there is none.
+ */
+static IndxInfo *
+findExtensionAncestorIndex(IndxInfo *idx)
+{
+	while (idx != NULL)
+	{
+		if (idx->indextable->dobj.ext_member &&
+			!(idx->dobj.dump & DUMP_COMPONENT_DEFINITION))
+			return idx;
+		if (idx->parentidx == 0)
+			break;
+		idx = findIndexByOid(idx->parentidx);
+	}
+	return NULL;
+}
+
+/*
  * flagInhIndexes -
  *	 Create IndexAttachInfo objects for partitioned indexes, and add
  *	 appropriate dependency links.
@@ -420,6 +440,7 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 		{
 			IndxInfo   *index = &(tblinfo[i].indexes[j]);
 			IndxInfo   *parentidx;
+			IndxInfo   *extidx;
 			IndexAttachInfo *attachinfo;
 
 			if (index->parentidx == 0)
@@ -428,6 +449,63 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 			parentidx = findIndexByOid(index->parentidx);
 			if (parentidx == NULL)
 				continue;
+
+			/*
+			 * If an ancestor index belongs to an extension, ATTACH PARTITION
+			 * recreates this index, so don't dump it or its constraint.  This
+			 * loses its custom properties and name (comments on a renamed
+			 * index fail to restore).  It also loses the index entirely if
+			 * CREATE EXTENSION does not recreate the ancestor, e.g. if the
+			 * user created it or the extension version differs.  We can't
+			 * tell these cases apart, so warn about it.
+			 */
+			extidx = findExtensionAncestorIndex(parentidx);
+			if (extidx != NULL)
+			{
+				/*
+				 * Only report it if index definitions would otherwise be
+				 * dumped.  There can be many such indexes, so list them only
+				 * in verbose mode, and warn once per extension index below.
+				 */
+				if ((index->dobj.dump & DUMP_COMPONENT_DEFINITION) &&
+					!fout->dopt->dataOnly &&
+					(fout->dopt->dumpSections & DUMP_POST_DATA))
+				{
+					DumpableObject *constraint = NULL;
+
+					if (index->indexconstraint != 0)
+						constraint = findObjectByDumpId(index->indexconstraint);
+
+					if (constraint != NULL)
+						pg_log_info("not dumping index \"%s.%s\" of constraint \"%s\" on partition \"%s.%s\", attached to index \"%s.%s\" of an extension table",
+									index->dobj.namespace->dobj.name,
+									index->dobj.name,
+									constraint->name,
+									tblinfo[i].dobj.namespace->dobj.name,
+									tblinfo[i].dobj.name,
+									extidx->dobj.namespace->dobj.name,
+									extidx->dobj.name);
+					else
+						pg_log_info("not dumping index \"%s.%s\" on partition \"%s.%s\", attached to index \"%s.%s\" of an extension table",
+									index->dobj.namespace->dobj.name,
+									index->dobj.name,
+									tblinfo[i].dobj.namespace->dobj.name,
+									tblinfo[i].dobj.name,
+									extidx->dobj.namespace->dobj.name,
+									extidx->dobj.name);
+					extidx->numSkippedChildren++;
+				}
+
+				index->dobj.dump &= ~DUMP_COMPONENT_DEFINITION;
+				if (index->indexconstraint != 0)
+				{
+					DumpableObject *constraint;
+
+					constraint = findObjectByDumpId(index->indexconstraint);
+					if (constraint != NULL)
+						constraint->dump &= ~DUMP_COMPONENT_DEFINITION;
+				}
+			}
 
 			attachinfo = (IndexAttachInfo *) pg_malloc(sizeof(IndexAttachInfo));
 
@@ -464,6 +542,36 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 
 			/* keep track of the list of partitions in the parent index */
 			simple_ptr_list_append(&parentidx->partattaches, &attachinfo->dobj);
+		}
+	}
+
+	/*
+	 * Warn once per extension index whose child indexes were not dumped.
+	 * pg_dump can't tell whether CREATE EXTENSION recreates it (it may have
+	 * been added by the user, or the extension version may differ), and the
+	 * child indexes are lost if it doesn't.
+	 */
+	for (i = 0; i < numTables; i++)
+	{
+		for (j = 0; j < tblinfo[i].numIndexes; j++)
+		{
+			IndxInfo   *index = &(tblinfo[i].indexes[j]);
+
+			if (index->numSkippedChildren == 0)
+				continue;
+
+			pg_log_warning(ngettext("%d index on partitions of extension table \"%s.%s\" is not dumped; "
+									"it is restored only if CREATE EXTENSION creates index \"%s.%s\" "
+									"(use --verbose to list it)",
+									"%d indexes on partitions of extension table \"%s.%s\" are not dumped; "
+									"they are restored only if CREATE EXTENSION creates index \"%s.%s\" "
+									"(use --verbose to list them)",
+									index->numSkippedChildren),
+						   index->numSkippedChildren,
+						   tblinfo[i].dobj.namespace->dobj.name,
+						   tblinfo[i].dobj.name,
+						   index->dobj.namespace->dobj.name,
+						   index->dobj.name);
 		}
 	}
 }

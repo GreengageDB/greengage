@@ -128,7 +128,6 @@ static void setQryDistributionPolicy(ParseState *pstate, IntoClause *into, Query
 static bool checkCanOptSelectLockingClause(SelectStmt *stmt);
 static bool queryNodeSearch(Node *node, void *context);
 static void sanity_check_on_conflict_update_set_distkey(GpPolicy  *policy, List *onconflict_set);
-static void sanity_check_on_conflict_update(Oid relid, List *on_conflict_set, Node *on_conflict_where);
 
 /*
  * parse_analyze
@@ -3775,6 +3774,14 @@ sanity_check_on_conflict_update_set_distkey(GpPolicy  *policy, List *onconflict_
 	foreach(lc, onconflict_set)
 	{
 		TargetEntry *te = lfirst(lc);
+
+		/*
+		 * Skip resjunk entries (e.g. the sub-select of a multiple-column
+		 * assignment): they don't assign a column of the table.
+		 */
+		if (te->resjunk)
+			continue;
+
 		conflict_update_cols = bms_add_member(conflict_update_cols,
 											  te->resno);
 	}
@@ -3787,7 +3794,7 @@ sanity_check_on_conflict_update_set_distkey(GpPolicy  *policy, List *onconflict_
 	}
 }
 
-static void
+void
 sanity_check_on_conflict_update(Oid relid, List *on_conflict_set, Node *on_conflict_where)
 {
 	GpPolicy  *policy = GpPolicyFetch(relid);
