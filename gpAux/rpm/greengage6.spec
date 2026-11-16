@@ -1,22 +1,35 @@
 # Run command: `make -C ./gpdb_src/gpAux pkg-rpm`
 
+Name: greengage6
+
 %{!?gproot: %global gproot /opt/greengagedb}
-%{!?gpdir:  %global gpdir  greengage6}
+%{!?gpdir:  %global gpdir %{name}}
 %global     prefix %{gproot}/%{gpdir}
 
-# bin/, sbin/, lib/python/ use bare 'python' interpreter intentionally.
-# On Rocky 8, python -> python2; on Rocky 9, python -> python3.11.
-# Perl test scripts use /usr/bin/env perl for portability across environments
-# where Perl is not at /usr/bin/perl — see commit:eab7246a65e3c7834f8d4763d73972e4a6c0fcbd
+# Disable build-id links for /opt packages
+%global _build_id_links none
+
+# Do not export the bundled PostgreSQL libraries to avoid conflicts
+%global __provides_exclude_from ^%{prefix}/.*$
+%global __requires_exclude ^(libpq|libecpg|libecpg_compat|libpgtypes|libpqwalreceiver)\.so
+
+# Scripts use `#!/usr/bin/env <interpreter>' for portability
 %global __brp_mangle_shebangs_exclude_from ^%{prefix}/.*$
 
-Name:    greengage6
 Version: %{gpdb_version}
 Release: %{gpdb_release}%{?dist}
 Summary: Greengage MPP database engine
+Group:   Applications/Databases
 License: ASL 2.0
 URL:     https://greengagedb.org
 
+# Explicitly declare the public library needed by external connectors
+# The prefix is excluded from auto-generated Provides
+
+Provides: libgppc.so.1
+Provides: libgppc.so.1()(64bit)
+
+# System utilities required by database management scripts
 Requires: findutils
 Requires: glibc-langpack-en
 Requires: iproute
@@ -32,12 +45,9 @@ Requires: zip
 
 %if 0%{?rhel} >= 9
 Requires: python3
-Requires: python3-pip
 %else
 Requires: python2
 Requires: python3
-Requires: python2-pip
-Requires: python3-pip
 %endif
 
 Conflicts: greengage-loaders
@@ -69,10 +79,15 @@ find %{buildroot}%{prefix} -type f \
 find %{buildroot}%{prefix} -name "*.md" -executable \
     -exec chmod -x {} +
 
-# Remove debug info from *.so
-find %{buildroot}%{prefix} -type f -name "*.so" -exec strip --strip-debug {} \;
+# Remove symbols and debug info from ELF files
+find %{buildroot}%{prefix} -type f \( -perm -u+x -o -name "*.so*" \) \
+    -exec strip --strip-unneeded {} \; 2>/dev/null
 
 %files
 %{prefix}
+%dir %{gproot}
 
 %changelog
+* %(LC_ALL=C date "+%%a %%b %%d %%Y") Greengage Team - %{version}-%{release}
+- Build the package from the source tree
+
