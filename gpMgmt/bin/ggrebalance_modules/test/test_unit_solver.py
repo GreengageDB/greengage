@@ -3,7 +3,9 @@
 #
 
 import random
+import time
 from collections import defaultdict
+from mock import patch
 
 from gppylib.test.unit.gp_unittest import *
 from ..solver import GreedySolver, Solution, SolverConfig, LNS, LNSConfig
@@ -500,6 +502,74 @@ class TestGreedySolverFunc(GpTestCase):
         
         # Must find a swap
         self.assertEqual(1, result)
-    
+
+class TestLNSTimeout(GpTestCase):
+    @patch('ggrebalance_modules.solver.signal')
+    def test_lns_skips_improvement_with_nonpositive_timeout(self, mock_signal):
+        mock_signal.getitimer.return_value = (0.0, 0.0)
+        for timeout in (0.0, -1.0):
+            with self.subTest(timeout=timeout):
+                config = LNSConfig(
+                    n_segments=2,
+                    n_hosts_target=2,
+                    n_hosts_initial=3,
+                    initial_primary_mapping=[0, 2],
+                    initial_mirror_mapping=[2, 0],
+                    strategy='grouped',
+                    max_iterations=1,
+                    timeout=timeout,
+                )
+                lns = LNS(config, seed=42)
+                with patch.object(lns, '_apply_repair', wraps=lns._apply_repair) as repair:
+                    solution, cost = lns.solve()
+
+                self.assertEqual(solution, {0: (0, 1), 1: (1, 0)})
+                self.assertEqual(cost, 2)
+                repair.assert_not_called()
+                mock_signal.signal.assert_not_called()
+                mock_signal.setitimer.assert_not_called()
+
+    @patch('ggrebalance_modules.solver.signal')
+    def test_lns_handles_timeout_during_timer_cleanup(self, mock_signal):
+        config = LNSConfig(
+            n_segments=2,
+            n_hosts_target=2,
+            n_hosts_initial=2,
+            initial_primary_mapping=[0, 1],
+            initial_mirror_mapping=[1, 0],
+            strategy='grouped',
+            max_iterations=0,
+        )
+        old_handler = mock_signal.getsignal.return_value
+        old_timer = (10.0, 0.0)
+        mock_signal.getitimer.return_value = old_timer
+
+        def expire_during_cleanup(which, seconds, interval=None):
+            if seconds == 0 and interval is None:
+                handler = mock_signal.signal.call_args[0][1]
+                handler(mock_signal.SIGALRM, None)
+
+        mock_signal.setitimer.side_effect = expire_during_cleanup
+
+        solution, cost = LNS(config, seed=42).solve()
+
+        self.assertEqual(solution, {0: (0, 1), 1: (1, 0)})
+        self.assertEqual(cost, 0)
+        mock_signal.signal.assert_called_with(mock_signal.SIGALRM, old_handler)
+        mock_signal.setitimer.assert_called_with(mock_signal.ITIMER_REAL, *old_timer)
+
+    @getEncoding('1000_50_unbalanced_spread', 'spread', None, None, None)
+    def test_lns_respects_timeout(self):
+        timeout_sec = 1.0
+        allowed_overrun_sec = 2.0
+
+        lns = LNS(LNSConfig.from_parent(self.encoding[0], MAX_SOLVER_ITERS, timeout_sec), seed=42)
+        start = time.perf_counter()
+        lns.solve()
+        elapsed = time.perf_counter() - start
+
+        self.assertLess(elapsed, timeout_sec + allowed_overrun_sec,
+                        f"LNS with timeout {timeout_sec}s took {elapsed:.1f}s")
+
 if __name__ == '__main__':
     run_tests()

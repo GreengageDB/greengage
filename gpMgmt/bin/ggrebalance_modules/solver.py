@@ -5,6 +5,7 @@
 from dataclasses import dataclass, fields
 from enum import Enum
 import random
+import signal
 from typing import NewType, Optional, Set, Dict, List, Tuple, Union
 from collections import defaultdict
 import time
@@ -1223,40 +1224,61 @@ class LNS:
         return self.solver.target_primary_load
 
     def solve(self) -> Tuple[Solution, Cost]:
-        greedy_sol, _ = self.solver.solve()
+        greedy_sol, greedy_cost = self.solver.solve()
+        if self.config.timeout <= 0:
+            return greedy_sol, Cost(greedy_cost)
+
         p, m     = [greedy_sol[i][0] for i in range(self.n_segments)], [greedy_sol[i][1] for i in range(self.n_segments)]
         cost     = self.solver._calculate_cost(p, m)
-        best_p, best_m, best_cost = p[:], m[:], cost
+        # Publish mappings and cost together so a timeout always leaves a complete snapshot.
+        best_solution = (p[:], m[:], cost)
 
-        start = time.perf_counter()
+        # Limit the time available for LNS solver to improve greedy results
+        class LnsTimeoutException(Exception):
+            pass
 
-        for it in range(self.config.max_iterations):
-            if time.perf_counter() - start > self.config.timeout:
-                if self.printing:
-                    print(f"\n Time limit reached ({self.config.timeout}s) at {it} iteration")
-                break
+        def _on_alarm(signum, frame):
+            raise LnsTimeoutException("operation timed out")
+        old_handler = signal.getsignal(signal.SIGALRM)
+        old_timer = signal.getitimer(signal.ITIMER_REAL)
 
-            frac     = self.rng.uniform(self.config.destroy_fraction_lo,
-                                        self.config.destroy_fraction_hi)
-            d_method = self.rng.choice(self._d_methods)
-            r_method = self.rng.choice(self._r_methods)
+        # The inner finally always cancels the timer; the outer try also catches
+        # timeouts raised during cancellation.
+        try:
+            try:
+                signal.signal(signal.SIGALRM, _on_alarm)
+                signal.setitimer(signal.ITIMER_REAL, self.config.timeout)
+                for it in range(self.config.max_iterations):
+                    frac     = self.rng.uniform(self.config.destroy_fraction_lo,
+                                                self.config.destroy_fraction_hi)
+                    d_method = self.rng.choice(self._d_methods)
+                    r_method = self.rng.choice(self._r_methods)
 
-            destroyed = self._apply_destroy(p, m, d_method, frac)
-            new_p_, new_m_  = self._apply_repair(p, m, r_method, destroyed)
+                    destroyed = self._apply_destroy(p, m, d_method, frac)
+                    new_p_, new_m_  = self._apply_repair(p, m, r_method, destroyed)
 
-            # repair couldn't assign
-            if any(new_p_[i] == -1 or new_m_[i] == -1 for i in range(self.n_segments)):
-                continue
+                    # repair couldn't assign
+                    if any(new_p_[i] == -1 or new_m_[i] == -1 for i in range(self.n_segments)):
+                        continue
 
-            new_cost = self.solver._calculate_cost(new_p_, new_m_)
-            if new_cost < cost or (new_cost == cost and self.rng.random() < 0.5):
-                p, m, cost = new_p_, new_m_, new_cost
-                if cost < best_cost:
-                    if self.printing:
-                        print(f"Iter {it} ({d_method.value}) "
-                              f"({r_method.value}): NEW BEST = {cost}")
-                    best_p, best_m, best_cost = p[:], m[:], cost
+                    new_cost = self.solver._calculate_cost(new_p_, new_m_)
+                    if new_cost < cost or (new_cost == cost and self.rng.random() < 0.5):
+                        p, m, cost = new_p_, new_m_, new_cost
+                        if cost < best_solution[2]:
+                            best_solution = (p[:], m[:], cost)
+                            if self.printing:
+                                print(f"Iter {it} ({d_method.value}) "
+                                    f"({r_method.value}): NEW BEST = {cost}")
+            finally:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+        except LnsTimeoutException:
+            if self.printing:
+                print(f"\n Time limit reached ({self.config.timeout}s) for LNS solver, use best completed solution")
+        finally:
+            signal.signal(signal.SIGALRM, old_handler)
+            signal.setitimer(signal.ITIMER_REAL, *old_timer)
 
+        best_p, best_m, best_cost = best_solution
         solution = _pack_solution(best_p, best_m, self.n_segments)
         assert(self.solver._validate_solution(solution))
         return solution, Cost(best_cost)
