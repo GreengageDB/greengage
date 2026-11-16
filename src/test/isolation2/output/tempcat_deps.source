@@ -15,6 +15,14 @@
 -- disturb the objects.  Expected errors are asserted in DO blocks because
 -- their DETAIL lines contain OIDs that are not stable across runs.
 --
+-- The registry capacity overflow section at the bottom of this file
+-- needs gp_tempcat_registry_capacity = 1024, a POSTMASTER GUC: restart
+-- with the low value before any session starts; the default value is
+-- restored at the end of the file.
+!\retcode gpconfig -c gp_tempcat_registry_capacity -v 1024 --skipvalidation;
+(exited with code 0)
+!\retcode gpstop -a -M fast -r;
+(exited with code 0)
 
 0:CREATE FUNCTION tempcat_assert_blocked(stmt text, needle text) RETURNS void AS $$ BEGIN EXECUTE stmt; /* part */ RAISE EXCEPTION 'statement unexpectedly succeeded: %', stmt; /* part */ EXCEPTION WHEN dependent_objects_still_exist THEN IF position(needle in SQLERRM) = 0 THEN RAISE EXCEPTION 'wrong error message: %', SQLERRM; /* part */ END IF; /* part */ END; /* part */ $$ LANGUAGE plpgsql;
 CREATE FUNCTION
@@ -559,3 +567,61 @@ DROP TABLE
 DROP FUNCTION
 0:DROP FUNCTION tempcat_retry_drop(text);
 DROP FUNCTION
+
+-- ============================================================
+-- Registry capacity overflow.  The shared dependency registry and
+-- the OID reservation hash hold gp_tempcat_registry_capacity
+-- entries each.  At the minimum capacity of 1024, 1101 ACL edges
+-- overflow the registry: the owner's commit warns, and protection
+-- is silently skipped for the overflowed edges, while edges that
+-- still fit keep blocking drops.  OID reservations fail loudly
+-- once the OID hash is full, and dropping tables frees the slots
+-- again.  The capacity is a POSTMASTER GUC: the restart with the
+-- low value happens at the top of this file, before any session
+-- starts; the default is restored at the end.
+-- ============================================================
+0:DO $$ BEGIN FOR i IN 1..1100 LOOP BEGIN EXECUTE format('CREATE ROLE ovf_r%s', i); /* part */ EXCEPTION WHEN duplicate_object THEN NULL; /* part */ END; /* part */ END LOOP; /* part */ END $$;
+DO
+
+2:SET gp_enable_temp_memory_catalog = on;
+SET
+2:CREATE TEMP TABLE ovf_t (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+2:DO $$ BEGIN FOR i IN 1..1100 LOOP EXECUTE format('GRANT SELECT ON ovf_t TO ovf_r%s', i); END LOOP; END $$;
+DO
+
+-- An edge that fits the registry keeps blocking: the role cannot be
+-- dropped while the owning session lives.
+0:DO $$ BEGIN EXECUTE 'DROP ROLE ovf_r5'; /* part */ RAISE EXCEPTION 'unexpectedly succeeded'; /* part */ EXCEPTION WHEN dependent_objects_still_exist THEN IF position('privileges are granted on temporary relation' in SQLERRM) = 0 THEN /* part */ RAISE EXCEPTION 'wrong error: %', SQLERRM; /* part */ END IF; /* part */ END $$;
+DO
+
+-- An edge that overflowed the registry is not published, so the drop
+-- succeeds: the protection is silently skipped for that role.
+0:DROP ROLE ovf_r1100;
+DROP ROLE
+
+-- OID reservations fail loudly once the OID hash is full.
+0:CREATE TABLE ovf_state(cnt int);
+CREATE TABLE
+2:DO $$ DECLARE i int := 0; cnt int := 0; /* part */ BEGIN LOOP i := i + 1; /* part */ BEGIN EXECUTE format('CREATE TEMP TABLE ovf_oid_%s(a int)', i); /* part */ cnt := cnt + 1; /* part */ EXCEPTION WHEN OTHERS THEN IF SQLERRM <> 'out of temporary OID reservation slots' THEN /* part */ RAISE EXCEPTION 'unexpected error: %', SQLERRM; /* part */ END IF; /* part */ INSERT INTO ovf_state VALUES (cnt); /* part */ EXIT; /* part */ END; /* part */ END LOOP; /* part */ END $$;
+DO
+
+-- Dropping tables frees reservation slots: creations work again.
+2:DO $$ DECLARE v int; i int; /* part */ BEGIN SELECT cnt INTO v FROM ovf_state; /* part */ FOR i IN 1..v/2 LOOP EXECUTE format('DROP TABLE ovf_oid_%s', i); /* part */ END LOOP; /* part */ END $$;
+DO
+2:DO $$ BEGIN FOR i IN 1..5 LOOP EXECUTE format('CREATE TEMP TABLE ovf_rec_%s(a int)', i); /* part */ END LOOP; /* part */ END $$;
+DO
+
+2:DROP TABLE ovf_t;
+DROP TABLE
+2:DO $$ DECLARE v int; v_half int; i int; /* part */ BEGIN SELECT cnt INTO v FROM ovf_state; /* part */ v_half := v / 2; /* part */ FOR i IN 1..5 LOOP BEGIN EXECUTE format('DROP TABLE ovf_rec_%s', i); /* part */ EXCEPTION WHEN undefined_table THEN NULL; /* part */ END; /* part */ END LOOP; /* part */ FOR i IN v_half + 1..v LOOP BEGIN EXECUTE format('DROP TABLE ovf_oid_%s', i); /* part */ EXCEPTION WHEN undefined_table THEN NULL; /* part */ END; /* part */ END LOOP; /* part */ END $$;
+DO
+0:DROP TABLE ovf_state;
+DROP TABLE
+0:DO $$ BEGIN FOR i IN 1..1100 LOOP BEGIN EXECUTE format('DROP ROLE ovf_r%s', i); /* part */ EXCEPTION WHEN undefined_object THEN NULL; /* part */ END; /* part */ END LOOP; /* part */ END $$;
+DO
+
+!\retcode gpconfig -r gp_tempcat_registry_capacity --skipvalidation;
+(exited with code 0)
+!\retcode gpstop -a -M fast -r;
+(exited with code 0)
