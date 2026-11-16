@@ -1449,6 +1449,10 @@ CEngine::FinalizeExploration()
 	{
 		// derive statistics
 		m_pmemo->ResetStats();
+
+		// stats derivation from the root does not reach the CTE producers, but
+		// the consumers need the stats they publish
+		m_pmemo->DeriveStatsIfAbsent(m_mp, true /*fProducersOnly*/);
 		DeriveStats(m_mp);
 	}
 

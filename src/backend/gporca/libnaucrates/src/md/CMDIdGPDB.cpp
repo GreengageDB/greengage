@@ -79,6 +79,9 @@ CMDIdGPDB CMDIdGPDB::m_mdid_varchar(IMDId::EmdidGeneral, GPDB_VARCHAR);
 // text mdid
 CMDIdGPDB CMDIdGPDB::m_mdid_text(IMDId::EmdidGeneral, GPDB_TEXT);
 
+// bytea mdid
+CMDIdGPDB CMDIdGPDB::m_mdid_bytea(IMDId::EmdidGeneral, GPDB_BYTEA);
+
 // text mdid
 CMDIdGPDB CMDIdGPDB::m_mdid_name(IMDId::EmdidGeneral, GPDB_NAME);
 

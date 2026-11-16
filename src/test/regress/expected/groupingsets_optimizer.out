@@ -1835,29 +1835,38 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 BEGIN;
 SET LOCAL enable_hashagg = false;
 EXPLAIN (COSTS OFF) SELECT a, b, count(*), max(a), max(b) FROM gstest3 GROUP BY GROUPING SETS(a, b,()) ORDER BY a, b;
-                           QUERY PLAN                           
-----------------------------------------------------------------
- Sort
-   Sort Key: (NULL::integer), (NULL::integer)
-   ->  Sequence
-         ->  Shared Scan (share slice:id 0:0)
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     ->  Seq Scan on gstest3
-         ->  Append
-               ->  Aggregate
-                     ->  Shared Scan (share slice:id 0:0)
-               ->  GroupAggregate
-                     Group Key: share0_ref3.b
-                     ->  Sort
-                           Sort Key: share0_ref3.b
-                           ->  Shared Scan (share slice:id 0:0)
-               ->  GroupAggregate
-                     Group Key: share0_ref4.a
-                     ->  Sort
-                           Sort Key: share0_ref4.a
-                           ->  Shared Scan (share slice:id 0:0)
- Optimizer: Pivotal Optimizer (GPORCA)
-(20 rows)
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: (NULL::integer), (NULL::integer)
+   ->  Sort
+         Sort Key: (NULL::integer), (NULL::integer)
+         ->  Sequence
+               ->  Shared Scan (share slice:id 1:0)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on gstest3
+               ->  Append
+                     ->  Result
+                           ->  Redistribute Motion 1:3  (slice3)
+                                 ->  Aggregate
+                                       ->  Gather Motion 3:1  (slice4; segments: 3)
+                                             ->  Shared Scan (share slice:id 4:0)
+                     ->  GroupAggregate
+                           Group Key: share0_ref3.b
+                           ->  Sort
+                                 Sort Key: share0_ref3.b
+                                 ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                       Hash Key: share0_ref3.b
+                                       ->  Shared Scan (share slice:id 5:0)
+                     ->  GroupAggregate
+                           Group Key: share0_ref4.a
+                           ->  Sort
+                                 Sort Key: share0_ref4.a
+                                 ->  Redistribute Motion 3:3  (slice6; segments: 3)
+                                       Hash Key: share0_ref4.a
+                                       ->  Shared Scan (share slice:id 6:0)
+ Optimizer: GPORCA
+(29 rows)
 
 SELECT a, b, count(*), max(a), max(b) FROM gstest3 GROUP BY GROUPING SETS(a, b,()) ORDER BY a, b;
  a | b | count | max | max 
@@ -1871,29 +1880,38 @@ SELECT a, b, count(*), max(a), max(b) FROM gstest3 GROUP BY GROUPING SETS(a, b,(
 
 SET LOCAL enable_seqscan = false;
 EXPLAIN (COSTS OFF) SELECT a, b, count(*), max(a), max(b) FROM gstest3 GROUP BY GROUPING SETS(a, b,()) ORDER BY a, b;
-                           QUERY PLAN                           
-----------------------------------------------------------------
- Sort
-   Sort Key: (NULL::integer), (NULL::integer)
-   ->  Sequence
-         ->  Shared Scan (share slice:id 0:0)
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     ->  Seq Scan on gstest3
-         ->  Append
-               ->  Aggregate
-                     ->  Shared Scan (share slice:id 0:0)
-               ->  GroupAggregate
-                     Group Key: share0_ref3.b
-                     ->  Sort
-                           Sort Key: share0_ref3.b
-                           ->  Shared Scan (share slice:id 0:0)
-               ->  GroupAggregate
-                     Group Key: share0_ref4.a
-                     ->  Sort
-                           Sort Key: share0_ref4.a
-                           ->  Shared Scan (share slice:id 0:0)
- Optimizer: Pivotal Optimizer (GPORCA)
-(20 rows)
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: (NULL::integer), (NULL::integer)
+   ->  Sort
+         Sort Key: (NULL::integer), (NULL::integer)
+         ->  Sequence
+               ->  Shared Scan (share slice:id 1:0)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on gstest3
+               ->  Append
+                     ->  Result
+                           ->  Redistribute Motion 1:3  (slice3)
+                                 ->  Aggregate
+                                       ->  Gather Motion 3:1  (slice4; segments: 3)
+                                             ->  Shared Scan (share slice:id 4:0)
+                     ->  GroupAggregate
+                           Group Key: share0_ref3.b
+                           ->  Sort
+                                 Sort Key: share0_ref3.b
+                                 ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                       Hash Key: share0_ref3.b
+                                       ->  Shared Scan (share slice:id 5:0)
+                     ->  GroupAggregate
+                           Group Key: share0_ref4.a
+                           ->  Sort
+                                 Sort Key: share0_ref4.a
+                                 ->  Redistribute Motion 3:3  (slice6; segments: 3)
+                                       Hash Key: share0_ref4.a
+                                       ->  Shared Scan (share slice:id 6:0)
+ Optimizer: GPORCA
+(29 rows)
 
 SELECT a, b, count(*), max(a), max(b) FROM gstest3 GROUP BY GROUPING SETS(a, b,()) ORDER BY a, b;
  a | b | count | max | max 

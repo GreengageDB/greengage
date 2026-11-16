@@ -19,6 +19,7 @@
 #include "gpopt/optimizer/COptimizerConfig.h"
 #include "naucrates/statistics/CFilterStatsProcessor.h"
 #include "naucrates/statistics/CLeftAntiSemiJoinStatsProcessor.h"
+#include "naucrates/statistics/CLeftOuterJoinStatsProcessor.h"
 #include "naucrates/statistics/CScaleFactorUtils.h"
 #include "naucrates/statistics/CStatisticsUtils.h"
 
@@ -91,6 +92,15 @@ CJoinStatsProcessor::JoinHistograms(
 			{
 				join_histogram->SetNDVScaled();
 			}
+			// a join can't undo either side's unsupported-predicate
+			// imprecision on this column - carry it forward so a deeper
+			// LASJ consuming this join's output still knows not to trust
+			// this histogram's bucket content
+			if (histogram1->IsUnsupportedPredDerived() ||
+				histogram2->IsUnsupportedPredDerived())
+			{
+				join_histogram->SetUnsupportedPredDerived();
+			}
 			*result_hist1 = join_histogram;
 			*result_hist2 = (*result_hist1)->CopyHistogram();
 			if (histogram2->WereNDVsScaled())
@@ -135,7 +145,6 @@ CJoinStatsProcessor::CalcAllJoinStats(CMemoryPool *mp,
 	// join statistics objects one by one using relevant predicates in given scalar expression
 	const ULONG num_stats = statistics_array->Size();
 	IStatistics *stats = (*statistics_array)[0]->CopyStats(mp);
-	CDouble num_rows_outer = stats->Rows();
 	// predicate indexes, if we have a mix of inner and LOJs
 	ULongPtrArray *predIndexes = nullptr;
 	CExpression *inner_or_simple_2_way_loj_preds = expr;
@@ -201,8 +210,16 @@ CJoinStatsProcessor::CalcAllJoinStats(CMemoryPool *mp,
 
 		if (is_a_left_join)
 		{
-			new_stats =
-				stats->CalcLOJoinStats(mp, current_stats, join_preds_stats);
+			// the unsupported join predicates are folded into the LOJ derivation:
+			// they filter the matched part of the join, and the outer rows that
+			// lose all their matches become null-extended rows, so that
+			// Card(LOJ) >= Card(Outer child of LOJ) holds and the null fraction of
+			// the inner columns accounts for them
+			new_stats = CLeftOuterJoinStatsProcessor::CalcLOJoinStatsStatic(
+				mp, stats, current_stats, join_preds_stats,
+				unsupported_pred_stats);
+			CRefCount::SafeRelease(unsupported_pred_stats);
+			unsupported_pred_stats = nullptr;
 		}
 		else
 		{
@@ -222,24 +239,11 @@ CJoinStatsProcessor::CalcAllJoinStats(CMemoryPool *mp,
 					mp, dynamic_cast<CStatistics *>(stats),
 					unsupported_pred_stats, false /* do_cap_NDVs */);
 
-			// If it is outer join and the cardinality after applying the unsupported join
-			// filters is less than the cardinality of outer child, we don't use this stats.
-			// Because we need to make sure that Card(LOJ) >= Card(Outer child of LOJ).
-			if (is_a_left_join &&
-				stats_after_join_filter->Rows() < num_rows_outer)
-			{
-				stats_after_join_filter->Release();
-			}
-			else
-			{
-				stats->Release();
-				stats = stats_after_join_filter;
-			}
+			stats->Release();
+			stats = stats_after_join_filter;
 
 			unsupported_pred_stats->Release();
 		}
-
-		num_rows_outer = stats->Rows();
 
 		join_preds_stats->Release();
 		output_colrefsets->Release();
@@ -440,12 +444,8 @@ CJoinStatsProcessor::SetResultingJoinStats(
 	}
 
 
-	// finalize output_is_empty: for LASJ, empty only if every AND-ed
-	// predicate independently showed complete coverage (AND across
-	// predicates); for other join types, keep the OR-accumulated
-	// per-predicate result plus the (unchanged) outer-empty rule.
-	output_is_empty = IsLASJ ? lasj_all_preds_fully_covered
-							 : (output_is_empty || (outer_stats->IsEmpty()));
+	output_is_empty = outer_stats->IsEmpty() ||
+					  (IsLASJ ? lasj_all_preds_fully_covered : output_is_empty);
 
 	num_join_rows = CStatistics::MinRows;
 	if (!output_is_empty)

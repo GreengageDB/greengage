@@ -51,6 +51,7 @@
 #include "optimizer/optimizer.h"
 #include "optimizer/prep.h"
 #include "optimizer/tlist.h"
+#include "parser/analyze.h"
 #include "parser/parsetree.h"
 #include "parser/parse_coerce.h"
 #include "partitioning/partdesc.h"
@@ -245,11 +246,24 @@ preprocess_targetlist(PlannerInfo *root)
 	 * while we have the relation open.
 	 */
 	if (parse->onConflict)
+	{
+		/*
+		 * OnConflictUpdate may modify the distkey of the table through a view
+		 * or a rule, avoiding similar check in analyze.c.
+		 * This can lead to wrong data distribution. Add a check
+		 * here and raise error for such case.
+		 */
+		if (parse->onConflict->action == ONCONFLICT_UPDATE)
+			sanity_check_on_conflict_update(target_rte->relid,
+				parse->onConflict->onConflictSet,
+				parse->onConflict->onConflictWhere);
+
 		parse->onConflict->onConflictSet =
 			expand_targetlist(root, parse->onConflict->onConflictSet,
 							  CMD_UPDATE,
 							  result_relation,
 							  target_relation);
+	}
 
 	if (target_relation)
 		table_close(target_relation, NoLock);

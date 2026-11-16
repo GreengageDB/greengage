@@ -112,8 +112,17 @@ set_tablespace_directory_suffix(ClusterInfo *cluster)
 {
 	/* This cluster has a version-specific subdirectory */
 
+	uint32 ggdb_major_version;
+	if (cluster->major_version == GPDB6_MAJOR_PGVERSION)
+		ggdb_major_version = 6;
+	else if (cluster->major_version == GPDB7_MAJOR_PGVERSION)
+		ggdb_major_version = 7;
+	else
+		pg_fatal("Unknown or unsupported Greengage version: %s\n", cluster->major_version_str);
+	
 	/* The leading slash is needed to start a new directory. */
-	cluster->tablespace_suffix = psprintf("/PG_%s_%d",
-										  cluster->major_version_str,
+	cluster->tablespace_suffix = psprintf("/%d/GPDB_%d_%d",
+										  cluster->dbid,
+										  ggdb_major_version,
 										  cluster->controldata.cat_ver);
 }

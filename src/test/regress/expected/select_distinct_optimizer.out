@@ -353,8 +353,8 @@ EXPLAIN SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS DISTINCT FROM
 EXPLAIN SELECT * FROM distinct_1 left join distinct_2 on distinct_1.a IS DISTINCT FROM distinct_2.a;
                                             QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.55 rows=2 width=8)
-   ->  Nested Loop Left Join  (cost=0.00..1324032.55 rows=1 width=8)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.54 rows=1 width=8)
+   ->  Nested Loop Left Join  (cost=0.00..1324032.54 rows=1 width=8)
          Join Filter: (distinct_1.a IS DISTINCT FROM distinct_2.a)
          ->  Seq Scan on distinct_1  (cost=0.00..431.00 rows=1 width=4)
          ->  Materialize  (cost=0.00..431.00 rows=1 width=4)
@@ -366,8 +366,8 @@ EXPLAIN SELECT * FROM distinct_1 left join distinct_2 on distinct_1.a IS DISTINC
 EXPLAIN SELECT * FROM distinct_1 right join distinct_2 on distinct_1.a IS DISTINCT FROM distinct_2.a;
                                             QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.55 rows=2 width=8)
-   ->  Nested Loop Left Join  (cost=0.00..1324032.55 rows=1 width=8)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.54 rows=1 width=8)
+   ->  Nested Loop Left Join  (cost=0.00..1324032.54 rows=1 width=8)
          Join Filter: (distinct_1.a IS DISTINCT FROM distinct_2.a)
          ->  Seq Scan on distinct_2  (cost=0.00..431.00 rows=1 width=4)
          ->  Materialize  (cost=0.00..431.00 rows=1 width=4)
@@ -391,7 +391,7 @@ EXPLAIN SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS NOT DISTINCT 
 EXPLAIN SELECT * FROM distinct_1 left join distinct_2 on distinct_1.a IS NOT DISTINCT FROM distinct_2.a;
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=2 width=8)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=8)
    ->  Hash Left Join  (cost=0.00..862.00 rows=1 width=8)
          Hash Cond: (NOT (distinct_1.a IS DISTINCT FROM distinct_2.a))
          ->  Seq Scan on distinct_1  (cost=0.00..431.00 rows=1 width=4)
@@ -403,7 +403,7 @@ EXPLAIN SELECT * FROM distinct_1 left join distinct_2 on distinct_1.a IS NOT DIS
 EXPLAIN SELECT * FROM distinct_1 right join  distinct_2 on distinct_1.a IS NOT DISTINCT FROM distinct_2.a;
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=2 width=8)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=8)
    ->  Hash Left Join  (cost=0.00..862.00 rows=1 width=8)
          Hash Cond: (NOT (distinct_2.a IS DISTINCT FROM distinct_1.a))
          ->  Seq Scan on distinct_2  (cost=0.00..431.00 rows=1 width=4)

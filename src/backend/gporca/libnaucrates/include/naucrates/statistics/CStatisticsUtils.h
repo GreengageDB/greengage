@@ -164,6 +164,21 @@ public:
 								  CStatsPred *pred_stats,
 								  ULongPtrArray *colids);
 
+	// recursively collect every column touched by an unsupported-predicate
+	// filter anywhere in a predicate (sub)tree - not only predicates that
+	// are themselves a direct child of a conjunction or disjunction, but
+	// also ones nested inside a further conjunction or disjunction below it
+	static void CollectUnsupportedPredUsedColIds(CBitSet *colids_bitset,
+												 CStatsPred *pred_stats);
+
+	// should a histogram combining histogram1 and histogram2 (e.g. via a
+	// union) be marked as derived from an unsupported predicate? Not needed
+	// when exactly one side is marked and the other (unmarked) side's own
+	// value range already covers the marked side's - the combined range is
+	// then exactly the unmarked side's own, already-trustworthy range.
+	static BOOL ShouldMarkUnsupportedPredDerived(const CHistogram *histogram1,
+												 const CHistogram *histogram2);
+
 	// given the previously generated histogram, update the intermediate
 	// result of the disjunction
 	static void UpdateDisjStatistics(

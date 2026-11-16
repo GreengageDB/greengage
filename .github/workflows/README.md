@@ -33,14 +33,15 @@ operating systems:
   - Behave tests
   - Regression tests
   - Orca tests
-  - Resource group tests
+  - Resource group tests (cgroup v1)
+  - Resource group v2 tests (cgroup v2, version 7.x only)
   - JIT tests (version 7.x only)
   - pg_upgrade test (Ubuntu 22.04 only, no matrix)
 - **Upload**: Retags and pushes final Docker images to GHCR and optionally
   DockerHub. Runs for push to the default branch (retags to `latest`) and tags
   after build.
 - **Package**: Builds Debian packages and optionally tests deployment.
-  Currently supported for version 6.x only.
+  Supported for versions 6.x and 7.x.
 
 ## Greengage CI (No Tests)
 
@@ -52,8 +53,8 @@ required, but the test pipeline is not required.
 
 ### Key Features
 
-- **Same Build Process:** Uses the same build workflow and matrix-based
-  configuration as `Greengage CI`.
+- **Same Build Process:** Uses the same build workflow as `Greengage CI`,
+  with a fixed target operating system instead of a matrix.
 
 - **No Tests:** Does not run any test suites.
 
@@ -69,7 +70,11 @@ required, but the test pipeline is not required.
 1. **Build:** Builds Docker images for the configured target operating
    systems.
 
-2. **Tests:** No test jobs are executed.
+2. **Package:** Builds the RPM package for Rocky Linux 9 in the image from
+   the Build job, checks it with `rpmlint`, and installs it in a clean
+   container.
+
+3. **Tests:** No test jobs are executed.
 
 ## Release Workflow
 
@@ -193,7 +198,7 @@ The workflow is parameterized to support flexibility:
 - **Target OS**: Supports multiple operating systems, defined in the matrix
   strategy. Ubuntu 22.04 uses no version suffix for backward compatibility with
   existing artifact naming; Ubuntu 24.04 support is currently available for
-  version 6.x and for the `build` job of version 7.x.
+  version 6.x and for the `build` and `package` jobs of version 7.x.
 
 ## Usage
 
@@ -264,6 +269,8 @@ of the `greengagedb/greengage-ci` repository:
   [README/REUSABLE-TESTS-REGRESSION.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-REGRESSION.md)
 - Resource group tests:
   [README/REUSABLE-TESTS-RESGROUP.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-RESGROUP.md)
+- Resource group v2 tests:
+  [README/REUSABLE-TESTS-RESGROUP-V2.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-RESGROUP-V2.md)
 - pg_upgrade test:
   [README/REUSABLE-TESTS-PG_UPGRADE.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-PG_UPGRADE.md)
 - Upload process:

@@ -128,6 +128,9 @@ extern char *output_files[];
  */
 #define MULTIXACT_FORMATCHANGE_CAT_VER 301809211
 
+#define GPDB6_MAJOR_PGVERSION 90400
+#define GPDB7_MAJOR_PGVERSION 120000
+
 /*
  * Extra information stored for each Append-only table.
  * This is used to transfer the information from the auxiliary
@@ -381,6 +384,8 @@ typedef struct
 	char		major_version_str[64];	/* string PG_VERSION of cluster */
 	uint32		bin_version;	/* version returned from pg_ctl */
 	const char *tablespace_suffix;	/* directory specification */
+
+	uint32 		dbid;			/* segment's dbid from internal.auto.conf */
 } ClusterInfo;
 
 
@@ -542,6 +547,7 @@ char	   *cluster_conn_opts(ClusterInfo *cluster);
 bool		start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error);
 void		stop_postmaster(bool in_atexit);
 uint32		get_major_server_version(ClusterInfo *cluster);
+uint32		get_dbid(ClusterInfo *cluster);
 void		check_pghost_envvar(void);
 
 

@@ -216,7 +216,12 @@ check_new_cluster(void)
 
 	check_for_prepared_transactions(&new_cluster);
 
-	check_for_new_tablespace_dir(&new_cluster);
+	/*
+	 * On the segments, tablespaces directories are created by ggupgrade before
+	 * running the pg_upgrade, so this check is irrelevant for them.
+	 */
+	if (is_greengage_dispatcher_mode())
+		check_for_new_tablespace_dir(&new_cluster);
 }
 
 
