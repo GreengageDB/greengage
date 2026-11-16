@@ -474,8 +474,12 @@ class RebalanceSM:
                 self.logger.info('Plan to rollback step')
                 step.setStatus(RebalanceStep.Status.PLANNED, True)
             else:
-                self.logger.info('Cancel step')
-                step.setStatus(RebalanceStep.Status.CANCELLED)
+                if step.isRollback():
+                    self.logger.info('Cancel rollback step')
+                    step.setStatus(RebalanceStep.Status.CANCELLED, True)
+                else:
+                    self.logger.info('Cancel step')
+                    step.setStatus(RebalanceStep.Status.CANCELLED)
             self.rebalance_schema.updateExecutionStep(step)
 
         # Mark dependent steps accordingly
