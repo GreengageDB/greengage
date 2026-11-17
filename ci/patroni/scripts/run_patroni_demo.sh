@@ -11,7 +11,7 @@ fi
 docker-compose -f ./ci/patroni/docker-compose-patroni.yaml up -d
 
 # Prepare ALL containers first
-services=$(docker-compose -f ./ci/patroni/docker-compose-patroni.yaml config --services | grep -vx etcd | tr '\n' ' ')
+services=$(docker-compose -f ./ci/patroni/docker-compose-patroni.yaml config --services | grep -vx -e etcd1 -e etcd2 -e etcd3 | tr '\n' ' ')
 for service in $services
 do
   docker-compose -f ./ci/patroni/docker-compose-patroni.yaml exec -T \
@@ -79,6 +79,9 @@ if [ "$failed" -ne 0 ]; then
   echo "ERROR: host key setup failed on one or more containers" >&2
   exit 1
 fi
+
+# Run the apt install as root
+docker-compose -f ./ci/patroni/docker-compose-patroni.yaml exec -T cdw bash -c "apt update && apt install -y etcd-client"
 
 docker-compose -f ./ci/patroni/docker-compose-patroni.yaml exec -T -u gpadmin cdw bash <<'PATRONI_ETCD3'
 set -e
