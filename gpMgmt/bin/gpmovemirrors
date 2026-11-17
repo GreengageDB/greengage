@@ -26,6 +26,7 @@ try:
     from gppylib.parseutils import line_reader, check_values, canonicalize_address
     from gppylib.operations.segment_tablespace_locations import get_tablespace_locations
     from gppylib.operations.update_pg_hba_on_segments import update_pg_hba_for_new_mirrors
+    from gppylib.fault_injection import inject_fault
 
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
@@ -398,6 +399,8 @@ try:
     """ Create a backout file for the user if they choose to go back to the original configuration. """
     backout_filename = options.input_filename + "_backout_" + str(time.strftime("%m%d%y%H%M%S"))
     newConfig.write_output_file(backout_filename, False)
+
+    inject_fault('FAULT_GPMOVEMIRRORS_BEFORE_GPRECOVERSEG')
 
     """ Start gprecoverseg. """
     recoversegOptions = "-i " + newConfig.inputFile + " -B " + str(options.batch_size) + \
