@@ -1,0 +1,37 @@
+test_explain_hooks
+==================
+
+An extension of EXPLAIN for tests. It registers the option TEST_HOOKS,
+which needs ANALYZE, and uses each hook an extension of EXPLAIN has: the
+validation of the options, a line on each plan node, a line after the
+plan, and the data that each qExec sends to the qDisp with the
+statistics of its slice. With TEST_HOOKS each plan node shows "Hooked:
+true", and after the plan "QE Reports" lists the segments whose qExecs
+reported for each slice, "QE Messages" counts the messages of the
+qExecs, each of which the qDisp passes on before its pieces, "Other
+Pieces" counts the pieces of data of another name, which each qExec
+sends empty, and "Reports of Other Statements" counts the reports that
+came with another statement's showstatctx than the explained one.
+
+Each qExec sends its slice, its segment and its qe_identifier, and the
+qDisp checks them against those of the message, and that the message
+came before its pieces, so a report that reaches the wrong slice fails
+the statement. The setting test_explain_hooks.send off makes each qExec
+send no piece. The setting test_explain_hooks.bad_piece ("short",
+"empty_name", "long_name", "unterminated", "no_length", "negative" or
+"truncated") makes each qExec send a malformed piece besides, which the
+qDisp must refuse. The counts are kept for one plan at a time, and each
+plan of an EXPLAIN, such as one that a rule adds, starts with none; an
+EXPLAIN with TEST_HOOKS inside another is not supported.
+
+The qExecs send their data on every EXPLAIN ANALYZE, so the library
+must be loaded in every backend that runs the tests, the qExecs' too,
+and installed on every host. The setup test sets
+session_preload_libraries for the test database, a setting that reaches
+every instance, and each test runs in a new session; the teardown test
+resets it. The expected output is that of a cluster of three primary
+segments, such as the demo cluster. installcheck-world installs the
+module and runs its tests; to run them alone against a running cluster:
+
+    make install
+    make installcheck
