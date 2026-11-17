@@ -1767,18 +1767,6 @@ class ResourceEstimator:
             f"    Available: {issue['available_gb']:.2f} GB\n"
         )
     
-    def get_allocated_space_for_filesystem(self, hostname: str, filesystem: str) -> int:
-        """
-        Get the space already allocated to a specific filesystem
-            
-        Returns:
-            Allocated space in KB, or 0 if no allocations found
-        """
-        fs_key = (hostname, filesystem)
-        if fs_key in self.filesystem_allocations:
-            return self.filesystem_allocations[fs_key]['required_kb']
-        return 0
-    
     def check_space(self,
                     hostname: str,
                     host_address: str,
