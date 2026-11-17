@@ -751,7 +751,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 				{
 					char	   *uri_str = (char *) strVal(lfirst(c));
 
-					/* append to a list of Value nodes, size nelems */
+					/* append to a list of String nodes, size nelems */
 					modifiedloclist = lappend(modifiedloclist, makeString(pstrdup(uri_str)));
 
 					if (list_length(modifiedloclist) == num_segs_participating)
@@ -1038,10 +1038,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 		else
 		{
 			/* no file for this segdb. add a null entry */
-			Value	   *n = makeNode(Value);
-
-			n->type = T_Null;
-			filenames = lappend(filenames, n);
+			filenames = lappend(filenames, NULL);
 		}
 	}
 

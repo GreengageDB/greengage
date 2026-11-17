@@ -3,7 +3,7 @@
  * pl_exec.c		- Executor for the PL/pgSQL
  *			  procedural language
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1215,6 +1215,20 @@ static void
 plpgsql_exec_error_callback(void *arg)
 {
 	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) arg;
+	int			err_lineno;
+
+	/*
+	 * If err_var is set, report the variable's declaration line number.
+	 * Otherwise, if err_stmt is set, report the err_stmt's line number.  When
+	 * err_stmt is not set, we're in function entry/exit, or some such place
+	 * not attached to a specific line number.
+	 */
+	if (estate->err_var != NULL)
+		err_lineno = estate->err_var->lineno;
+	else if (estate->err_stmt != NULL)
+		err_lineno = estate->err_stmt->lineno;
+	else
+		err_lineno = 0;
 
 	if (estate->err_text != NULL)
 	{
@@ -1223,13 +1237,8 @@ plpgsql_exec_error_callback(void *arg)
 		 * actually need it.  Therefore, places that set up err_text should
 		 * use gettext_noop() to ensure the strings get recorded in the
 		 * message dictionary.
-		 *
-		 * If both err_text and err_stmt are set, use the err_text as
-		 * description, but report the err_stmt's line number.  When err_stmt
-		 * is not set, we're in function entry/exit, or some such place not
-		 * attached to a specific line number.
 		 */
-		if (estate->err_stmt != NULL)
+		if (err_lineno > 0)
 		{
 			/*
 			 * translator: last %s is a phrase such as "during statement block
@@ -1237,7 +1246,7 @@ plpgsql_exec_error_callback(void *arg)
 			 */
 			errcontext("PL/pgSQL function %s line %d %s",
 					   estate->func->fn_signature,
-					   estate->err_stmt->lineno,
+					   err_lineno,
 					   _(estate->err_text));
 		}
 		else
@@ -1251,12 +1260,12 @@ plpgsql_exec_error_callback(void *arg)
 					   _(estate->err_text));
 		}
 	}
-	else if (estate->err_stmt != NULL)
+	else if (estate->err_stmt != NULL && err_lineno > 0)
 	{
 		/* translator: last %s is a plpgsql statement type name */
 		errcontext("PL/pgSQL function %s line %d at %s",
 				   estate->func->fn_signature,
-				   estate->err_stmt->lineno,
+				   err_lineno,
 				   plpgsql_stmt_typename(estate->err_stmt));
 	}
 	else
@@ -1644,7 +1653,12 @@ exec_stmt_block(PLpgSQL_execstate *estate, PLpgSQL_stmt_block *block)
 		 * Note that we currently don't support promise datums within blocks,
 		 * only at a function's outermost scope, so we needn't handle those
 		 * here.
+		 *
+		 * Since RECFIELD isn't a supported case either, it's okay to cast the
+		 * PLpgSQL_datum to PLpgSQL_variable.
 		 */
+		estate->err_var = (PLpgSQL_variable *) datum;
+
 		switch (datum->dtype)
 		{
 			case PLPGSQL_DTYPE_VAR:
@@ -1717,6 +1731,8 @@ exec_stmt_block(PLpgSQL_execstate *estate, PLpgSQL_stmt_block *block)
 				elog(ERROR, "unrecognized dtype: %d", datum->dtype);
 		}
 	}
+
+	estate->err_var = NULL;
 
 	if (block->exceptions)
 	{
@@ -3554,26 +3570,13 @@ exec_stmt_return_query(PLpgSQL_execstate *estate,
 		memset(&options, 0, sizeof(options));
 		options.params = paramLI;
 		options.read_only = estate->readonly_func;
+		options.must_return_tuples = true;
 		options.dest = treceiver;
 
 		rc = SPI_execute_plan_extended(expr->plan, &options);
-		if (rc != SPI_OK_SELECT)
-		{
-			/*
-			 * SELECT INTO deserves a special error message, because "query is
-			 * not a SELECT" is not very helpful in that case.
-			 */
-			if (rc == SPI_OK_SELINTO)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("query is SELECT INTO, but it should be plain SELECT"),
-						 errcontext("query: %s", expr->query)));
-			else
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("query is not a SELECT"),
-						 errcontext("query: %s", expr->query)));
-		}
+		if (rc < 0)
+			elog(ERROR, "SPI_execute_plan_extended failed executing query \"%s\": %s",
+				 expr->query, SPI_result_code_string(rc));
 	}
 	else
 	{
@@ -3610,6 +3613,7 @@ exec_stmt_return_query(PLpgSQL_execstate *estate,
 		options.params = exec_eval_using_params(estate,
 												stmt->params);
 		options.read_only = estate->readonly_func;
+		options.must_return_tuples = true;
 		options.dest = treceiver;
 
 		rc = SPI_execute_extended(querystr, &options);
@@ -4054,6 +4058,7 @@ plpgsql_estate_setup(PLpgSQL_execstate *estate,
 	estate->eval_econtext = NULL;
 
 	estate->err_stmt = NULL;
+	estate->err_var = NULL;
 	estate->err_text = NULL;
 
 	estate->plugin_info = NULL;

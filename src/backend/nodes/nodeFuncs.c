@@ -3,7 +3,7 @@
  * nodeFuncs.c
  *		Various general-purpose manipulations of Node trees
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -2248,6 +2248,26 @@ expression_tree_walker(Node *node,
 					return true;
 			}
 			break;
+		case T_PartitionBoundSpec:
+			{
+				PartitionBoundSpec *pbs = (PartitionBoundSpec *) node;
+
+				if (walker(pbs->listdatums, context))
+					return true;
+				if (walker(pbs->lowerdatums, context))
+					return true;
+				if (walker(pbs->upperdatums, context))
+					return true;
+			}
+			break;
+		case T_PartitionRangeDatum:
+			{
+				PartitionRangeDatum *prd = (PartitionRangeDatum *) node;
+
+				if (walker(prd->value, context))
+					return true;
+			}
+			break;
 		case T_List:
 			foreach(temp, (List *) node)
 			{
@@ -2818,7 +2838,6 @@ expression_tree_mutator(Node *node,
 		case T_NextValueExpr:
 		case T_RangeTblRef:
 		case T_String:
-		case T_Null:
 		case T_CTESearchClause:
 			return (Node *) copyObject(node);
 		case T_WithCheckOption:
@@ -3294,6 +3313,28 @@ expression_tree_mutator(Node *node,
 				MUTATE(newnode->search_clause, cte->search_clause, CTESearchClause *);
 				MUTATE(newnode->cycle_clause, cte->cycle_clause, CTECycleClause *);
 
+				return (Node *) newnode;
+			}
+			break;
+		case T_PartitionBoundSpec:
+			{
+				PartitionBoundSpec *pbs = (PartitionBoundSpec *) node;
+				PartitionBoundSpec *newnode;
+
+				FLATCOPY(newnode, pbs, PartitionBoundSpec);
+				MUTATE(newnode->listdatums, pbs->listdatums, List *);
+				MUTATE(newnode->lowerdatums, pbs->lowerdatums, List *);
+				MUTATE(newnode->upperdatums, pbs->upperdatums, List *);
+				return (Node *) newnode;
+			}
+			break;
+		case T_PartitionRangeDatum:
+			{
+				PartitionRangeDatum *prd = (PartitionRangeDatum *) node;
+				PartitionRangeDatum *newnode;
+
+				FLATCOPY(newnode, prd, PartitionRangeDatum);
+				MUTATE(newnode->value, prd->value, Node *);
 				return (Node *) newnode;
 			}
 			break;
@@ -3812,7 +3853,6 @@ raw_expression_tree_walker(Node *node,
 		case T_Float:
 		case T_String:
 		case T_BitString:
-		case T_Null:
 		case T_ParamRef:
 		case T_A_Const:
 		case T_A_Star:

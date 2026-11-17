@@ -4,7 +4,7 @@
  *	Catalog routines used by pg_dump; long ago these were shared
  *	by another dump tool, but not anymore.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -274,8 +274,11 @@ getSchemaData(Archive *fout, int *numTablesPtr)
 	pg_log_info("reading publications");
 	(void) getPublications(fout, &numPublications);
 
-	pg_log_info("reading publication membership");
+	pg_log_info("reading publication membership of tables");
 	getPublicationTables(fout, tblinfo, numTables);
+
+	pg_log_info("reading publication membership of schemas");
+	getPublicationNamespaces(fout);
 
 	pg_log_info("reading subscriptions");
 	getSubscriptions(fout);

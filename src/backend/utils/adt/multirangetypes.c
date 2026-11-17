@@ -21,7 +21,7 @@
  *	for a particular range index.  Offsets are counted starting from the end of
  *	flags aligned to the bound type.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -713,7 +713,10 @@ multirange_get_range(TypeCacheEntry *rangetyp,
 	if (RANGE_HAS_LBOUND(flags))
 		ptr = (Pointer) att_addlength_pointer(ptr, typlen, ptr);
 	if (RANGE_HAS_UBOUND(flags))
+	{
+		ptr = (Pointer) att_align_pointer(ptr, typalign, typlen, ptr);
 		ptr = (Pointer) att_addlength_pointer(ptr, typlen, ptr);
+	}
 	len = (ptr - begin) + sizeof(RangeType) + sizeof(uint8);
 
 	range = palloc0(len);
@@ -961,7 +964,7 @@ multirange_constructor2(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(0))
 		elog(ERROR,
-			 "multirange values cannot contain NULL members");
+			 "multirange values cannot contain null members");
 
 	rangeArray = PG_GETARG_ARRAYTYPE_P(0);
 
@@ -973,9 +976,7 @@ multirange_constructor2(PG_FUNCTION_ARGS)
 
 	rngtypid = ARR_ELEMTYPE(rangeArray);
 	if (rngtypid != rangetyp->type_id)
-		ereport(ERROR,
-				(errcode(ERRCODE_DATATYPE_MISMATCH),
-				 errmsg("type %u does not match constructor type", rngtypid)));
+		elog(ERROR, "type %u does not match constructor type", rngtypid);
 
 	/*
 	 * Be careful: we can still be called with zero ranges, like this:
@@ -997,7 +998,7 @@ multirange_constructor2(PG_FUNCTION_ARGS)
 			if (nulls[i])
 				ereport(ERROR,
 						(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-						 errmsg("multirange values cannot contain NULL members")));
+						 errmsg("multirange values cannot contain null members")));
 
 			/* make_multirange will do its own copy */
 			ranges[i] = DatumGetRangeTypeP(elements[i]);
@@ -1031,16 +1032,14 @@ multirange_constructor1(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(0))
 		elog(ERROR,
-			 "multirange values cannot contain NULL members");
+			 "multirange values cannot contain null members");
 
 	range = PG_GETARG_RANGE_P(0);
 
 	/* Make sure the range type matches. */
 	rngtypid = RangeTypeGetOid(range);
 	if (rngtypid != rangetyp->type_id)
-		ereport(ERROR,
-				(errcode(ERRCODE_DATATYPE_MISMATCH),
-				 errmsg("type %u does not match constructor type", rngtypid)));
+		elog(ERROR, "type %u does not match constructor type", rngtypid);
 
 	PG_RETURN_MULTIRANGE_P(make_multirange(mltrngtypid, rangetyp, 1, &range));
 }

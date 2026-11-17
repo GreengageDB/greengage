@@ -2,7 +2,7 @@
  * backend_status.c
  *	  Backend status reporting infrastructure.
  *
- * Copyright (c) 2001-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2001-2022, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
@@ -601,9 +601,9 @@ pgstat_report_activity(BackendState state, const char *cmd_str)
 
 		if (beentry->st_state == STATE_RUNNING ||
 			beentry->st_state == STATE_FASTPATH)
-			pgstat_count_conn_active_time(secs * 1000000 + usecs);
+			pgstat_count_conn_active_time((PgStat_Counter) secs * 1000000 + usecs);
 		else
-			pgstat_count_conn_txn_idle_time(secs * 1000000 + usecs);
+			pgstat_count_conn_txn_idle_time((PgStat_Counter) secs * 1000000 + usecs);
 	}
 
 	/*

@@ -1,9 +1,9 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2022, PostgreSQL Global Development Group
 
 use strict;
 use warnings;
-use TestLib;
+use PostgreSQL::Test::Utils;
 use Test::More tests => 23;
 
 use FindBin;

@@ -1,11 +1,11 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2022, PostgreSQL Global Development Group
 
 # Test how pg_rewind reacts to extra files and directories in the data dirs.
 
 use strict;
 use warnings;
-use TestLib;
+use PostgreSQL::Test::Utils;
 use Test::More tests => 5;
 
 use File::Find;

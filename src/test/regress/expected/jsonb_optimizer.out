@@ -4841,7 +4841,7 @@ select ('[1, "2", null]'::jsonb)['1'];
 (1 row)
 
 select ('[1, "2", null]'::jsonb)[1.0];
-ERROR:  subscript type is not supported
+ERROR:  subscript type numeric is not supported
 LINE 1: select ('[1, "2", null]'::jsonb)[1.0];
                                          ^
 HINT:  Jsonb subscript must be coerced to either integer or text

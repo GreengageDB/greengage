@@ -12,7 +12,7 @@
  * respective utility commands.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *	src/backend/parser/parse_utilcmd.c
@@ -713,8 +713,8 @@ transformColumnDefinition(CreateStmtContext *cxt, ColumnDef *column)
 		 */
 		qstring = quote_qualified_identifier(snamespace, sname);
 		snamenode = makeNode(A_Const);
-		snamenode->val.type = T_String;
-		snamenode->val.val.str = qstring;
+		snamenode->val.node.type = T_String;
+		snamenode->val.sval.sval = qstring;
 		snamenode->location = -1;
 		castnode = makeNode(TypeCast);
 		castnode->typeName = SystemTypeName("regclass");
@@ -1700,7 +1700,7 @@ transformOfType(CreateStmtContext *cxt, TypeName *ofTypename)
 		n->location = -1;
 		cxt->columns = lappend(cxt->columns, n);
 	}
-	DecrTupleDescRefCount(tupdesc);
+	ReleaseTupleDesc(tupdesc);
 
 	ReleaseSysCache(tuple);
 }
@@ -2528,10 +2528,11 @@ transformDistributedBy(ParseState *pstate,
 
 				if (iparam && iparam->name != 0)
 				{
-					IndexElem *distrkey = makeNode(IndexElem);
+					DistributionKeyElem *distrkey = makeNode(DistributionKeyElem);
 
 					distrkey->name = iparam->name;
-					distrkey->opclass = NULL;
+					distrkey->opclass = NIL;
+					distrkey->location = -1;
 
 					distrkeys = lappend(distrkeys, distrkey);
 				}
@@ -2557,7 +2558,7 @@ transformDistributedBy(ParseState *pstate,
 				 */
 				foreach(ip, constraint->keys)
 				{
-					Value	   *v = lfirst(ip);
+					String	   *v = lfirst(ip);
 					ListCell   *dkcell;
 
 					foreach(dkcell, distrkeys)
@@ -2587,7 +2588,7 @@ transformDistributedBy(ParseState *pstate,
 				new_distrkeys = NIL;
 				foreach(ip, constraint->keys)
 				{
-					Value	   *v = lfirst(ip);
+					String	   *v = lfirst(ip);
 					DistributionKeyElem  *dk = makeNode(DistributionKeyElem);
 
 					dk->name = strVal(v);
@@ -3045,7 +3046,7 @@ transformDistributedBy(ParseState *pstate,
 
 		foreach(dk, distrkeys)
 		{
-			char	   *distcolname = strVal(lfirst(dk));
+			char	   *distcolname = ((DistributionKeyElem *) lfirst(dk))->name;
 			ListCell   *ip;
 			bool		found = false;
 
@@ -3085,7 +3086,7 @@ transformDistributedBy(ParseState *pstate,
 
 		foreach(dk, distrkeys)
 		{
-			char	   *distcolname = strVal(lfirst(dk));
+			char	   *distcolname = ((DistributionKeyElem *) lfirst(dk))->name;
 			ListCell   *ip;
 			bool		found = false;
 
@@ -4050,7 +4051,7 @@ transformIndexStmt(Oid relid, IndexStmt *stmt, const char *queryString)
 /*
  * transformStatsStmt - parse analysis for CREATE STATISTICS
  *
- * To avoid race conditions, it's important that this function rely only on
+ * To avoid race conditions, it's important that this function relies only on
  * the passed-in relid (and not on stmt->relation) to determine the target
  * relation.
  */
@@ -4106,7 +4107,7 @@ transformStatsStmt(Oid relid, CreateStatsStmt *stmt, const char *queryString)
 	if (list_length(pstate->p_rtable) != 1)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
-				 errmsg("statistics expressions can refer only to the table being indexed")));
+				 errmsg("statistics expressions can refer only to the table being referenced")));
 
 	free_parsestate(pstate);
 
@@ -4815,7 +4816,7 @@ transformAlterTableStmt(Oid relid, AlterTableStmt *stmt,
 		newcmds = lappend(newcmds, newcmd);
 	}
 
-	/* Append extended statistic objects */
+	/* Append extended statistics objects */
 	transformExtendedStatistics(&cxt);
 
 	/* Close rel */

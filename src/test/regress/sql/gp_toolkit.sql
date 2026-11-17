@@ -5,6 +5,11 @@
 create database toolkit_testdb;
 \c toolkit_testdb
 
+-- PG15 no longer grants CREATE on schema public to PUBLIC in a freshly created
+-- database; restore it so the non-superuser toolkit_user1 can create a table in
+-- public below (mirroring the regression test_setup for the main database).
+GRANT ALL ON SCHEMA public TO public;
+
 create role toolkit_admin superuser createdb;
 create role toolkit_user1 login;
 

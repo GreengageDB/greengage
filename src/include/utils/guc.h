@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2007-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Copyright (c) 2000-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2000-2022, PostgreSQL Global Development Group
  * Written by Peter Eisentraut <peter_e@gmx.net>.
  *
  * src/include/utils/guc.h
@@ -240,10 +240,20 @@ typedef enum
 
 #define GUC_EXPLAIN			  0x100000	/* include in explain */
 
+/*
+ * GUC_RUNTIME_COMPUTED is intended for runtime-computed GUCs that are only
+ * available via 'postgres -C' if the server is not running.
+ */
+#define GUC_RUNTIME_COMPUTED  0x200000
+
 #define GUC_UNIT				(GUC_UNIT_MEMORY | GUC_UNIT_TIME)
 
 /* GPDB speific */
-#define GUC_DISALLOW_USER_SET  0x00200000 /* Do not allow this GUC to be set by the user */
+/*
+ * NB: keep these above every upstream GUC_* flag bit.  GUC_DISALLOW_USER_SET
+ * used to be 0x00200000, which upstream now uses for GUC_RUNTIME_COMPUTED.
+ */
+#define GUC_DISALLOW_USER_SET  0x01000000 /* Do not allow this GUC to be set by the user */
 #define GUC_GPDB_NEED_SYNC     0x00400000  /* guc value is synced between master and primary */
 #define GUC_GPDB_NO_SYNC       0x00800000  /* guc value is not synced between master and primary */
 

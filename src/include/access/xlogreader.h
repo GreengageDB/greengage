@@ -3,7 +3,7 @@
  * xlogreader.h
  *		Definitions for the generic XLog reading facility
  *
- * Portions Copyright (c) 2013-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2013-2022, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *		src/include/access/xlogreader.h
@@ -175,6 +175,16 @@ struct XLogReaderState
 	XLogRecPtr	ReadRecPtr;		/* start of last record read */
 	XLogRecPtr	EndRecPtr;		/* end+1 of last record read */
 
+	/*
+	 * Set at the end of recovery: the start point of a partial record at the
+	 * end of WAL (InvalidXLogRecPtr if there wasn't one), and the start
+	 * location of its first contrecord that went missing.
+	 */
+	XLogRecPtr	abortedRecPtr;
+	XLogRecPtr	missingContrecPtr;
+	/* Set when XLP_FIRST_IS_OVERWRITE_CONTRECORD is found */
+	XLogRecPtr	overwrittenRecPtr;
+
 
 	/* ----------------------------------------
 	 * Decoded representation of current record
@@ -251,16 +261,6 @@ struct XLogReaderState
 
 	/* Buffer to hold error message */
 	char	   *errormsg_buf;
-
-	/*
-	 * Set at the end of recovery: the start point of a partial record at the
-	 * end of WAL (InvalidXLogRecPtr if there wasn't one), and the start
-	 * location of its first contrecord that went missing.
-	 */
-	XLogRecPtr	abortedRecPtr;
-	XLogRecPtr	missingContrecPtr;
-	/* Set when XLP_FIRST_IS_OVERWRITE_CONTRECORD is found */
-	XLogRecPtr	overwrittenRecPtr;
 };
 
 /* Get a new XLogReader */

@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1064,7 +1064,7 @@ transformRangeTableFunc(ParseState *pstate, RangeTableFunc *rtf)
 			{
 				foreach(lc2, ns_names)
 				{
-					Value	   *ns_node = (Value *) lfirst(lc2);
+					String	   *ns_node = lfirst_node(String, lc2);
 
 					if (ns_node == NULL)
 						continue;
@@ -1452,7 +1452,7 @@ transformFromClauseItem(ParseState *pstate, Node *n,
 			foreach(lx, l_colnames)
 			{
 				char	   *l_colname = strVal(lfirst(lx));
-				Value	   *m_name = NULL;
+				String	   *m_name = NULL;
 
 				if (l_colname[0] == '\0')
 					continue;	/* ignore dropped columns */
@@ -1997,7 +1997,7 @@ transformLimitClause(ParseState *pstate, Node *clause,
 	 * unadorned NULL that's not accepted back by the grammar.
 	 */
 	if (exprKind == EXPR_KIND_LIMIT && limitOption == LIMIT_OPTION_WITH_TIES &&
-		IsA(clause, A_Const) && ((A_Const *) clause)->val.type == T_Null)
+		IsA(clause, A_Const) && castNode(A_Const, clause)->isnull)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_ROW_COUNT_IN_LIMIT_CLAUSE),
 				 errmsg("row count cannot be null in FETCH FIRST ... WITH TIES clause")));
@@ -2210,20 +2210,19 @@ findTargetlistEntrySQL92(ParseState *pstate, Node *node, List **tlist,
 	}
 	if (IsA(node, A_Const))
 	{
-		Value	   *val = &((A_Const *) node)->val;
-		int			location = ((A_Const *) node)->location;
+		A_Const	   *aconst = castNode(A_Const, node);
 		int			targetlist_pos = 0;
 		int			target_pos;
 
-		if (!IsA(val, Integer))
+		if (!IsA(&aconst->val, Integer))
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
 			/* translator: %s is name of a SQL construct, eg ORDER BY */
 					 errmsg("non-integer constant in %s",
 							ParseExprKindName(exprKind)),
-					 parser_errposition(pstate, location)));
+					 parser_errposition(pstate, aconst->location)));
 
-		target_pos = intVal(val);
+		target_pos = intVal(&aconst->val);
 		foreach(tl, *tlist)
 		{
 			TargetEntry *tle = (TargetEntry *) lfirst(tl);
@@ -2243,7 +2242,7 @@ findTargetlistEntrySQL92(ParseState *pstate, Node *node, List **tlist,
 		/* translator: %s is name of a SQL construct, eg ORDER BY */
 				 errmsg("%s position %d is not in select list",
 						ParseExprKindName(exprKind), target_pos),
-				 parser_errposition(pstate, location)));
+				 parser_errposition(pstate, aconst->location)));
 	}
 
 	/*

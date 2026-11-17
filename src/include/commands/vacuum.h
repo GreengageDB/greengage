@@ -4,7 +4,7 @@
  *	  header file for postgres vacuum cleaner and statistics analyzer
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/vacuum.h
@@ -15,6 +15,8 @@
 #define VACUUM_H
 
 #include "access/htup.h"
+#include "access/genam.h"
+#include "access/parallel.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_statistic.h"
 #include "catalog/pg_type.h"
@@ -42,7 +44,7 @@
 
 /*
  * bulkdelete can be performed in parallel.  This option can be used by
- * IndexAm's that need to scan the index to delete the tuples.
+ * index AMs that need to scan indexes to delete tuples.
  */
 #define VACUUM_OPTION_PARALLEL_BULKDEL		(1 << 0)
 
@@ -63,6 +65,9 @@
 
 /* value for checking vacuum flags */
 #define VACUUM_OPTION_MAX_VALID_VALUE		((1 << 3) - 1)
+
+/* Abstract type for parallel vacuum state */
+typedef struct ParallelVacuumState ParallelVacuumState;
 
 /*----------
  * ANALYZE builds one of these structs for each attribute (column) that is
@@ -320,6 +325,21 @@ typedef struct
 	bool		summary_sent;
 } gp_acquire_sample_rows_context;
 
+/*
+ * VacDeadItems stores TIDs whose index tuples are deleted by index vacuuming.
+ */
+typedef struct VacDeadItems
+{
+	int			max_items;		/* # slots allocated in array */
+	int			num_items;		/* current # of entries */
+
+	/* Sorted array of TIDs to delete from indexes */
+	ItemPointerData items[FLEXIBLE_ARRAY_MEMBER];
+} VacDeadItems;
+
+#define MAXDEADITEMS(avail_mem) \
+	(((avail_mem) - offsetof(VacDeadItems, items)) / sizeof(ItemPointerData))
+
 /* GUC parameters */
 extern PGDLLIMPORT int default_statistics_target;	/* PGDLLIMPORT for PostGIS */
 extern int	vacuum_freeze_min_age;
@@ -377,6 +397,28 @@ extern bool vacuum_is_relation_owner(Oid relid, Form_pg_class reltuple,
 extern Relation vacuum_open_relation(Oid relid, RangeVar *relation,
 									 bits32 options, bool verbose,
 									 LOCKMODE lmode);
+extern IndexBulkDeleteResult *vac_bulkdel_one_index(IndexVacuumInfo *ivinfo,
+													IndexBulkDeleteResult *istat,
+													VacDeadItems *dead_items);
+extern IndexBulkDeleteResult *vac_cleanup_one_index(IndexVacuumInfo *ivinfo,
+													IndexBulkDeleteResult *istat);
+extern Size vac_max_items_to_alloc_size(int max_items);
+
+/* in commands/vacuumparallel.c */
+extern ParallelVacuumState *parallel_vacuum_init(Relation rel, Relation *indrels,
+												 int nindexes, int nrequested_workers,
+												 int max_items, int elevel,
+												 BufferAccessStrategy bstrategy);
+extern void parallel_vacuum_end(ParallelVacuumState *pvs, IndexBulkDeleteResult **istats);
+extern VacDeadItems *parallel_vacuum_get_dead_items(ParallelVacuumState *pvs);
+extern void parallel_vacuum_bulkdel_all_indexes(ParallelVacuumState *pvs,
+												long num_table_tuples,
+												int num_index_scans);
+extern void parallel_vacuum_cleanup_all_indexes(ParallelVacuumState *pvs,
+												long num_table_tuples,
+												int num_index_scans,
+												bool estimated_count);
+extern void parallel_vacuum_main(dsm_segment *seg, shm_toc *toc);
 
 extern bool vacuumStatement_IsTemporary(Relation onerel);
 

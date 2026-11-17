@@ -2,7 +2,7 @@
 #
 # Makefile for src/interfaces/libpq library
 #
-# Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+# Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
 # Portions Copyright (c) 1994, Regents of the University of California
 #
 # src/interfaces/libpq/Makefile
@@ -115,7 +115,9 @@ backend_src = $(top_srcdir)/src/backend
 libpq-refs-stamp: $(shlib)
 ifneq ($(enable_coverage), yes)
 ifeq (,$(filter aix solaris,$(PORTNAME)))
-	! nm -A -u $< 2>/dev/null | grep -v __cxa_atexit | grep exit
+	@if nm -A -u $< 2>/dev/null | grep -v __cxa_atexit | grep exit; then \
+		echo 'libpq must not be calling any function which invokes exit'; exit 1; \
+	fi
 endif
 endif
 	touch $@

@@ -3,7 +3,7 @@
  * xactdesc.c
  *	  rmgr descriptor routines for access/transam/xact.c
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -16,6 +16,7 @@
 
 #include "access/transam.h"
 #include "access/xact.h"
+#include "replication/origin.h"
 #include "storage/dbdirnode.h"
 #include "storage/sinval.h"
 #include "storage/standbydefs.h"
@@ -361,6 +362,9 @@ xact_desc_commit(StringInfo buf, uint8 info, xl_xact_commit *xlrec, RepOriginId 
 	if (xlrec->tablespace_oid_to_delete_on_commit != InvalidOid)
 		appendStringInfo(buf, "; tablespace_oid_to_delete_on_commit: %u", xlrec->tablespace_oid_to_delete_on_commit);
 
+	if (XactCompletionApplyFeedback(parsed.xinfo))
+		appendStringInfoString(buf, "; apply_feedback");
+
 	if (XactCompletionForceSyncCommit(parsed.xinfo))
 		appendStringInfoString(buf, "; sync");
 
@@ -390,7 +394,7 @@ xact_desc_distributed_commit(StringInfo buf, uint8 info, xl_xact_commit *xlrec, 
 }
 
 static void
-xact_desc_abort(StringInfo buf, uint8 info, xl_xact_abort *xlrec)
+xact_desc_abort(StringInfo buf, uint8 info, xl_xact_abort *xlrec, RepOriginId origin_id)
 {
 	xl_xact_parsed_abort parsed;
 
@@ -408,10 +412,18 @@ xact_desc_abort(StringInfo buf, uint8 info, xl_xact_abort *xlrec)
 
 	if (xlrec->tablespace_oid_to_delete_on_abort != InvalidOid)
 		appendStringInfo(buf, "; tablespace_oid_to_delete_on_abort: %u", xlrec->tablespace_oid_to_delete_on_abort);
+
+	if (parsed.xinfo & XACT_XINFO_HAS_ORIGIN)
+	{
+		appendStringInfo(buf, "; origin: node %u, lsn %X/%X, at %s",
+						 origin_id,
+						 LSN_FORMAT_ARGS(parsed.origin_lsn),
+						 timestamptz_to_str(parsed.origin_timestamp));
+	}
 }
 
 static void
-xact_desc_prepare(StringInfo buf, uint8 info, xl_xact_prepare *xlrec)
+xact_desc_prepare(StringInfo buf, uint8 info, xl_xact_prepare *xlrec, RepOriginId origin_id)
 {
 	xl_xact_parsed_prepare parsed;
 
@@ -433,6 +445,16 @@ xact_desc_prepare(StringInfo buf, uint8 info, xl_xact_prepare *xlrec)
 
 	if (xlrec->tablespace_oid_to_delete_on_abort != InvalidOid)
 		appendStringInfo(buf, "; tablespace_oid_to_delete_on_abort = %u", xlrec->tablespace_oid_to_delete_on_abort);
+
+	/*
+	 * Check if the replication origin has been set in this record in the
+	 * same way as PrepareRedoAdd().
+	 */
+	if (origin_id != InvalidRepOriginId)
+		appendStringInfo(buf, "; origin: node %u, lsn %X/%X, at %s",
+						 origin_id,
+						 LSN_FORMAT_ARGS(parsed.origin_lsn),
+						 timestamptz_to_str(parsed.origin_timestamp));
 }
 
 static void
@@ -463,13 +485,15 @@ xact_desc(StringInfo buf, XLogReaderState *record)
 	{
 		xl_xact_abort *xlrec = (xl_xact_abort *) rec;
 
-		xact_desc_abort(buf, XLogRecGetInfo(record), xlrec);
+		xact_desc_abort(buf, XLogRecGetInfo(record), xlrec,
+						XLogRecGetOrigin(record));
 	}
 	else if (info == XLOG_XACT_PREPARE)
 	{
 		xl_xact_prepare *xlrec = (xl_xact_prepare *) rec;
 
-		xact_desc_prepare(buf, XLogRecGetInfo(record), xlrec);
+		xact_desc_prepare(buf, XLogRecGetInfo(record), xlrec,
+						  XLogRecGetOrigin(record));
 	}
 	else if (info == XLOG_XACT_ASSIGNMENT)
 	{

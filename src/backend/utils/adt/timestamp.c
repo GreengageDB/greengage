@@ -3,7 +3,7 @@
  * timestamp.c
  *	  Functions for the built-in SQL types "timestamp" and "interval".
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -2705,20 +2705,17 @@ static inline INT128
 interval_cmp_value(const Interval *interval)
 {
 	INT128		span;
-	int64		dayfraction;
 	int64		days;
 
 	/*
-	 * Separate time field into days and dayfraction, then add the month and
-	 * day fields to the days part.  We cannot overflow int64 days here.
+	 * Combine the month and day fields into an integral number of days.
+	 * Because the inputs are int32, int64 arithmetic suffices here.
 	 */
-	dayfraction = interval->time % USECS_PER_DAY;
-	days = interval->time / USECS_PER_DAY;
-	days += interval->month * INT64CONST(30);
+	days = interval->month * INT64CONST(30);
 	days += interval->day;
 
-	/* Widen dayfraction to 128 bits */
-	span = int64_to_int128(dayfraction);
+	/* Widen time field to 128 bits */
+	span = int64_to_int128(interval->time);
 
 	/* Scale up days to microseconds, forming a 128-bit product */
 	int128_add_int64_mul_int64(&span, days, USECS_PER_DAY);
@@ -4633,8 +4630,8 @@ timestamp_trunc(PG_FUNCTION_ARGS)
 			default:
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("timestamp units \"%s\" not supported",
-								lowunits)));
+						 errmsg("unit \"%s\" not supported for type %s",
+								lowunits, format_type_be(TIMESTAMPOID))));
 				result = 0;
 		}
 
@@ -4647,8 +4644,8 @@ timestamp_trunc(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("timestamp units \"%s\" not recognized",
-						lowunits)));
+				 errmsg("unit \"%s\" not recognized for type %s",
+						lowunits, format_type_be(TIMESTAMPOID))));
 		result = 0;
 	}
 
@@ -4826,8 +4823,8 @@ timestamptz_trunc_internal(text *units, TimestampTz timestamp, pg_tz *tzp)
 			default:
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("timestamp with time zone units \"%s\" not "
-								"supported", lowunits)));
+						 errmsg("unit \"%s\" not supported for type %s",
+								lowunits, format_type_be(TIMESTAMPTZOID))));
 				result = 0;
 		}
 
@@ -4843,8 +4840,8 @@ timestamptz_trunc_internal(text *units, TimestampTz timestamp, pg_tz *tzp)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("timestamp with time zone units \"%s\" not recognized",
-						lowunits)));
+				 errmsg("unit \"%s\" not recognized for type %s",
+						lowunits, format_type_be(TIMESTAMPTZOID))));
 		result = 0;
 	}
 
@@ -4998,17 +4995,11 @@ interval_trunc(PG_FUNCTION_ARGS)
 					break;
 
 				default:
-					if (val == DTK_WEEK)
-						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("interval units \"%s\" not supported "
-										"because months usually have fractional weeks",
-										lowunits)));
-					else
-						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("interval units \"%s\" not supported",
-										lowunits)));
+					ereport(ERROR,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							 errmsg("unit \"%s\" not supported for type %s",
+									lowunits, format_type_be(INTERVALOID)),
+							 (val == DTK_WEEK) ? errdetail("Months usually have fractional weeks.") : 0));
 			}
 
 			if (tm2interval(tm, fsec, result) != 0)
@@ -5023,8 +5014,8 @@ interval_trunc(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("interval units \"%s\" not recognized",
-						lowunits)));
+				 errmsg("unit \"%s\" not recognized for type %s",
+						lowunits, format_type_be(INTERVALOID))));
 	}
 
 	PG_RETURN_INTERVAL_P(result);
@@ -5220,18 +5211,11 @@ NonFiniteTimestampTzPart(int type, int unit, char *lowunits,
 						 bool isNegative, bool isTz)
 {
 	if ((type != UNITS) && (type != RESERV))
-	{
-		if (isTz)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("timestamp with time zone units \"%s\" not recognized",
-							lowunits)));
-		else
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("timestamp units \"%s\" not recognized",
-							lowunits)));
-	}
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("unit \"%s\" not recognized for type %s",
+						lowunits,
+						format_type_be(isTz ? TIMESTAMPTZOID : TIMESTAMPOID))));
 
 	switch (unit)
 	{
@@ -5267,16 +5251,11 @@ NonFiniteTimestampTzPart(int type, int unit, char *lowunits,
 				return get_float8_infinity();
 
 		default:
-			if (isTz)
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("timestamp with time zone units \"%s\" not supported",
-								lowunits)));
-			else
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("timestamp units \"%s\" not supported",
-								lowunits)));
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("unit \"%s\" not supported for type %s",
+							lowunits,
+							format_type_be(isTz ? TIMESTAMPTZOID : TIMESTAMPOID))));
 			return 0.0;			/* keep compiler quiet */
 	}
 }
@@ -5475,8 +5454,8 @@ timestamp_part_common(PG_FUNCTION_ARGS, bool retnumeric)
 			default:
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("timestamp units \"%s\" not supported",
-								lowunits)));
+						 errmsg("unit \"%s\" not supported for type %s",
+								lowunits, format_type_be(TIMESTAMPOID))));
 				intresult = 0;
 		}
 	}
@@ -5522,8 +5501,8 @@ timestamp_part_common(PG_FUNCTION_ARGS, bool retnumeric)
 			default:
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("timestamp units \"%s\" not supported",
-								lowunits)));
+						 errmsg("unit \"%s\" not supported for type %s",
+								lowunits, format_type_be(TIMESTAMPOID))));
 				intresult = 0;
 		}
 
@@ -5532,7 +5511,8 @@ timestamp_part_common(PG_FUNCTION_ARGS, bool retnumeric)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("timestamp units \"%s\" not recognized", lowunits)));
+				 errmsg("unit \"%s\" not recognized for type %s",
+						lowunits, format_type_be(TIMESTAMPOID))));
 		intresult = 0;
 	}
 
@@ -5746,8 +5726,8 @@ timestamptz_part_common(PG_FUNCTION_ARGS, bool retnumeric)
 			default:
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("timestamp with time zone units \"%s\" not supported",
-								lowunits)));
+						 errmsg("unit \"%s\" not supported for type %s",
+								lowunits, format_type_be(TIMESTAMPTZOID))));
 				intresult = 0;
 		}
 
@@ -5794,8 +5774,8 @@ timestamptz_part_common(PG_FUNCTION_ARGS, bool retnumeric)
 			default:
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("timestamp with time zone units \"%s\" not supported",
-								lowunits)));
+						 errmsg("unit \"%s\" not supported for type %s",
+								lowunits, format_type_be(TIMESTAMPTZOID))));
 				intresult = 0;
 		}
 	}
@@ -5803,8 +5783,8 @@ timestamptz_part_common(PG_FUNCTION_ARGS, bool retnumeric)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("timestamp with time zone units \"%s\" not recognized",
-						lowunits)));
+				 errmsg("unit \"%s\" not recognized for type %s",
+						lowunits, format_type_be(TIMESTAMPTZOID))));
 
 		intresult = 0;
 	}
@@ -5926,8 +5906,8 @@ interval_part_common(PG_FUNCTION_ARGS, bool retnumeric)
 				default:
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							 errmsg("interval units \"%s\" not supported",
-									lowunits)));
+							 errmsg("unit \"%s\" not supported for type %s",
+									lowunits, format_type_be(INTERVALOID))));
 					intresult = 0;
 			}
 		}
@@ -5987,8 +5967,8 @@ interval_part_common(PG_FUNCTION_ARGS, bool retnumeric)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("interval units \"%s\" not recognized",
-						lowunits)));
+				 errmsg("unit \"%s\" not recognized for type %s",
+						lowunits, format_type_be(INTERVALOID))));
 		intresult = 0;
 	}
 

@@ -5,7 +5,7 @@
  * Basically this is stuff that is useful in both pg_dump and pg_dumpall.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/bin/pg_dump/dumputils.c
@@ -41,6 +41,7 @@ static void AddAcl(PQExpBuffer aclbuf, const char *keyword,
  *	acls: the ACL string fetched from the database
  *	baseacls: the initial ACL string for this object; can be
  *		NULL or empty string to indicate "not available from server"
+ *		(GPDB: external protocols dumped from GPDB 6, see getExtProtocols())
  *	owner: username of object owner (will be passed through fmtId); can be
  *		NULL or empty string to indicate "no owner known"
  *	prefix: string to prefix to each generated command; typically empty
@@ -226,16 +227,25 @@ buildACLCommands(const char *name, const char *subname, const char *nspname,
 				appendPQExpBuffer(firstsql, "%s FROM ", name);
 				if (grantee->len == 0)
 					appendPQExpBufferStr(firstsql, "PUBLIC;\n");
-				else if (strncmp(grantee->data, "group ",
-								 strlen("group ")) == 0)
-					appendPQExpBuffer(firstsql, "GROUP %s;\n",
-									  fmtId(grantee->data + strlen("group ")));
 				else
 					appendPQExpBuffer(firstsql, "%s;\n",
 									  fmtId(grantee->data));
 			}
 		}
 	}
+
+	/*
+	 * At this point we have issued REVOKE statements for all initial and
+	 * default privileges that are no longer present on the object, so we are
+	 * almost ready to GRANT the privileges listed in grantitems[].
+	 *
+	 * We still need some hacking though to cover the case where new default
+	 * public privileges are added in new versions: the REVOKE ALL will revoke
+	 * them, leading to behavior different from what the old version had,
+	 * which is generally not what's wanted.  So add back default privs if the
+	 * source database is too old to have had that particular priv.  (As of
+	 * right now, no such cases exist in supported versions.)
+	 */
 
 	/*
 	 * Scan individual ACL items to be granted.
@@ -287,10 +297,6 @@ buildACLCommands(const char *name, const char *subname, const char *nspname,
 					appendPQExpBuffer(thissql, "%s TO ", name);
 					if (grantee->len == 0)
 						appendPQExpBufferStr(thissql, "PUBLIC;\n");
-					else if (strncmp(grantee->data, "group ",
-									 strlen("group ")) == 0)
-						appendPQExpBuffer(thissql, "GROUP %s;\n",
-										  fmtId(grantee->data + strlen("group ")));
 					else
 						appendPQExpBuffer(thissql, "%s;\n", fmtId(grantee->data));
 				}
@@ -303,10 +309,6 @@ buildACLCommands(const char *name, const char *subname, const char *nspname,
 					appendPQExpBuffer(thissql, "%s TO ", name);
 					if (grantee->len == 0)
 						appendPQExpBufferStr(thissql, "PUBLIC");
-					else if (strncmp(grantee->data, "group ",
-									 strlen("group ")) == 0)
-						appendPQExpBuffer(thissql, "GROUP %s",
-										  fmtId(grantee->data + strlen("group ")));
 					else
 						appendPQExpBufferStr(thissql, fmtId(grantee->data));
 					appendPQExpBufferStr(thissql, " WITH GRANT OPTION;\n");
@@ -401,16 +403,12 @@ buildDefaultACLCommands(const char *type, const char *nspname,
 /*
  * This will parse an aclitem string, having the general form
  *		username=privilegecodes/grantor
- * or
- *		group groupname=privilegecodes/grantor
- * (the "group" case occurs only with servers before 8.1).
  *
  * Returns true on success, false on parse error.  On success, the components
  * of the string are returned in the PQExpBuffer parameters.
  *
- * The returned grantee string will be the dequoted username or groupname
- * (preceded with "group " in the latter case).  Note that a grant to PUBLIC
- * is represented by an empty grantee string.  The returned grantor is the
+ * The returned grantee string will be the dequoted username, or an empty
+ * string in the case of a grant to PUBLIC.  The returned grantor is the
  * dequoted grantor name.  Privilege characters are translated to GRANT/REVOKE
  * comma-separated privileges lists.  If "privswgo" is non-NULL, the result is
  * separate lists for privileges with grant option ("privswgo") and without
@@ -503,8 +501,7 @@ do { \
 			{
 				CONVERT_PRIV('d', "DELETE");
 				CONVERT_PRIV('t', "TRIGGER");
-				if (remoteVersion >= 80400)
-					CONVERT_PRIV('D', "TRUNCATE");
+				CONVERT_PRIV('D', "TRUNCATE");
 			}
 		}
 

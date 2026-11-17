@@ -1,66 +1,18 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2022, PostgreSQL Global Development Group
 
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More;
 use Config;
 
 # start a pgbench specific server
-my $node = PostgresNode->new('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init;
 $node->start;
-
-# invoke pgbench, with parameters:
-#   $opts: options as a string to be split on spaces
-#   $stat: expected exit status
-#   $out: reference to a regexp list that must match stdout
-#   $err: reference to a regexp list that must match stderr
-#   $name: name of test for error messages
-#   $files: reference to filename/contents dictionary
-#   @args: further raw options or arguments
-sub pgbench
-{
-	local $Test::Builder::Level = $Test::Builder::Level + 1;
-
-	my ($opts, $stat, $out, $err, $name, $files, @args) = @_;
-	my @cmd = ('pgbench', split /\s+/, $opts);
-	my @filenames = ();
-	if (defined $files)
-	{
-
-		# note: files are ordered for determinism
-		for my $fn (sort keys %$files)
-		{
-			my $filename = $node->basedir . '/' . $fn;
-			push @cmd, '-f', $filename;
-
-			# cleanup file weight
-			$filename =~ s/\@\d+$//;
-
-			#push @filenames, $filename;
-			# filenames are expected to be unique on a test
-			if (-e $filename)
-			{
-				ok(0, "$filename must not already exist");
-				unlink $filename or die "cannot unlink $filename: $!";
-			}
-			append_to_file($filename, $$files{$fn});
-		}
-	}
-
-	push @cmd, @args;
-
-	$node->command_checks_all(\@cmd, $stat, $out, $err, $name);
-
-	# cleanup?
-	#unlink @filenames or die "cannot unlink files (@filenames): $!";
-
-	return;
-}
 
 # tablespace for testing, because partitioned tables cannot use pg_default
 # explicitly and we want to test that table creation with tablespace works
@@ -68,7 +20,7 @@ sub pgbench
 my $ts = $node->basedir . '/regress_pgbench_tap_1_ts_dir';
 mkdir $ts or die "cannot create directory $ts";
 # this takes care of WIN-specific path issues
-my $ets = TestLib::perl2host($ts);
+my $ets = PostgreSQL::Test::Utils::perl2host($ts);
 
 # the next commands will issue a syntax error if the path contains a "'"
 $node->safe_psql('postgres',
@@ -77,7 +29,7 @@ $node->safe_psql('postgres',
 # Test concurrent OID generation via pg_enum_oid_index.  This indirectly
 # exercises LWLock and spinlock concurrency.
 my $labels = join ',', map { "'l$_'" } 1 .. 1000;
-pgbench(
+$node->pgbench(
 	'--no-vacuum --client=5 --protocol=prepared --transactions=25',
 	0,
 	[qr{processed: 125/125}],
@@ -89,7 +41,7 @@ pgbench(
 	});
 
 # Trigger various connection errors
-pgbench(
+$node->pgbench(
 	'no-such-database',
 	1,
 	[qr{^$}],
@@ -99,13 +51,13 @@ pgbench(
 	],
 	'no such database');
 
-pgbench(
+$node->pgbench(
 	'-S -t 1', 1, [],
 	[qr{Perhaps you need to do initialization}],
 	'run without init');
 
 # Initialize pgbench tables scale 1
-pgbench(
+$node->pgbench(
 	'-i', 0,
 	[qr{^$}],
 	[
@@ -117,7 +69,7 @@ pgbench(
 	'pgbench scale 1 initialization',);
 
 # Again, with all possible options
-pgbench(
+$node->pgbench(
 	'--initialize --init-steps=dtpvg --scale=1 --unlogged-tables --fillfactor=98 --foreign-keys --quiet --tablespace=regress_pgbench_tap_1_ts --index-tablespace=regress_pgbench_tap_1_ts --partitions=2 --partition-method=hash',
 	0,
 	[qr{^$}i],
@@ -134,7 +86,7 @@ pgbench(
 	'pgbench scale 1 initialization');
 
 # Test interaction of --init-steps with legacy step-selection options
-pgbench(
+$node->pgbench(
 	'--initialize --init-steps=dtpvGvv --no-vacuum --foreign-keys --unlogged-tables --partitions=3',
 	0,
 	[qr{^$}],
@@ -151,7 +103,7 @@ pgbench(
 	'pgbench --init-steps');
 
 # Run all builtin scripts, for a few transactions each
-pgbench(
+$node->pgbench(
 	'--transactions=5 -Dfoo=bla --client=2 --protocol=simple --builtin=t'
 	  . ' --connect -n -v -n',
 	0,
@@ -164,7 +116,7 @@ pgbench(
 	[qr{^$}],
 	'pgbench tpcb-like');
 
-pgbench(
+$node->pgbench(
 	'--transactions=20 --client=5 -M extended --builtin=si -C --no-vacuum -s 1',
 	0,
 	[
@@ -177,7 +129,7 @@ pgbench(
 	[qr{scale option ignored}],
 	'pgbench simple update');
 
-pgbench(
+$node->pgbench(
 	'-t 100 -c 7 -M prepared -b se --debug',
 	0,
 	[
@@ -203,7 +155,7 @@ my $nthreads = 2;
 }
 
 # run custom scripts
-pgbench(
+$node->pgbench(
 	"-t 100 -c 1 -j $nthreads -M prepared -n",
 	0,
 	[
@@ -233,7 +185,7 @@ COMMIT;
 }
 	});
 
-pgbench(
+$node->pgbench(
 	'-n -t 10 -c 1 -M simple',
 	0,
 	[
@@ -254,7 +206,7 @@ COMMIT;
 }
 	});
 
-pgbench(
+$node->pgbench(
 	'-n -t 10 -c 2 -M extended',
 	0,
 	[
@@ -285,7 +237,7 @@ $node->append_conf('postgresql.conf',
 	  . "log_parameter_max_length = 0\n"
 	  . "log_parameter_max_length_on_error = 0");
 $node->reload;
-pgbench(
+$node->pgbench(
 	'-n -t1 -c1 -M prepared',
 	2,
 	[],
@@ -300,7 +252,7 @@ select $$'Valame Dios!' dijo Sancho; 'no le dije yo a vuestra merced que mirase 
 select column1::jsonb from (values (:value), (:long)) as q;
 ]
 	});
-my $log = TestLib::slurp_file($node->logfile);
+my $log = PostgreSQL::Test::Utils::slurp_file($node->logfile);
 unlike(
 	$log,
 	qr[DETAIL:  parameters: \$1 = '\{ invalid ',],
@@ -312,7 +264,7 @@ $node->append_conf('postgresql.conf',
 	    "log_parameter_max_length = -1\n"
 	  . "log_parameter_max_length_on_error = 64");
 $node->reload;
-pgbench(
+$node->pgbench(
 	'-n -t1 -c1 -M prepared',
 	2,
 	[],
@@ -326,7 +278,7 @@ pgbench(
 SELECT 1 / (random() / 2)::int, :one::int, :two::int;
 }
 	});
-pgbench(
+$node->pgbench(
 	'-n -t1 -c1 -M prepared',
 	2,
 	[],
@@ -341,7 +293,7 @@ select $$'Valame Dios!' dijo Sancho; 'no le dije yo a vuestra merced que mirase 
 select column1::jsonb from (values (:value), (:long)) as q;
 ]
 	});
-$log = TestLib::slurp_file($node->logfile);
+$log = PostgreSQL::Test::Utils::slurp_file($node->logfile);
 like(
 	$log,
 	qr[DETAIL:  parameters: \$1 = '\{ invalid ', \$2 = '''Valame Dios!'' dijo Sancho; ''no le dije yo a vuestra merced que mirase bien lo que hacia\?'''],
@@ -354,7 +306,7 @@ $node->append_conf('postgresql.conf',
 	  . "log_parameter_max_length = 7\n"
 	  . "log_parameter_max_length_on_error = -1");
 $node->reload;
-pgbench(
+$node->pgbench(
 	'-n -t1 -c1 -M prepared',
 	2,
 	[],
@@ -371,7 +323,7 @@ SELECT 1 / (random() / 2)::int, :one::int, :two::int;
 
 $node->append_conf('postgresql.conf', "log_min_duration_statement = 0");
 $node->reload;
-pgbench(
+$node->pgbench(
 	'-n -t1 -c1 -M prepared',
 	2,
 	[],
@@ -386,7 +338,7 @@ select $$'Valame Dios!' dijo Sancho; 'no le dije yo a vuestra merced que mirase 
 select column1::jsonb from (values (:value), (:long)) as q;
 ]
 	});
-$log = TestLib::slurp_file($node->logfile);
+$log = PostgreSQL::Test::Utils::slurp_file($node->logfile);
 like(
 	$log,
 	qr[DETAIL:  parameters: \$1 = '\{ inval\.\.\.', \$2 = '''Valame\.\.\.'],
@@ -394,7 +346,7 @@ like(
 $log = undef;
 
 # Check that bad parameters are reported during typinput phase of BIND
-pgbench(
+$node->pgbench(
 	'-n -t1 -c1 -M prepared',
 	2,
 	[],
@@ -417,8 +369,7 @@ $node->append_conf('postgresql.conf',
 $node->reload;
 
 # test expressions
-# command 1..3 and 23 depend on random seed which is used to call srandom.
-pgbench(
+$node->pgbench(
 	'--random-seed=5432 -t 1 -Dfoo=-10.1 -Dbla=false -Di=+3 -Dn=null -Dt=t -Df=of -Dd=1.0',
 	0,
 	[ qr{type: .*/001_pgbench_expressions}, qr{processed: 1/1} ],
@@ -426,9 +377,9 @@ pgbench(
 		qr{setting random seed to 5432\b},
 
 		# After explicit seeding, the four random checks (1-3,20) are
-		# deterministic
-		qr{command=1.: int 13\b},      # uniform random
-		qr{command=2.: int 116\b},     # exponential random
+		# deterministic; but see also magic values in checks 111,113.
+		qr{command=1.: int 17\b},      # uniform random
+		qr{command=2.: int 104\b},     # exponential random
 		qr{command=3.: int 1498\b},    # gaussian random
 		qr{command=4.: int 4\b},
 		qr{command=5.: int 5\b},
@@ -442,7 +393,7 @@ pgbench(
 		qr{command=15.: double 15\b},
 		qr{command=16.: double 16\b},
 		qr{command=17.: double 17\b},
-		qr{command=20.: int 1\b},    # zipfian random
+		qr{command=20.: int 3\b},    # zipfian random
 		qr{command=21.: double -27\b},
 		qr{command=22.: double 1024\b},
 		qr{command=23.: double 1\b},
@@ -496,6 +447,7 @@ pgbench(
 		qr{command=109.: boolean true\b},
 		qr{command=110.: boolean true\b},
 		qr{command=111.: boolean true\b},
+		qr{command=113.: boolean true\b},
 	],
 	'pgbench expressions',
 	{
@@ -639,8 +591,17 @@ SELECT :v0, :v1, :v2, :v3;
 \set t debug(0 <= :p and :p < :size and :p = permute(:v + :size, :size) and :p <> permute(:v + 1, :size))
 -- actual values
 \set t debug(permute(:v, 1) = 0)
-\set t debug(permute(0, 2, 5432) = 0 and permute(1, 2, 5432) = 1 and \
-             permute(0, 2, 5435) = 1 and permute(1, 2, 5435) = 0)
+\set t debug(permute(0, 2, 5431) = 0 and permute(1, 2, 5431) = 1 and \
+             permute(0, 2, 5433) = 1 and permute(1, 2, 5433) = 0)
+-- check permute's portability across architectures
+\set size debug(:max - 10)
+\set t debug(permute(:size-1, :size, 5432) = 520382784483822430 and \
+             permute(:size-2, :size, 5432) = 1143715004660802862 and \
+             permute(:size-3, :size, 5432) = 447293596416496998 and \
+             permute(:size-4, :size, 5432) = 916527772266572956 and \
+             permute(:size-5, :size, 5432) = 2763809008686028849 and \
+             permute(:size-6, :size, 5432) = 8648551549198294572 and \
+             permute(:size-7, :size, 5432) = 4542876852200565125)
 }
 	});
 
@@ -653,7 +614,7 @@ $node->safe_psql('postgres',
 my $seed = int(rand(1000000000));
 for my $i (1, 2)
 {
-	pgbench(
+	$node->pgbench(
 		"--random-seed=$seed -t 1",
 		0,
 		[qr{processed: 1/1}],
@@ -693,7 +654,7 @@ ok($out =~ /\b$seed\|zipfian\|4\d\d\d\|2/,
 $node->safe_psql('postgres', 'DROP TABLE seeded_random;');
 
 # backslash commands
-pgbench(
+$node->pgbench(
 	'-t 1', 0,
 	[
 		qr{type: .*/001_pgbench_backslash_commands},
@@ -722,7 +683,7 @@ pgbench(
 	});
 
 # working \gset
-pgbench(
+$node->pgbench(
 	'-t 1', 0,
 	[ qr{type: .*/001_pgbench_gset}, qr{processed: 1/1} ],
 	[
@@ -757,7 +718,7 @@ SELECT 0 AS i4, 4 AS i4 \gset
 }
 	});
 # \gset cannot accept more than one row, causing command to fail.
-pgbench(
+$node->pgbench(
 	'-t 1', 2,
 	[ qr{type: .*/001_pgbench_gset_two_rows}, qr{processed: 0/1} ],
 	[qr{expected one row, got 2\b}],
@@ -770,7 +731,7 @@ SELECT 5432 AS fail UNION SELECT 5433 ORDER BY 1 \gset
 
 # working \aset
 # Valid cases.
-pgbench(
+$node->pgbench(
 	'-t 1', 0,
 	[ qr{type: .*/001_pgbench_aset}, qr{processed: 1/1} ],
 	[ qr{command=3.: int 8\b},       qr{command=4.: int 7\b} ],
@@ -786,7 +747,7 @@ SELECT 8 AS i6 UNION SELECT 9 ORDER BY 1 DESC \aset
 }
 	});
 # Empty result set with \aset, causing command to fail.
-pgbench(
+$node->pgbench(
 	'-t 1', 2,
 	[ qr{type: .*/001_pgbench_aset_empty}, qr{processed: 0/1} ],
 	[
@@ -803,7 +764,7 @@ pgbench(
 	});
 
 # Working \startpipeline
-pgbench(
+$node->pgbench(
 	'-t 1 -n -M extended',
 	0,
 	[ qr{type: .*/001_pgbench_pipeline}, qr{actually processed: 1/1} ],
@@ -819,7 +780,7 @@ pgbench(
 	});
 
 # Working \startpipeline in prepared query mode
-pgbench(
+$node->pgbench(
 	'-t 1 -n -M prepared',
 	0,
 	[ qr{type: .*/001_pgbench_pipeline_prep}, qr{actually processed: 1/1} ],
@@ -835,7 +796,7 @@ pgbench(
 	});
 
 # Try \startpipeline twice
-pgbench(
+$node->pgbench(
 	'-t 1 -n -M extended',
 	2,
 	[],
@@ -850,7 +811,7 @@ pgbench(
 	});
 
 # Try to end a pipeline that hasn't started
-pgbench(
+$node->pgbench(
 	'-t 1 -n -M extended',
 	2,
 	[],
@@ -864,7 +825,7 @@ pgbench(
 	});
 
 # Try \gset in pipeline mode
-pgbench(
+$node->pgbench(
 	'-t 1 -n -M extended',
 	2,
 	[],
@@ -1129,7 +1090,7 @@ for my $e (@errors)
 	$status != 0 or die "invalid expected status for test \"$name\"";
 	my $n = '001_pgbench_error_' . $name;
 	$n =~ s/ /_/g;
-	pgbench(
+	$node->pgbench(
 		'-n -t 1 -Dfoo=bla -Dnull=null -Dtrue=true -Done=1 -Dzero=0.0 -Dbadtrue=trueXXX'
 		  . ' -Dmaxint=9223372036854775807 -Dminint=-9223372036854775808'
 		  . ($no_prepare ? '' : ' -M prepared'),
@@ -1141,14 +1102,14 @@ for my $e (@errors)
 }
 
 # throttling
-pgbench(
+$node->pgbench(
 	'-t 100 -S --rate=100000 --latency-limit=1000000 -c 2 -n -r',
 	0,
 	[ qr{processed: 200/200}, qr{builtin: select only} ],
 	[qr{^$}],
 	'pgbench throttling');
 
-pgbench(
+$node->pgbench(
 
 	# given the expected rate and the 2 ms tx duration, at most one is executed
 	'-t 10 --rate=100000 --latency-limit=1 -n -r',
@@ -1220,7 +1181,7 @@ sub check_pgbench_logs
 my $bdir = $node->basedir;
 
 # Run with sampling rate, 2 clients with 50 transactions each.
-pgbench(
+$node->pgbench(
 	"-n -S -t 50 -c 2 --log --sampling-rate=0.5", 0,
 	[ qr{select only}, qr{processed: 100/100} ], [qr{^$}],
 	'pgbench logs', undef,
@@ -1230,7 +1191,7 @@ check_pgbench_logs($bdir, '001_pgbench_log_2', 1, 8, 92,
 	qr{^[01] \d{1,2} \d+ \d \d+ \d+$});
 
 # Run with different read-only option pattern, 1 client with 10 transactions.
-pgbench(
+$node->pgbench(
 	"-n -b select-only -t 10 -l", 0,
 	[ qr{select only}, qr{processed: 10/10} ], [qr{^$}],
 	'pgbench logs contents', undef,

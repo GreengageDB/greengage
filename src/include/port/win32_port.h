@@ -6,7 +6,7 @@
  * Note this is read in MinGW as well as native Windows builds,
  * but not in Cygwin builds.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/port/win32_port.h
@@ -42,6 +42,14 @@
 #if !defined(__MINGW64_VERSION_MAJOR) || defined(_MSC_VER)
 #define _WINSOCKAPI_
 #endif
+
+/*
+ * windows.h includes a lot of other headers, slowing down compilation
+ * significantly.  WIN32_LEAN_AND_MEAN reduces that a bit. It'd be better to
+ * remove the include of windows.h (as well as indirect inclusions of it) from
+ * such a central place, but until then...
+ */
+#define WIN32_LEAN_AND_MEAN
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -381,6 +389,8 @@ extern int	_pgstat64(const char *name, struct stat *buf);
 #define ENETUNREACH WSAENETUNREACH
 #undef ENOTCONN
 #define ENOTCONN WSAENOTCONN
+#undef ETIMEDOUT
+#define ETIMEDOUT WSAETIMEDOUT
 
 /*
  * Locale stuff.

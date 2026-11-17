@@ -4,7 +4,7 @@
  *	  postgres transaction system definitions
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/access/xact.h
@@ -501,8 +501,8 @@ extern void RegisterSubXactCallback(SubXactCallback callback, void *arg);
 extern void UnregisterSubXactCallback(SubXactCallback callback, void *arg);
 
 extern void RecordDistributedForgetCommitted(DistributedTransactionId gxid);
-extern bool IsSubTransactionAssignmentPending(void);
-extern void MarkSubTransactionAssigned(void);
+extern bool IsSubxactTopXidLogPending(void);
+extern void MarkSubxactTopXidLogged(void);
 
 extern int	xactGetCommittedChildren(TransactionId **ptr);
 

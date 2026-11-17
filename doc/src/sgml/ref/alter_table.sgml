@@ -147,64 +147,9 @@ WITH ( MODULUS <replaceable class="parameter">numeric_literal</replaceable>, REM
 
 { <replaceable class="parameter">column_name</replaceable> | ( <replaceable class="parameter">expression</replaceable> ) } [ <replaceable class="parameter">opclass</replaceable> ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ]
 
-where partition_action is one of:
-  ALTER DEFAULT PARTITION
-  DROP DEFAULT PARTITION [IF EXISTS]
-  DROP PARTITION [IF EXISTS] { partition_name | 
-      FOR (RANK(number)) | FOR (value) } [CASCADE]
-  TRUNCATE DEFAULT PARTITION
-  TRUNCATE PARTITION { partition_name | FOR (RANK(number)) | 
-      FOR (value) }
-  RENAME DEFAULT PARTITION TO new_partition_name
-  RENAME PARTITION { partition_name | FOR (RANK(number)) | 
-      FOR (value) } TO new_partition_name
-  ADD DEFAULT PARTITION name [ ( subpartition_spec ) ]
-  ADD PARTITION [name] partition_element
-      [ ( subpartition_spec ) ]
-  EXCHANGE PARTITION { partition_name | FOR (RANK(number)) | 
-       FOR (value) } WITH TABLE table_name 
-        [ WITH | WITHOUT VALIDATION ]
-  EXCHANGE DEFAULT PARTITION WITH TABLE table_name
-   [ WITH | WITHOUT VALIDATION ]
-  SET SUBPARTITION TEMPLATE (subpartition_spec)
-  SPLIT DEFAULT PARTITION
-    {  AT (list_value)
-     | START([datatype] range_value) [INCLUSIVE | EXCLUSIVE] 
-        END([datatype] range_value) [INCLUSIVE | EXCLUSIVE] }
-    [ INTO ( PARTITION new_partition_name, 
-             PARTITION default_partition_name ) ]
-  SPLIT PARTITION { partition_name | FOR (RANK(number)) | 
-     FOR (value) } AT (value) 
-    [ INTO (PARTITION partition_name, PARTITION partition_name)]  
+<phrase><replaceable class="parameter">referential_action</replaceable> in a <literal>FOREIGN KEY</literal>/<literal>REFERENCES</literal> constraint is:</phrase>
 
-where partition_element is:
-    VALUES (list_value [,...] )
-  | START ([datatype] 'start_value') [INCLUSIVE | EXCLUSIVE]
-     [ END ([datatype] 'end_value') [INCLUSIVE | EXCLUSIVE] ]
-  | END ([datatype] 'end_value') [INCLUSIVE | EXCLUSIVE]
-[ WITH ( partition_storage_parameter=value [, ... ] ) ]
-[ TABLESPACE tablespace ]
-
-where subpartition_spec is:
-subpartition_element [, ...]
-and subpartition_element is:
-   DEFAULT SUBPARTITION subpartition_name
-  | [SUBPARTITION subpartition_name] VALUES (list_value [,...] )
-  | [SUBPARTITION subpartition_name] 
-     START ([datatype] 'start_value') [INCLUSIVE | EXCLUSIVE]
-     [ END ([datatype] 'end_value') [INCLUSIVE | EXCLUSIVE] ]
-     [ EVERY ( [number | datatype] 'interval_value') ]
-  | [SUBPARTITION subpartition_name] 
-     END ([datatype] 'end_value') [INCLUSIVE | EXCLUSIVE]
-     [ EVERY ( [number | datatype] 'interval_value') ]
-[ WITH ( partition_storage_parameter=value [, ... ] ) ]
-[ TABLESPACE tablespace ]
-
-Where column_reference_storage_directive is:
-
-   COLUMN column_name ENCODING ( storage_directive [, ... ] ), ... 
- | DEFAULT COLUMN ENCODING ( storage_directive [, ... ] )
-
+{ NO ACTION | RESTRICT | CASCADE | SET NULL [ ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) ] | SET DEFAULT [ ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) ] }
 </synopsis>
  </refsynopsisdiv>
 
@@ -267,6 +212,12 @@ Where column_reference_storage_directive is:
       cast from old data type to new.  A  <literal>USING</literal>
       clause must be provided if there is no implicit or assignment
       cast from old to new type.
+     </para>
+
+     <para>
+      When this form is used, the column's statistics are removed,
+      so running <link linkend="sql-analyze"><command>ANALYZE</command></link>
+      on the table afterwards is recommended.
      </para>
     </listitem>
    </varlistentry>
@@ -932,16 +883,51 @@ Where column_reference_storage_directive is:
      <para>
       This form changes the information which is written to the write-ahead log
       to identify rows which are updated or deleted.  This option has no effect
-      except when logical replication is in use.  <literal>DEFAULT</literal>
-      (the default for non-system tables) records the
-      old values of the columns of the primary key, if any.  <literal>USING INDEX</literal>
-      records the old values of the columns covered by the named index, which
-      must be unique, not partial, not deferrable, and include only columns marked
-      <literal>NOT NULL</literal>.  <literal>FULL</literal> records the old values of all columns
-      in the row.  <literal>NOTHING</literal> records no information about the old row.
-      (This is the default for system tables.)
+      except when logical replication is in use.
       In all cases, no old values are logged unless at least one of the columns
       that would be logged differs between the old and new versions of the row.
+     <variablelist>
+      <varlistentry>
+       <term><literal>DEFAULT</literal></term>
+       <listitem>
+        <para>
+         Records the old values of the columns of the primary key, if any.
+         This is the default for non-system tables. 
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
+       <term><literal>USING INDEX <replaceable class="parameter">index_name</replaceable></literal></term>
+       <listitem>
+        <para>
+         Records the old values of the columns covered by the named index,
+         that must be unique, not partial, not deferrable, and include only
+         columns marked <literal>NOT NULL</literal>. If this index is
+         dropped, the behavior is the same as <literal>NOTHING</literal>.
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
+       <term><literal>FULL</literal></term>
+       <listitem>
+        <para>
+         Records the old values of all columns in the row.
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
+       <term><literal>NOTHING</literal></term>
+       <listitem>
+        <para>
+         Records no information about the old row. This is the default for
+         system tables.
+        </para>
+       </listitem>
+      </varlistentry>
+     </variablelist>
      </para>
     </listitem>
    </varlistentry>

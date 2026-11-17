@@ -4,27 +4,22 @@
 #
 # Test driver for upgrading a Greenplum cluster with pg_upgrade.
 # The upgraded cluster will be a newly created gpdemo
-# cluster created by this script.  This test assumes that all pre-upgrade 
-# clusters, whether for 5 or 6, have been created as standard gpdemo clusters.
-# This test is independent of the user data contents of the pre-upgrade 
+# cluster created by this script.  This test assumes that all pre-upgrade
+# clusters have been created as standard gpdemo clusters.
+# This test is independent of the user data contents of the pre-upgrade
 # database, though of course you can run ICW into the gpdemo cluster before
 # upgrading to get some coverage of object types.
 #
 # The test first performs a pg_dumpall, then initializes a new
-# gpdemo cluster and upgrades the pre-upgrade cluster into it. After the 
-# upgrade it performs another pg_dumpall, if the two dumps match then the 
+# gpdemo cluster and upgrades the pre-upgrade cluster into it. After the
+# upgrade it performs another pg_dumpall, if the two dumps match then the
 # upgrade created a new identical copy of the cluster.
 
-# Here are two example runs, one for a 6 cluster and then one for a 5 cluster:
+# Example run:
 # bash test_gpdb.sh -b /usr/local/gpdb/bin -o ~/workspace/gpdb/gpAux/gpdemo/datadirs
-# bash test_gpdb.sh -b /usr/local/gpdb/bin -o ~/workspace/gpdb5/gpAux/gpdemo/datadirs
-#                   -B /usr/local/gpdb5/bin
 #
 # Keep in mind this script is relatively fragile since it depends on specific
 # paths and locations relative to the standard gpdemo cluster.
-#
-# It has been tested on demo clusters transitioning from (6 to 6)
-# or from (5 to 6; on a private branch).
 
 OLD_BINDIR=
 OLD_DATADIR=

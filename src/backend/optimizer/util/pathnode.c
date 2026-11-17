@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -129,7 +129,7 @@ compare_path_costs(Path *path1, Path *path2, CostSelector criterion)
 }
 
 /*
- * compare_path_fractional_costs
+ * compare_fractional_path_costs
  *	  Return -1, 0, or +1 according as path1 is cheaper, the same cost,
  *	  or more expensive than path2 for fetching the specified fraction
  *	  of the total tuples.
@@ -2075,7 +2075,7 @@ create_material_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath)
 MemoizePath *
 create_memoize_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 					List *param_exprs, List *hash_operators,
-					bool singlerow, double calls)
+					bool singlerow, bool binary_mode, double calls)
 {
 	MemoizePath *pathnode = makeNode(MemoizePath);
 
@@ -2100,6 +2100,7 @@ create_memoize_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 	pathnode->hash_operators = hash_operators;
 	pathnode->param_exprs = param_exprs;
 	pathnode->singlerow = singlerow;
+	pathnode->binary_mode = binary_mode;
 	pathnode->calls = calls;
 
 	/*
@@ -5905,6 +5906,7 @@ reparameterize_path(PlannerInfo *root, Path *path,
 													mpath->param_exprs,
 													mpath->hash_operators,
 													mpath->singlerow,
+													mpath->binary_mode,
 													mpath->calls);
 			}
 		default:

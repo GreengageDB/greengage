@@ -404,6 +404,7 @@ plan_tree_mutator(Node *node,
 				newidxonlyscan->indexid = idxonlyscan->indexid;
 				/* MUTATE(newidxonlyscan->indexid, idxonlyscan->indexid, List *); */
 				MUTATE(newidxonlyscan->indexqual, idxonlyscan->indexqual, List *);
+				MUTATE(newidxonlyscan->recheckqual, idxonlyscan->recheckqual, List *);
 				MUTATE(newidxonlyscan->indextlist, idxonlyscan->indextlist, List *);
 				/* indxorderdir  is  scalar */
 				return (Node *) newidxonlyscan;
@@ -1094,7 +1095,7 @@ get_function_name(Oid proid, const char *dflt)
 }
 
 /* Utility to get a name for a tle to use as an eref. */
-Value *
+String *
 get_tle_name(TargetEntry *tle, List *rtable, const char *default_name)
 {
 	char *name = NULL;

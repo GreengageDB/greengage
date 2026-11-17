@@ -1696,11 +1696,14 @@ testdb=&gt;
 
 
       <varlistentry>
-        <term><literal>\dl</literal></term>
+        <term><literal>\dl[+]</literal></term>
         <listitem>
         <para>
         This is an alias for <command>\lo_list</command>, which shows a
         list of large objects.
+        If <literal>+</literal> is appended to the command name,
+        each large object is listed with its associated permissions,
+        if any.
         </para>
         </listitem>
       </varlistentry>
@@ -1868,8 +1871,8 @@ testdb=&gt;
         If <replaceable class="parameter">pattern</replaceable> is
         specified, only those publications whose names match the pattern are
         listed.
-        If <literal>+</literal> is appended to the command name, the tables
-        associated with each publication are shown as well.
+        If <literal>+</literal> is appended to the command name, the tables and
+        schemas associated with each publication are shown as well.
         </para>
         </listitem>
       </varlistentry>
@@ -1951,11 +1954,11 @@ testdb=&gt;
         <para>
         The status of each kind of extended statistics is shown in a column
         named after its statistic kind (e.g. Ndistinct).
-        "defined" means that it was requested when creating the statistics,
-        and NULL means it wasn't requested.
-        You can use pg_stats_ext if you'd like to know whether <link linkend="sql-analyze">
-        <command>ANALYZE</command></link> was run and statistics are available to the
-        planner.
+        <literal>defined</literal> means that it was requested when creating
+        the statistics, and NULL means it wasn't requested.
+        You can use <structname>pg_stats_ext</structname> if you'd like to
+        know whether <link linkend="sql-analyze"><command>ANALYZE</command></link>
+        was run and statistics are available to the planner.
         </para>
         </listitem>
       </varlistentry>
@@ -2248,6 +2251,28 @@ Tue Oct 26 21:40:57 CEST 1999
          If the current query buffer is empty, the most recently sent query
          is described instead.
         </para>
+        </listitem>
+      </varlistentry>
+
+
+      <varlistentry>
+        <term><literal>\getenv <replaceable class="parameter">psql_var</replaceable> <replaceable class="parameter">env_var</replaceable></literal></term>
+
+        <listitem>
+        <para>
+         Gets the value of the environment
+         variable <replaceable class="parameter">env_var</replaceable>
+         and assigns it to the <application>psql</application>
+         variable <replaceable class="parameter">psql_var</replaceable>.
+         If <replaceable class="parameter">env_var</replaceable> is
+         not defined in the <application>psql</application> process's
+         environment, <replaceable class="parameter">psql_var</replaceable>
+         is not changed.  Example:
+<programlisting>
+=&gt; <userinput>\getenv home HOME</userinput>
+=&gt; <userinput>\echo :home</userinput>
+/home/postgres
+</programlisting></para>
         </listitem>
       </varlistentry>
 
@@ -2603,12 +2628,15 @@ lo_import 152801
       </varlistentry>
 
       <varlistentry>
-        <term><literal>\lo_list</literal></term>
+        <term><literal>\lo_list[+]</literal></term>
         <listitem>
         <para>
         Shows a list of all <productname>PostgreSQL</productname>
         large objects currently stored in the database,
         along with any comments provided for them.
+        If <literal>+</literal> is appended to the command name,
+        each large object is listed with its associated permissions,
+        if any.
         </para>
         </listitem>
       </varlistentry>

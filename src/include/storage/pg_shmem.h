@@ -14,7 +14,7 @@
  * only one ID number.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/storage/pg_shmem.h
@@ -87,5 +87,6 @@ extern PGShmemHeader *PGSharedMemoryCreate(Size size,
 										   PGShmemHeader **shim);
 extern bool PGSharedMemoryIsInUse(unsigned long id1, unsigned long id2);
 extern void PGSharedMemoryDetach(void);
+extern void GetHugePageSize(Size *hugepagesize, int *mmap_flags);
 
 #endif							/* PG_SHMEM_H */

@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2007-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -95,10 +95,12 @@
 #include "cdb/cdbvars.h"
 #include "common/file_perm.h"
 #include "common/file_utils.h"
+#include "common/pg_prng.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "port/pg_iovec.h"
 #include "portability/mem.h"
+#include "postmaster/startup.h"
 #include "storage/fd.h"
 #include "storage/ipc.h"
 #include "utils/guc.h"
@@ -3066,7 +3068,8 @@ SetTempTablespaces(Oid *tableSpaces, int numSpaces)
 	 * available tablespaces.
 	 */
 	if (numSpaces > 1)
-		nextTempTableSpace = random() % numSpaces;
+		nextTempTableSpace = pg_prng_uint64_range(&pg_global_prng_state,
+												  0, numSpaces - 1);
 	else
 		nextTempTableSpace = 0;
 }
@@ -3547,6 +3550,9 @@ do_syncfs(const char *path)
 {
 	int			fd;
 
+	ereport_startup_progress("syncing data directory (syncfs), elapsed time: %ld.%02d s, current path: %s",
+							 path);
+
 	fd = OpenTransientFile(path, O_RDONLY);
 	if (fd < 0)
 	{
@@ -3631,6 +3637,9 @@ SyncDataDirectory(void)
 		 * directories.
 		 */
 
+		/* Prepare to report progress syncing the data directory via syncfs. */
+		begin_startup_progress_phase();
+
 		/* Sync the top level pgdata directory. */
 		do_syncfs(".");
 		/* If any tablespaces are configured, sync each of those. */
@@ -3653,17 +3662,23 @@ SyncDataDirectory(void)
 	}
 #endif							/* !HAVE_SYNCFS */
 
+#ifdef PG_FLUSH_DATA_WORKS
+	/* Prepare to report progress of the pre-fsync phase. */
+	begin_startup_progress_phase();
+
 	/*
 	 * If possible, hint to the kernel that we're soon going to fsync the data
 	 * directory and its contents.  Errors in this step are even less
 	 * interesting than normal, so log them only at DEBUG1.
 	 */
-#ifdef PG_FLUSH_DATA_WORKS
 	walkdir(".", pre_sync_fname, false, DEBUG1);
 	if (xlog_is_symlink)
 		walkdir("pg_wal", pre_sync_fname, false, DEBUG1);
 	walkdir("pg_tblspc", pre_sync_fname, true, DEBUG1);
 #endif
+
+	/* Prepare to report progress syncing the data directory via fsync. */
+	begin_startup_progress_phase();
 
 	/*
 	 * Now we do the fsync()s in the same order.
@@ -3767,6 +3782,9 @@ pre_sync_fname(const char *fname, bool isdir, int elevel)
 	if (isdir)
 		return;
 
+	ereport_startup_progress("syncing data directory (pre-fsync), elapsed time: %ld.%02d s, current path: %s",
+							 fname);
+
 	fd = OpenTransientFile(fname, O_RDONLY | PG_BINARY);
 
 	if (fd < 0)
@@ -3796,6 +3814,9 @@ pre_sync_fname(const char *fname, bool isdir, int elevel)
 static void
 datadir_fsync_fname(const char *fname, bool isdir, int elevel)
 {
+	ereport_startup_progress("syncing data directory (fsync), elapsed time: %ld.%02d s, current path: %s",
+							 fname);
+
 	/*
 	 * We want to silently ignoring errors about unreadable files.  Pass that
 	 * desire on to fsync_fname_ext().

@@ -3,7 +3,7 @@
  * spi.h
  *				Server Programming Interface public declarations
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/executor/spi.h
@@ -48,6 +48,7 @@ typedef struct SPIExecuteOptions
 	ParamListInfo params;
 	bool		read_only;
 	bool		allow_nonatomic;
+	bool		must_return_tuples;
 	uint64		tcount;
 	DestReceiver *dest;
 	ResourceOwner owner;

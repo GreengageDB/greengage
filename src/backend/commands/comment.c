@@ -4,7 +4,7 @@
  *
  * PostgreSQL object comments utility code.
  *
- * Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Copyright (c) 1996-2022, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/commands/comment.c
@@ -55,7 +55,7 @@ CommentObject(CommentStmt *stmt)
 	 */
 	if (stmt->objtype == OBJECT_DATABASE)
 	{
-		char	   *database = strVal((Value *) stmt->object);
+		char	   *database = strVal(stmt->object);
 
 		if (!OidIsValid(get_database_oid(database, true)))
 		{

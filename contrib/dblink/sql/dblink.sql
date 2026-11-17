@@ -1,5 +1,28 @@
 CREATE EXTENSION dblink;
 
+-- directory paths and dlsuffix are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
+\getenv libdir PG_LIBDIR
+\getenv dlsuffix PG_DLSUFFIX
+
+\set regresslib :libdir '/regress' :dlsuffix
+
+-- create some functions needed for tests
+CREATE FUNCTION setenv(text, text)
+   RETURNS void
+   AS :'regresslib', 'regress_setenv'
+   LANGUAGE C STRICT;
+
+CREATE FUNCTION wait_pid(int)
+   RETURNS void
+   AS :'regresslib'
+   LANGUAGE C STRICT;
+
+\set path :abs_srcdir '/'
+\set fnbody 'SELECT setenv(''PGSERVICEFILE'', ' :'path' ' || $1)'
+CREATE FUNCTION set_pgservicefile(text) RETURNS void LANGUAGE SQL
+    AS :'fnbody';
+
 -- want context for notices
 \set SHOW_CONTEXT always
 
@@ -449,17 +472,6 @@ SELECT * from
  dblink_send_query('dtest1', 'select * from foo where f1 < 3') as t1;
 -- end_ignore
 
--- Newer libpq speculatively tags conn->errorMessage with "could not
--- connect to socket ...:" as soon as it identifies the connection
--- target, even when the connection subsequently succeeds. The async
--- send above never actually runs (dblink_send_query() does not exist
--- in GPDB), so nothing resets the buffer before dblink_error_message()
--- reads it, and that leftover text becomes visible here. The socket
--- path is environment-dependent, so mask it out.
--- start_matchsubs
--- m/connection to server on socket "[^"]*" failed:/
--- s/connection to server on socket "[^"]*" failed:/connection to server on socket "SOCKET" failed:/
--- end_matchsubs
 SELECT dblink_cancel_query('dtest1');
 SELECT dblink_error_message('dtest1');
 SELECT dblink_disconnect('dtest1');
@@ -496,6 +508,9 @@ REVOKE EXECUTE ON FUNCTION dblink_connect_u(text, text) FROM regress_dblink_user
 DROP USER regress_dblink_user;
 DROP USER MAPPING FOR public SERVER fdtest;
 DROP SERVER fdtest;
+
+-- should fail
+ALTER FOREIGN DATA WRAPPER dblink_fdw OPTIONS (nonexistent 'fdw');
 
 -- test asynchronous notifications
 SELECT dblink_connect(connection_parameters());

@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -43,7 +43,6 @@
 
 #include <math.h>
 
-#include "fmgr.h"
 #include "miscadmin.h"
 #include "nodes/extensible.h"
 #include "nodes/parsenodes.h"
@@ -99,12 +98,11 @@
 /* Read an unsigned integer field (anything written as ":fldname %u") */
 #define READ_UINT_FIELD(fldname)    READ_SCALAR_FIELD(fldname, atoui(token))
 
-/* Read an uint64 field (anything written as ":fldname %ll") */
-#ifndef WIN32
-#define READ_UINT64_FIELD(fldname)  READ_SCALAR_FIELD(fldname, atoll(token))
-#else
-#define READ_UINT64_FIELD(fldname)  READ_SCALAR_FIELD(fldname, _atoi64(token))
-#endif
+/* Read an unsigned integer field (anything written using UINT64_FORMAT) */
+#define READ_UINT64_FIELD(fldname) \
+	token = pg_strtok(&length);		/* skip :fldname */ \
+	token = pg_strtok(&length);		/* get field value */ \
+	local_node->fldname = strtou64(token, NULL, 10)
 
 /* Read a long integer field (anything written as ":fldname %ld") */
 #define READ_LONG_FIELD(fldname) \
@@ -716,7 +714,7 @@ _readVar(void)
 {
 	READ_LOCALS(Var);
 
-	READ_UINT_FIELD(varno);
+	READ_INT_FIELD(varno);
 	READ_INT_FIELD(varattno);
 	READ_OID_FIELD(vartype);
 	READ_INT_FIELD(vartypmod);
@@ -794,6 +792,7 @@ _readConstraint(void)
 	READ_CHAR_FIELD(fk_matchtype);
 	READ_CHAR_FIELD(fk_upd_action);
 	READ_CHAR_FIELD(fk_del_action);
+	READ_NODE_FIELD(fk_del_set_cols);
 	READ_NODE_FIELD(old_conpfeqop);
 	READ_OID_FIELD(old_pktable_oid);
 
@@ -993,7 +992,7 @@ unwrapStringList(List *list)
 
 	foreach(lc, list)
 	{
-		Value	   *val = (Value *) lfirst(lc);
+		String	   *val = (String *) lfirst(lc);
 
 		lfirst(lc) = strVal(val);
 		pfree(val);
@@ -1224,25 +1223,31 @@ _readAConst(void)
 
 	/* skip " :val " */
 	token = pg_strtok(&length);
+	if (length == 4 && strncmp(token, "NULL", 4) == 0)
+	{
+		local_node->isnull = true;
+		local_node->location = -1;
+		READ_DONE();
+	}
 	if (length != 4 || token[0] != ':' || token[1] != 'v')
 		elog(ERROR,"Unable to understand A_CONST node \"%.30s\"", token);
 
 	token = pg_strtok(&length);
 	token = debackslash(token,length);
-	local_node->val.type = T_String;
+	local_node->val.node.type = T_String;
 
 	if (token[0] == '"')
 	{
-		local_node->val.val.str = palloc(length - 1);
-		strncpy(local_node->val.val.str , token+1, strlen(token)-2);
-		local_node->val.val.str[strlen(token)-2] = '\0';
+		local_node->val.sval.sval = palloc(length - 1);
+		strncpy(local_node->val.sval.sval , token+1, strlen(token)-2);
+		local_node->val.sval.sval[strlen(token)-2] = '\0';
 	}
 	else if (length > 2 && (token[0] == 'b'|| token[0] == 'B') && (token[1] == '\'' || token[1] == '"'))
 	{
-		local_node->val.type = T_BitString;
-		local_node->val.val.str = palloc(length+1);
-		strncpy(local_node->val.val.str , token, length);
-		local_node->val.val.str[length] = '\0';
+		local_node->val.node.type = T_BitString;
+		local_node->val.bsval.bsval = palloc(length+1);
+		strncpy(local_node->val.bsval.bsval , token, length);
+		local_node->val.bsval.bsval[length] = '\0';
 	}
 	else
 	{
@@ -1262,20 +1267,20 @@ _readAConst(void)
 	 	   }
 	 	if (isInt)
 		{
-			local_node->val.type = T_Integer;
-			local_node->val.val.ival = atol(token);
+			local_node->val.node.type = T_Integer;
+			local_node->val.ival.ival = atol(token);
 		}
 		else if (isFloat)
 		{
-			local_node->val.type = T_Float;
-			local_node->val.val.str = palloc(length + 1);
-			strcpy(local_node->val.val.str , token);
+			local_node->val.node.type = T_Float;
+			local_node->val.fval.fval = palloc(length + 1);
+			strcpy(local_node->val.fval.fval , token);
 		}
 		else
 		{
 			elog(ERROR,"Deserialization problem:  A_Const not string, bitstring, float, or int");
-			local_node->val.val.str = palloc(length + 1);
-			strcpy(local_node->val.val.str , token);
+			local_node->val.sval.sval = palloc(length + 1);
+			strcpy(local_node->val.sval.sval , token);
 		}
 	}
 
@@ -3011,6 +3016,7 @@ _readIndexOnlyScan(void)
 
 	READ_OID_FIELD(indexid);
 	READ_NODE_FIELD(indexqual);
+	READ_NODE_FIELD(recheckqual);
 	READ_NODE_FIELD(indexorderby);
 	READ_NODE_FIELD(indextlist);
 	READ_ENUM_FIELD(indexorderdir, ScanDirection);
@@ -3429,7 +3435,9 @@ _readMemoize(void)
 	READ_OID_ARRAY(collations, local_node->numKeys);
 	READ_NODE_FIELD(param_exprs);
 	READ_BOOL_FIELD(singlerow);
+	READ_BOOL_FIELD(binary_mode);
 	READ_UINT_FIELD(est_entries);
+	READ_BITMAPSET_FIELD(keyparamids);
 
 	READ_DONE();
 }
@@ -4351,8 +4359,21 @@ _readVacuumRelation(void)
 }
 
 /*
- * GPDB: see _outPublicationTable.
+ * GPDB: see _outPublicationObjSpec.
  */
+static PublicationObjSpec *
+_readPublicationObjSpec(void)
+{
+	READ_LOCALS(PublicationObjSpec);
+
+	READ_ENUM_FIELD(pubobjtype, PublicationObjSpecType);
+	READ_STRING_FIELD(name);
+	READ_NODE_FIELD(pubtable);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
 static PublicationTable *
 _readPublicationTable(void)
 {
@@ -4370,7 +4391,7 @@ _readCreatePublicationStmt()
 
 	READ_STRING_FIELD(pubname);
 	READ_NODE_FIELD(options);
-	READ_NODE_FIELD(tables);
+	READ_NODE_FIELD(pubobjects);
 	READ_BOOL_FIELD(for_all_tables);
 
 	READ_DONE();
@@ -4383,9 +4404,9 @@ _readAlterPublicationStmt()
 
 	READ_STRING_FIELD(pubname);
 	READ_NODE_FIELD(options);
-	READ_NODE_FIELD(tables);
+	READ_NODE_FIELD(pubobjects);
 	READ_BOOL_FIELD(for_all_tables);
-	READ_ENUM_FIELD(tableAction, DefElemAction);
+	READ_ENUM_FIELD(action, AlterPublicationAction);
 
 	READ_DONE();
 }
@@ -4829,23 +4850,23 @@ parseNodeString(void)
 		return_value = _readArrayCoerceExpr();
 	else if (MATCH("CONVERTROWTYPEEXPR", 18))
 		return_value = _readConvertRowtypeExpr();
-	else if (MATCH("COLLATE", 7))
+	else if (MATCH("COLLATEEXPR", 11))
 		return_value = _readCollateExpr();
-	else if (MATCH("CASE", 4))
+	else if (MATCH("CASEEXPR", 8))
 		return_value = _readCaseExpr();
-	else if (MATCH("WHEN", 4))
+	else if (MATCH("CASEWHEN", 8))
 		return_value = _readCaseWhen();
 	else if (MATCH("CASETESTEXPR", 12))
 		return_value = _readCaseTestExpr();
-	else if (MATCH("ARRAY", 5))
+	else if (MATCH("ARRAYEXPR", 9))
 		return_value = _readArrayExpr();
-	else if (MATCH("ROW", 3))
+	else if (MATCH("ROWEXPR", 7))
 		return_value = _readRowExpr();
-	else if (MATCH("ROWCOMPARE", 10))
+	else if (MATCH("ROWCOMPAREEXPR", 14))
 		return_value = _readRowCompareExpr();
-	else if (MATCH("COALESCE", 8))
+	else if (MATCH("COALESCEEXPR", 12))
 		return_value = _readCoalesceExpr();
-	else if (MATCH("MINMAX", 6))
+	else if (MATCH("MINMAXEXPR", 10))
 		return_value = _readMinMaxExpr();
 	else if (MATCH("SQLVALUEFUNCTION", 16))
 		return_value = _readSQLValueFunction();
@@ -4879,17 +4900,17 @@ parseNodeString(void)
 		return_value = _readOnConflictExpr();
 	else if (MATCH("APPENDRELINFO", 13))
 		return_value = _readAppendRelInfo();
-	else if (MATCH("RTE", 3))
+	else if (MATCH("RANGETBLENTRY", 13))
 		return_value = _readRangeTblEntry();
 	else if (MATCH("RANGETBLFUNCTION", 16))
 		return_value = _readRangeTblFunction();
 	else if (MATCH("TABLESAMPLECLAUSE", 17))
 		return_value = _readTableSampleClause();
-	else if (MATCH("NOTIFY", 6))
+	else if (MATCH("NOTIFYSTMT", 10))
 		return_value = _readNotifyStmt();
 	else if (MATCH("DEFELEM", 7))
 		return_value = _readDefElem();
-	else if (MATCH("DECLARECURSOR", 13))
+	else if (MATCH("DECLARECURSORSTMT", 17))
 		return_value = _readDeclareCursorStmt();
 	else if (MATCH("PLANNEDSTMT", 11))
 		return_value = _readPlannedStmt();
@@ -5109,6 +5130,8 @@ parseNodeString(void)
 		return_value = _readCreateOpFamilyStmt();
 	else if (MATCHX("CREATEPLANGSTMT"))
 		return_value = _readCreatePLangStmt();
+	else if (MATCHX("PUBLICATIONOBJSPEC"))
+		return_value = _readPublicationObjSpec();
 	else if (MATCHX("PUBLICATIONTABLE"))
 		return_value = _readPublicationTable();
 	else if (MATCHX("CREATEPUBLICATIONSTMT"))

@@ -22,9 +22,14 @@ PostgreSQL documentation
  <refsynopsisdiv>
 <synopsis>
 CREATE PUBLICATION <replaceable class="parameter">name</replaceable>
-    [ FOR TABLE [ ONLY ] <replaceable class="parameter">table_name</replaceable> [ * ] [, ...]
-      | FOR ALL TABLES ]
+    [ FOR ALL TABLES
+      | FOR <replaceable class="parameter">publication_object</replaceable> [, ... ] ]
     [ WITH ( <replaceable class="parameter">publication_parameter</replaceable> [= <replaceable class="parameter">value</replaceable>] [, ... ] ) ]
+
+<phrase>where <replaceable class="parameter">publication_object</replaceable> is one of:</phrase>
+
+    TABLE [ ONLY ] <replaceable class="parameter">table_name</replaceable> [ * ] [, ... ]
+    ALL TABLES IN SCHEMA { <replaceable class="parameter">schema_name</replaceable> | CURRENT_SCHEMA } [, ... ]
 </synopsis>
  </refsynopsisdiv>
 
@@ -86,6 +91,11 @@ CREATE PUBLICATION <replaceable class="parameter">name</replaceable>
       partition are also published via publications that its ancestors are
       part of.
      </para>
+
+     <para>
+      Specifying a table that is part of a schema specified by
+      <literal>FOR ALL TABLES IN SCHEMA</literal> is not supported.
+     </para>
     </listitem>
    </varlistentry>
 
@@ -95,6 +105,37 @@ CREATE PUBLICATION <replaceable class="parameter">name</replaceable>
      <para>
       Marks the publication as one that replicates changes for all tables in
       the database, including tables created in the future.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><literal>FOR ALL TABLES IN SCHEMA</literal></term>
+    <listitem>
+     <para>
+      Marks the publication as one that replicates changes for all tables in
+      the specified list of schemas, including tables created in the future.
+     </para>
+
+     <para>
+      Specifying a schema along with a table which belongs to the specified
+      schema using <literal>FOR TABLE</literal> is not supported.
+     </para>
+
+     <para>
+      Only persistent base tables and partitioned tables present in the schema
+      will be included as part of the publication.  Temporary tables, unlogged
+      tables, foreign tables, materialized views, and regular views from the
+      schema will not be part of the publication.
+     </para>
+
+     <para>
+      When a partitioned table is published via schema level publication, all
+      of its existing and future partitions irrespective of it being from the
+      publication schema or not are implicitly considered to be part of the
+      publication. So, even operations that are performed directly on a
+      partition are also published via publications that its ancestors are
+      part of.
      </para>
     </listitem>
    </varlistentry>
@@ -153,9 +194,10 @@ CREATE PUBLICATION <replaceable class="parameter">name</replaceable>
   <title>Notes</title>
 
   <para>
-   If neither <literal>FOR TABLE</literal> nor <literal>FOR ALL
-   TABLES</literal> is specified, then the publication starts out with an
-   empty set of tables.  That is useful if tables are to be added later.
+   If <literal>FOR TABLE</literal>, <literal>FOR ALL TABLES</literal> or
+   <literal>FOR ALL TABLES IN SCHEMA</literal> is not specified, then the
+   publication starts out with an empty set of tables.  That is useful if
+   tables or schemas are to be added later.
   </para>
 
   <para>
@@ -171,8 +213,9 @@ CREATE PUBLICATION <replaceable class="parameter">name</replaceable>
 
   <para>
    To add a table to a publication, the invoking user must have ownership
-   rights on the table.  The <command>FOR ALL TABLES</command> clause requires
-   the invoking user to be a superuser.
+   rights on the table.  The <command>FOR ALL TABLES</command> and
+   <command>FOR ALL TABLES IN SCHEMA</command> clauses require the invoking
+   user to be a superuser.
   </para>
 
   <para>
@@ -187,6 +230,13 @@ CREATE PUBLICATION <replaceable class="parameter">name</replaceable>
    publish the operation that actually results from the command.  So depending
    of the outcome, it may be published as either <command>INSERT</command> or
    <command>UPDATE</command>, or it may not be published at all.
+  </para>
+
+  <para>
+   <command>ATTACH</command>ing a table into a partition tree whose root is
+   published using a publication with <literal>publish_via_partition_root</literal>
+   set to <literal>true</literal> does not result in the table's existing contents
+   being replicated.
   </para>
 
   <para>
@@ -222,6 +272,25 @@ CREATE PUBLICATION alltables FOR ALL TABLES;
 <programlisting>
 CREATE PUBLICATION insert_only FOR TABLE mydata
     WITH (publish = 'insert');
+</programlisting>
+  </para>
+
+  <para>
+   Create a publication that publishes all changes for tables
+   <structname>users</structname>, <structname>departments</structname> and
+   all changes for all the tables present in the schema
+   <structname>production</structname>:
+<programlisting>
+CREATE PUBLICATION production_publication FOR TABLE users, departments, ALL TABLES IN SCHEMA production;
+</programlisting>
+  </para>
+
+  <para>
+   Create a publication that publishes all changes for all the tables present in
+   the schemas <structname>marketing</structname> and
+   <structname>sales</structname>:
+<programlisting>
+CREATE PUBLICATION sales_publication FOR ALL TABLES IN SCHEMA marketing, sales;
 </programlisting></para>
  </refsect1>
 
@@ -240,6 +309,8 @@ CREATE PUBLICATION insert_only FOR TABLE mydata
   <simplelist type="inline">
    <member><xref linkend="sql-alterpublication"/></member>
    <member><xref linkend="sql-droppublication"/></member>
+   <member><xref linkend="sql-createsubscription"/></member>
+   <member><xref linkend="sql-altersubscription"/></member>
   </simplelist>
  </refsect1>
 </refentry>

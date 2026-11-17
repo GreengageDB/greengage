@@ -611,31 +611,32 @@ _outAExpr(StringInfo str, A_Expr *node)
 }
 
 static void
-_outValue(StringInfo str, Value *value)
+_outValue(StringInfo str, const Node *value)
 {
 
-	int16 vt = value->type;
+	int16 vt = nodeTag(value);
 	appendBinaryStringInfo(str, (const char *)&vt, sizeof(int16));
-	switch (value->type)
+	switch (nodeTag(value))
 	{
 		case T_Integer:
-			appendBinaryStringInfo(str, (const char *)&value->val.ival, sizeof(long));
-			break;
-		case T_Float:
-		case T_String:
-		case T_BitString:
 			{
-				int slen = (value->val.str != NULL ? strlen(value->val.str) : 0);
-				appendBinaryStringInfo(str, (const char *)&slen, sizeof(int));
-				if (slen > 0)
-					appendBinaryStringInfo(str, value->val.str, slen);
+				/* sent as a long, the reader expects that width */
+				long		ival = ((const Integer *) value)->ival;
+
+				appendBinaryStringInfo(str, (const char *)&ival, sizeof(long));
 			}
 			break;
-		case T_Null:
-			/* nothing to do */
+		case T_Float:
+			WRITE_STRING_VAR(((const Float *) value)->fval);
+			break;
+		case T_String:
+			WRITE_STRING_VAR(((const String *) value)->sval);
+			break;
+		case T_BitString:
+			WRITE_STRING_VAR(((const BitString *) value)->bsval);
 			break;
 		default:
-			elog(ERROR, "unrecognized node type: %d", (int) value->type);
+			elog(ERROR, "unrecognized node type: %d", (int) nodeTag(value));
 			break;
 	}
 }
@@ -645,7 +646,9 @@ _outAConst(StringInfo str, A_Const *node)
 {
 	WRITE_NODE_TYPE("A_CONST");
 
-	_outValue(str, &(node->val));
+	WRITE_BOOL_FIELD(isnull);
+	if (!node->isnull)
+		_outValue(str, &node->val.node);
 	WRITE_LOCATION_FIELD(location);  /*CDB*/
 
 }
@@ -931,7 +934,6 @@ _outNode(StringInfo str, void *obj)
 	else if (IsA(obj, Integer) ||
 			 IsA(obj, Float) ||
 			 IsA(obj, String) ||
-			 IsA(obj, Null) ||
 			 IsA(obj, BitString))
 	{
 		_outValue(str, obj);
@@ -1842,6 +1844,9 @@ _outNode(StringInfo str, void *obj)
 				_outAlterTableSpaceOptionsStmt(str, obj);
 				break;
 
+			case T_PublicationObjSpec:
+				_outPublicationObjSpec(str, obj);
+				break;
 			case T_PublicationTable:
 				_outPublicationTable(str, obj);
 				break;

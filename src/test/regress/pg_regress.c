@@ -8,7 +8,7 @@
  *
  * This code is released under the terms of the PostgreSQL License.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/test/regress/pg_regress.c
@@ -143,7 +143,9 @@ static void make_directory(const char *dir);
 
 static void header(const char *fmt,...) pg_attribute_printf(1, 2);
 static void status(const char *fmt,...) pg_attribute_printf(1, 2);
-static void psql_command(const char *database, const char *query,...) pg_attribute_printf(2, 3);
+static StringInfo psql_start_command(void);
+static void psql_add_command(StringInfo buf, const char *query,...) pg_attribute_printf(2, 3);
+static void psql_end_command(StringInfo buf, const char *database);
 
 static bool detectCgroupMountPoint(char *cgdir, int len);
 static bool should_exclude_test(char *test);
@@ -506,7 +508,7 @@ string_matches_pattern(const char *str, const char *pattern)
  * Note: this is optimized on the assumption that most calls will find
  * no more than one occurrence of "replace", and quite likely none.
  */
-void
+static void
 replace_string(StringInfo string, const char *replace, const char *replacement)
 {
 	int			pos = 0;
@@ -1171,6 +1173,15 @@ initialize_environment(void)
 	 */
 	setenv("PGAPPNAME", "pg_regress", 1);
 
+	/*
+	 * Set variables that the test scripts may need to refer to.
+	 */
+	setenv("PG_ABS_SRCDIR", inputdir, 1);
+	setenv("PG_ABS_BUILDDIR", outputdir, 1);
+	setenv("PG_TABLESPACE_DIR", tablespacedir, 1);
+	setenv("PG_LIBDIR", dlpath, 1);
+	setenv("PG_DLSUFFIX", DLSUFFIX, 1);
+
 	if (nolocale)
 	{
 		/*
@@ -1247,7 +1258,7 @@ initialize_environment(void)
 		 * won't mess things up.)  Also, set PGPORT to the temp port, and set
 		 * PGHOST depending on whether we are using TCP or Unix sockets.
 		 *
-		 * This list should be kept in sync with TestLib.pm.
+		 * This list should be kept in sync with PostgreSQL/Test/Utils.pm.
 		 */
 		unsetenv("PGCHANNELBINDING");
 		/* PGCLIENTENCODING, see above */
@@ -1565,50 +1576,93 @@ config_sspi_auth(const char *pgdata, const char *superuser_name)
 #endif							/* ENABLE_SSPI */
 
 /*
- * Issue a command via psql, connecting to the specified database
+ * psql_start_command, psql_add_command, psql_end_command
+ *
+ * Issue one or more commands within one psql call.
+ * Set up with psql_start_command, then add commands one at a time
+ * with psql_add_command, and finally execute with psql_end_command.
  *
  * Since we use system(), this doesn't return until the operation finishes
  */
-static void
-psql_command(const char *database, const char *query,...)
+static StringInfo
+psql_start_command(void)
 {
-	char		query_formatted[1024];
-	char		query_escaped[2048];
-	char		psql_cmd[MAXPGPATH + 2048];
-	va_list		args;
-	char	   *s;
-	char	   *d;
+	StringInfo	buf = makeStringInfo();
+
+	appendStringInfo(buf,
+					 "\"%s%spsql\" -X",
+					 bindir ? bindir : "",
+					 bindir ? "/" : "");
+	return buf;
+}
+
+static void
+psql_add_command(StringInfo buf, const char *query,...)
+{
+	StringInfoData cmdbuf;
+	const char *cmdptr;
+
+	/* Add each command as a -c argument in the psql call */
+	appendStringInfoString(buf, " -c \"");
 
 	/* Generate the query with insertion of sprintf arguments */
-	va_start(args, query);
-	vsnprintf(query_formatted, sizeof(query_formatted), query, args);
-	va_end(args);
+	initStringInfo(&cmdbuf);
+	for (;;)
+	{
+		va_list		args;
+		int			needed;
+
+		va_start(args, query);
+		needed = appendStringInfoVA(&cmdbuf, query, args);
+		va_end(args);
+		if (needed == 0)
+			break;				/* success */
+		enlargeStringInfo(&cmdbuf, needed);
+	}
 
 	/* Now escape any shell double-quote metacharacters */
-	d = query_escaped;
-	for (s = query_formatted; *s; s++)
+	for (cmdptr = cmdbuf.data; *cmdptr; cmdptr++)
 	{
-		if (strchr("\\\"$`", *s))
-			*d++ = '\\';
-		*d++ = *s;
+		if (strchr("\\\"$`", *cmdptr))
+			appendStringInfoChar(buf, '\\');
+		appendStringInfoChar(buf, *cmdptr);
 	}
-	*d = '\0';
 
-	/* And now we can build and execute the shell command */
-	snprintf(psql_cmd, sizeof(psql_cmd),
-			 "\"%s%spsql\" -X -c \"%s\" \"%s\"",
-			 bindir ? bindir : "",
-			 bindir ? "/" : "",
-			 query_escaped,
-			 database);
+	appendStringInfoChar(buf, '"');
 
-	if (system(psql_cmd) != 0)
+	pfree(cmdbuf.data);
+}
+
+static void
+psql_end_command(StringInfo buf, const char *database)
+{
+	/* Add the database name --- assume it needs no extra escaping */
+	appendStringInfo(buf,
+					 " \"%s\"",
+					 database);
+
+	/* And now we can execute the shell command */
+	if (system(buf->data) != 0)
 	{
 		/* psql probably already reported the error */
-		fprintf(stderr, _("command failed: %s\n"), psql_cmd);
+		fprintf(stderr, _("command failed: %s\n"), buf->data);
 		exit(2);
 	}
+
+	/* Clean up */
+	pfree(buf->data);
+	pfree(buf);
 }
+
+/*
+ * Shorthand macro for the common case of a single command
+ */
+#define psql_command(database, ...) \
+	do { \
+		StringInfo cmdbuf = psql_start_command(); \
+		psql_add_command(cmdbuf, __VA_ARGS__); \
+		psql_end_command(cmdbuf, database); \
+	} while (0)
 
 /*
  * Spawn a process to execute the given shell command; don't wait for it
@@ -1629,6 +1683,10 @@ spawn_process(const char *cmdline)
 	fflush(stderr);
 	if (logfile)
 		fflush(logfile);
+
+#ifdef EXEC_BACKEND
+	pg_disable_aslr();
+#endif
 
 	pid = fork();
 	if (pid == -1)
@@ -2591,13 +2649,19 @@ open_result_files(void)
 static void
 drop_database_if_exists(const char *dbname)
 {
+	StringInfo	buf = psql_start_command();
+
 	header(_("dropping database \"%s\""), dbname);
-	psql_command("postgres", "DROP DATABASE IF EXISTS \"%s\"", dbname);
+	/* Set warning level so we don't see chatter about nonexistent DB */
+	psql_add_command(buf, "SET client_min_messages = warning");
+	psql_add_command(buf, "DROP DATABASE IF EXISTS \"%s\"", dbname);
+	psql_end_command(buf, "postgres");
 }
 
 static void
 create_database(const char *dbname)
 {
+	StringInfo	buf = psql_start_command();
 	_stringlist *sl;
 
 	/*
@@ -2606,18 +2670,20 @@ create_database(const char *dbname)
 	 */
 	header(_("creating database \"%s\""), dbname);
 	if (encoding)
-		psql_command("postgres", "CREATE DATABASE \"%s\" TEMPLATE=template0 ENCODING='%s'", dbname, encoding);
+		psql_add_command(buf, "CREATE DATABASE \"%s\" TEMPLATE=template0 ENCODING='%s'%s", dbname, encoding,
+						 (nolocale) ? " LC_COLLATE='C' LC_CTYPE='C'" : "");
 	else
-		psql_command("postgres", "CREATE DATABASE \"%s\" TEMPLATE=template0%s", dbname,
-					 (nolocale) ? " LC_COLLATE='C' LC_CTYPE='C'" : "");
-	psql_command(dbname,
-				 "ALTER DATABASE \"%s\" SET lc_messages TO 'C';"
-				 "ALTER DATABASE \"%s\" SET lc_monetary TO 'C';"
-				 "ALTER DATABASE \"%s\" SET lc_numeric TO 'C';"
-				 "ALTER DATABASE \"%s\" SET lc_time TO 'C';"
-				 "ALTER DATABASE \"%s\" SET bytea_output TO 'hex';"
-				 "ALTER DATABASE \"%s\" SET timezone_abbreviations TO 'Default';",
-				 dbname, dbname, dbname, dbname, dbname, dbname);
+		psql_add_command(buf, "CREATE DATABASE \"%s\" TEMPLATE=template0%s", dbname,
+						 (nolocale) ? " LC_COLLATE='C' LC_CTYPE='C'" : "");
+	psql_add_command(buf,
+					 "ALTER DATABASE \"%s\" SET lc_messages TO 'C';"
+					 "ALTER DATABASE \"%s\" SET lc_monetary TO 'C';"
+					 "ALTER DATABASE \"%s\" SET lc_numeric TO 'C';"
+					 "ALTER DATABASE \"%s\" SET lc_time TO 'C';"
+					 "ALTER DATABASE \"%s\" SET bytea_output TO 'hex';"
+					 "ALTER DATABASE \"%s\" SET timezone_abbreviations TO 'Default';",
+					 dbname, dbname, dbname, dbname, dbname, dbname);
+	psql_end_command(buf, "postgres");
 
 	/*
 	 * Install any requested extensions.  We use CREATE IF NOT EXISTS so that
@@ -2634,20 +2700,28 @@ create_database(const char *dbname)
 static void
 drop_role_if_exists(const char *rolename)
 {
+	StringInfo	buf = psql_start_command();
+
 	header(_("dropping role \"%s\""), rolename);
-	psql_command("postgres", "DROP ROLE IF EXISTS \"%s\"", rolename);
+	/* Set warning level so we don't see chatter about nonexistent role */
+	psql_add_command(buf, "SET client_min_messages = warning");
+	psql_add_command(buf, "DROP ROLE IF EXISTS \"%s\"", rolename);
+	psql_end_command(buf, "postgres");
 }
 
 static void
 create_role(const char *rolename, const _stringlist *granted_dbs)
 {
+	StringInfo	buf = psql_start_command();
+
 	header(_("creating role \"%s\""), rolename);
-	psql_command("postgres", "CREATE ROLE \"%s\" WITH LOGIN", rolename);
+	psql_add_command(buf, "CREATE ROLE \"%s\" WITH LOGIN", rolename);
 	for (; granted_dbs != NULL; granted_dbs = granted_dbs->next)
 	{
-		psql_command("postgres", "GRANT ALL ON DATABASE \"%s\" TO \"%s\"",
-					 granted_dbs->str, rolename);
+		psql_add_command(buf, "GRANT ALL ON DATABASE \"%s\" TO \"%s\"",
+						 granted_dbs->str, rolename);
 	}
+	psql_end_command(buf, "postgres");
 }
 
 static char *

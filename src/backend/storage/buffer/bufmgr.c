@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2006-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -746,7 +746,7 @@ ReadRecentBuffer(RelFileNode rnode, ForkNumber forkNum, BlockNumber blockNum,
 		{
 			/*
 			 * It's now safe to pin the buffer.  We can't pin first and ask
-			 * questions later, because because it might confuse code paths
+			 * questions later, because it might confuse code paths
 			 * like InvalidateBuffer() if we pinned a random non-matching
 			 * buffer.
 			 */
@@ -914,7 +914,16 @@ ReadBuffer_common(SMgrRelation smgr, char relpersistence, ForkNumber forkNum,
 
 	/* Substitute proper block number if caller asked for P_NEW */
 	if (isExtend)
+	{
 		blockNum = smgrnblocks(smgr, forkNum);
+		/* Fail if relation is already at maximum possible length */
+		if (blockNum == P_NEW)
+			ereport(ERROR,
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					 errmsg("cannot extend relation %s beyond %u blocks",
+							relpath(smgr->smgr_rnode, forkNum),
+							P_NEW)));
+	}
 
 	if (isLocalBuf)
 	{
@@ -2000,11 +2009,11 @@ UnpinBuffer(BufferDesc *buf, bool fixOwner)
 				BUF_STATE_GET_REFCOUNT(buf_state) == 1)
 			{
 				/* we just released the last pin other than the waiter's */
-				int			wait_backend_pid = buf->wait_backend_pid;
+				int			wait_backend_pgprocno = buf->wait_backend_pgprocno;
 
 				buf_state &= ~BM_PIN_COUNT_WAITER;
 				UnlockBufHdr(buf, buf_state);
-				ProcSendSignal(wait_backend_pid);
+				ProcSendSignal(wait_backend_pgprocno);
 			}
 			else
 				UnlockBufHdr(buf, buf_state);
@@ -3072,40 +3081,26 @@ FlushBuffer(BufferDesc *buf, SMgrRelation reln)
 BlockNumber
 RelationGetNumberOfBlocksInFork(Relation relation, ForkNumber forkNum)
 {
-	switch (relation->rd_rel->relkind)
+	if (RELKIND_HAS_TABLE_AM(relation->rd_rel->relkind))
 	{
-		case RELKIND_SEQUENCE:
-		case RELKIND_INDEX:
-			return smgrnblocks(RelationGetSmgr(relation), forkNum);
+		/*
+		 * Not every table AM uses BLCKSZ wide fixed size blocks.
+		 * Therefore tableam returns the size in bytes - but for the
+		 * purpose of this routine, we want the number of blocks.
+		 * Therefore divide, rounding up.
+		 */
+		uint64		szbytes;
 
-		case RELKIND_RELATION:
-		case RELKIND_TOASTVALUE:
-		case RELKIND_MATVIEW:
-		case RELKIND_AOSEGMENTS:
-		case RELKIND_AOVISIMAP:
-		case RELKIND_AOBLOCKDIR:
-			{
-				/*
-				 * Not every table AM uses BLCKSZ wide fixed size blocks.
-				 * Therefore tableam returns the size in bytes - but for the
-				 * purpose of this routine, we want the number of blocks.
-				 * Therefore divide, rounding up.
-				 */
-				uint64		szbytes;
+		szbytes = table_relation_size(relation, forkNum);
 
-				szbytes = table_relation_size(relation, forkNum);
-
-				return (szbytes + (BLCKSZ - 1)) / BLCKSZ;
-			}
-		case RELKIND_VIEW:
-		case RELKIND_COMPOSITE_TYPE:
-		case RELKIND_FOREIGN_TABLE:
-		case RELKIND_PARTITIONED_INDEX:
-		case RELKIND_PARTITIONED_TABLE:
-		default:
-			Assert(false);
-			break;
+		return (szbytes + (BLCKSZ - 1)) / BLCKSZ;
 	}
+	else if (RELKIND_HAS_STORAGE(relation->rd_rel->relkind))
+	{
+			return smgrnblocks(RelationGetSmgr(relation), forkNum);
+	}
+	else
+		Assert(false);
 
 	return 0;					/* keep compiler quiet */
 }
@@ -4155,7 +4150,7 @@ UnlockBuffers(void)
 		 * got a cancel/die interrupt before getting the signal.
 		 */
 		if ((buf_state & BM_PIN_COUNT_WAITER) != 0 &&
-			buf->wait_backend_pid == MyProcPid)
+			buf->wait_backend_pgprocno == MyProc->pgprocno)
 			buf_state &= ~BM_PIN_COUNT_WAITER;
 
 		UnlockBufHdr(buf, buf_state);
@@ -4290,7 +4285,7 @@ LockBufferForCleanup(Buffer buffer)
 			LockBuffer(buffer, BUFFER_LOCK_UNLOCK);
 			elog(ERROR, "multiple backends attempting to wait for pincount 1");
 		}
-		bufHdr->wait_backend_pid = MyProcPid;
+		bufHdr->wait_backend_pgprocno = MyProc->pgprocno;
 		PinCountWaitBuf = bufHdr;
 		buf_state |= BM_PIN_COUNT_WAITER;
 		UnlockBufHdr(bufHdr, buf_state);
@@ -4361,7 +4356,7 @@ LockBufferForCleanup(Buffer buffer)
 		 */
 		buf_state = LockBufHdr(bufHdr);
 		if ((buf_state & BM_PIN_COUNT_WAITER) != 0 &&
-			bufHdr->wait_backend_pid == MyProcPid)
+			bufHdr->wait_backend_pgprocno == MyProc->pgprocno)
 			buf_state &= ~BM_PIN_COUNT_WAITER;
 		UnlockBufHdr(bufHdr, buf_state);
 

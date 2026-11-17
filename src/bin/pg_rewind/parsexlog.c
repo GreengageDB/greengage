@@ -3,7 +3,7 @@
  * parsexlog.c
  *	  Functions for reading Write-Ahead-Log
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *-------------------------------------------------------------------------
@@ -77,7 +77,7 @@ extractPageMap(const char *datadir, XLogRecPtr startpoint, int tliIndex,
 									XL_ROUTINE(.page_read = &SimpleXLogPageRead),
 									&private);
 	if (xlogreader == NULL)
-		pg_fatal("out of memory");
+		pg_fatal("out of memory while allocating a WAL reading processor");
 
 	XLogBeginRead(xlogreader, startpoint);
 	do
@@ -135,7 +135,7 @@ readOneRecord(const char *datadir, XLogRecPtr ptr, int tliIndex,
 									XL_ROUTINE(.page_read = &SimpleXLogPageRead),
 									&private);
 	if (xlogreader == NULL)
-		pg_fatal("out of memory");
+		pg_fatal("out of memory while allocating a WAL reading processor");
 
 	XLogBeginRead(xlogreader, ptr);
 	record = XLogReadRecord(xlogreader, &errormsg);
@@ -195,7 +195,7 @@ findLastCheckpoint(const char *datadir, XLogRecPtr forkptr, int tliIndex,
 									XL_ROUTINE(.page_read = &SimpleXLogPageRead),
 									&private);
 	if (xlogreader == NULL)
-		pg_fatal("out of memory");
+		pg_fatal("out of memory while allocating a WAL reading processor");
 
 	searchptr = forkptr;
 	for (;;)

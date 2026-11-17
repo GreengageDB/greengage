@@ -5,7 +5,7 @@
  *	  commands.  At one time acted as an interface between the Lisp and C
  *	  systems.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -26,6 +26,7 @@
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/partition.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_inherits.h"
 #include "catalog/toasting.h"
 #include "commands/alter.h"
@@ -895,6 +896,23 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 							errmsg("listen command cannot run in a function running on a segDB")));
 
 				CheckRestrictedOperation("LISTEN");
+
+				/*
+				 * We don't allow LISTEN in background processes, as there is
+				 * no mechanism for them to collect NOTIFY messages, so they'd
+				 * just block cleanout of the async SLRU indefinitely.
+				 * (Authors of custom background workers could bypass this
+				 * restriction by calling Async_Listen directly, but then it's
+				 * on them to provide some mechanism to process the message
+				 * queue.)  Note there seems no reason to forbid UNLISTEN.
+				 */
+				if (MyBackendType != B_BACKEND)
+					ereport(ERROR,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					/* translator: %s is name of a SQL command, eg LISTEN */
+							 errmsg("cannot execute %s within a background process",
+									"LISTEN")));
+
 				Async_Listen(stmt->conditionname);
 			}
 			break;
@@ -1086,10 +1104,10 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 			break;
 
 		case T_CheckPointStmt:
-			if (!superuser())
+			if (!has_privs_of_role(GetUserId(), ROLE_PG_CHECKPOINTER))
 				ereport(ERROR,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						 errmsg("must be superuser to do CHECKPOINT")));
+						 errmsg("must be superuser or have privileges of pg_checkpointer to do CHECKPOINT")));
 
 			if (Gp_role == GP_ROLE_DISPATCH)
 			{

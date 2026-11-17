@@ -3,7 +3,7 @@
  * auth.c
  *	  Routines to handle network authentication
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -18,6 +18,7 @@
 #include <sys/param.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <pwd.h>
 #include <unistd.h>
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
@@ -68,7 +69,7 @@ int     getpeereid(int, uid_t *__restrict__, gid_t *__restrict__);
  * Global authentication functions
  *----------------------------------------------------------------
  */
-static void auth_failed(Port *port, int status, char *logdetail);
+static void auth_failed(Port *port, int status, const char *logdetail);
 static char *recv_password_packet(Port *port);
 static void set_authn_id(Port *port, const char *id);
 
@@ -77,10 +78,11 @@ static void set_authn_id(Port *port, const char *id);
  * Password-based authentication methods (password, md5, and scram-sha-256)
  *----------------------------------------------------------------
  */
-static int	CheckPasswordAuth(Port *port, char **logdetail);
-static int	CheckPWChallengeAuth(Port *port, char **logdetail);
+static int	CheckPasswordAuth(Port *port, const char **logdetail);
+static int	CheckPWChallengeAuth(Port *port, const char **logdetail);
 
-static int	CheckMD5Auth(Port *port, char *shadow_pass, char **logdetail);
+static int	CheckMD5Auth(Port *port, char *shadow_pass,
+						 const char **logdetail);
 
 
 /*----------------------------------------------------------------
@@ -271,7 +273,7 @@ ClientAuthentication_hook_type ClientAuthentication_hook = NULL;
  * particular, if logdetail isn't NULL, we send that string to the log.
  */
 static void
-auth_failed(Port *port, int status, char *logdetail)
+auth_failed(Port *port, int status, const char *logdetail)
 {
 	const char *errstr;
 	char	   *cdetail;
@@ -643,8 +645,8 @@ set_authn_id(Port *port, const char *id)
 		 * connection continue, either.
 		 */
 		ereport(FATAL,
-				(errmsg("connection was re-authenticated"),
-				 errdetail_log("previous ID: \"%s\"; new ID: \"%s\"",
+				(errmsg("authentication identifier set more than once"),
+				 errdetail_log("previous identifier: \"%s\"; new identifier: \"%s\"",
 							   port->authn_id, id)));
 	}
 
@@ -669,7 +671,7 @@ void
 ClientAuthentication(Port *port)
 {
 	int			status = STATUS_ERROR;
-	char	   *logdetail = NULL;
+	const char *logdetail = NULL;
 
 	/*
 	 * For parallel retrieve cursor,
@@ -1100,7 +1102,7 @@ recv_password_packet(Port *port)
  * Plaintext password authentication.
  */
 static int
-CheckPasswordAuth(Port *port, char **logdetail)
+CheckPasswordAuth(Port *port, const char **logdetail)
 {
 	char	   *passwd;
 	int			result;
@@ -1135,7 +1137,7 @@ CheckPasswordAuth(Port *port, char **logdetail)
  * MD5 and SCRAM authentication.
  */
 static int
-CheckPWChallengeAuth(Port *port, char **logdetail)
+CheckPWChallengeAuth(Port *port, const char **logdetail)
 {
 	int			auth_result;
 	char	   *shadow_pass;
@@ -1197,7 +1199,7 @@ CheckPWChallengeAuth(Port *port, char **logdetail)
 }
 
 static int
-CheckMD5Auth(Port *port, char *shadow_pass, char **logdetail)
+CheckMD5Auth(Port *port, char *shadow_pass, const char **logdetail)
 {
 	char		md5Salt[4];		/* Password salt */
 	char	   *passwd;
@@ -3403,7 +3405,7 @@ PerformRadiusTransaction(const char *server, const char *secret, const char *por
 	struct addrinfo hint;
 	struct addrinfo *serveraddrs;
 	int			port;
-	ACCEPT_TYPE_ARG3 addrsize;
+	socklen_t	addrsize;
 	fd_set		fdset;
 	struct timeval endtime;
 	int			i,
@@ -3462,6 +3464,8 @@ PerformRadiusTransaction(const char *server, const char *secret, const char *por
 	md5trailer = packet->vector;
 	for (i = 0; i < encryptedpasswordlen; i += RADIUS_VECTOR_LENGTH)
 	{
+		const char *errstr = NULL;
+
 		memcpy(cryptvector + strlen(secret), md5trailer, RADIUS_VECTOR_LENGTH);
 
 		/*
@@ -3470,10 +3474,12 @@ PerformRadiusTransaction(const char *server, const char *secret, const char *por
 		 */
 		md5trailer = encryptedpassword + i;
 
-		if (!pg_md5_binary(cryptvector, strlen(secret) + RADIUS_VECTOR_LENGTH, encryptedpassword + i))
+		if (!pg_md5_binary(cryptvector, strlen(secret) + RADIUS_VECTOR_LENGTH,
+						   encryptedpassword + i, &errstr))
 		{
 			ereport(LOG,
-					(errmsg("could not perform MD5 encryption of password")));
+					(errmsg("could not perform MD5 encryption of password: %s",
+							errstr)));
 			pfree(cryptvector);
 			pg_freeaddrinfo_all(hint.ai_family, serveraddrs);
 			return STATUS_ERROR;
@@ -3558,6 +3564,7 @@ PerformRadiusTransaction(const char *server, const char *secret, const char *por
 		struct timeval timeout;
 		struct timeval now;
 		int64		timeoutval;
+		const char *errstr = NULL;
 
 		gettimeofday(&now, NULL);
 		timeoutval = (endtime.tv_sec * 1000000 + endtime.tv_usec) - (now.tv_sec * 1000000 + now.tv_usec);
@@ -3676,10 +3683,11 @@ PerformRadiusTransaction(const char *server, const char *secret, const char *por
 
 		if (!pg_md5_binary(cryptvector,
 						   packetlength + strlen(secret),
-						   encryptedpassword))
+						   encryptedpassword, &errstr))
 		{
 			ereport(LOG,
-					(errmsg("could not perform MD5 encryption of received packet")));
+					(errmsg("could not perform MD5 encryption of received packet: %s",
+							errstr)));
 			pfree(cryptvector);
 			continue;
 		}

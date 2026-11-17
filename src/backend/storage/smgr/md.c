@@ -10,7 +10,7 @@
  * It doesn't matter whether the bits are on spinning rust or some other
  * storage technology.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -477,7 +477,8 @@ mdextend(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum,
 	/*
 	 * If a relation manages to grow to 2^32-1 blocks, refuse to extend it any
 	 * more --- we mustn't create a block whose number actually is
-	 * InvalidBlockNumber.
+	 * InvalidBlockNumber.  (Note that this failure should be unreachable
+	 * because of upstream checks in bufmgr.c.)
 	 */
 	if (blocknum == InvalidBlockNumber)
 		ereport(ERROR,

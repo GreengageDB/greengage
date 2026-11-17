@@ -648,6 +648,39 @@ insert into graph0 values
 	(2, 3, 'arc 2 -> 3'),
 	(1, 4, 'arc 1 -> 4'),
 	(4, 5, 'arc 4 -> 5');
+explain (verbose, costs off)
+with recursive search_graph(f, t, label) as (
+	select * from graph0 g
+	union all
+	select g.*
+	from graph0 g, search_graph sg
+	where g.f = sg.t
+) search depth first by f, t set seq
+select * from search_graph order by seq;
+                                            QUERY PLAN                                            
+--------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: g.f, g.t, g.label, (ARRAY[ROW(g.f, g.t)])
+   Merge Key: (ARRAY[ROW(g.f, g.t)])
+   ->  Sort
+         Output: g.f, g.t, g.label, (ARRAY[ROW(g.f, g.t)])
+         Sort Key: (ARRAY[ROW(g.f, g.t)])
+         ->  Recursive Union
+               ->  Seq Scan on pg_temp.graph0 g
+                     Output: g.f, g.t, g.label, ARRAY[ROW(g.f, g.t)]
+               ->  Hash Join
+                     Output: g_1.f, g_1.t, g_1.label, array_cat(sg.seq, ARRAY[ROW(g_1.f, g_1.t)])
+                     Hash Cond: (sg.t = g_1.f)
+                     ->  WorkTable Scan on search_graph sg
+                           Output: sg.f, sg.t, sg.label, sg.seq
+                     ->  Hash
+                           Output: g_1.f, g_1.t, g_1.label
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 Output: g_1.f, g_1.t, g_1.label
+                                 ->  Seq Scan on pg_temp.graph0 g_1
+                                       Output: g_1.f, g_1.t, g_1.label
+(20 rows)
+
 with recursive search_graph(f, t, label) as (
 	select * from graph0 g
 	union all
@@ -685,6 +718,39 @@ select * from search_graph order by seq;
  2 | 3 | arc 2 -> 3 | {"(2,3)"}
  4 | 5 | arc 4 -> 5 | {"(4,5)"}
 (7 rows)
+
+explain (verbose, costs off)
+with recursive search_graph(f, t, label) as (
+	select * from graph0 g
+	union all
+	select g.*
+	from graph0 g, search_graph sg
+	where g.f = sg.t
+) search breadth first by f, t set seq
+select * from search_graph order by seq;
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: g.f, g.t, g.label, (ROW('0'::bigint, g.f, g.t))
+   Merge Key: (ROW('0'::bigint, g.f, g.t))
+   ->  Sort
+         Output: g.f, g.t, g.label, (ROW('0'::bigint, g.f, g.t))
+         Sort Key: (ROW('0'::bigint, g.f, g.t))
+         ->  Recursive Union
+               ->  Seq Scan on pg_temp.graph0 g
+                     Output: g.f, g.t, g.label, ROW('0'::bigint, g.f, g.t)
+               ->  Hash Join
+                     Output: g_1.f, g_1.t, g_1.label, ROW(int8inc((sg.seq)."*DEPTH*"), g_1.f, g_1.t)
+                     Hash Cond: (sg.t = g_1.f)
+                     ->  WorkTable Scan on search_graph sg
+                           Output: sg.f, sg.t, sg.label, sg.seq
+                     ->  Hash
+                           Output: g_1.f, g_1.t, g_1.label
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 Output: g_1.f, g_1.t, g_1.label
+                                 ->  Seq Scan on pg_temp.graph0 g_1
+                                       Output: g_1.f, g_1.t, g_1.label
+(20 rows)
 
 with recursive search_graph(f, t, label) as (
 	select * from graph0 g
@@ -949,6 +1015,36 @@ select * from search_graph order by path;
 (25 rows)
 
 -- CYCLE clause
+explain (verbose, costs off)
+with recursive search_graph(f, t, label) as (
+	select * from graph g
+	union all
+	select g.*
+	from graph g, search_graph sg
+	where g.f = sg.t
+) cycle f, t set is_cycle using path
+select * from search_graph;
+                                                                             QUERY PLAN                                                                              
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: g.f, g.t, g.label, (false), (ARRAY[ROW(g.f, g.t)])
+   ->  Recursive Union
+         ->  Seq Scan on pg_temp.graph g
+               Output: g.f, g.t, g.label, false, ARRAY[ROW(g.f, g.t)]
+         ->  Hash Join
+               Output: g_1.f, g_1.t, g_1.label, CASE WHEN (ROW(g_1.f, g_1.t) = ANY (sg.path)) THEN true ELSE false END, array_cat(sg.path, ARRAY[ROW(g_1.f, g_1.t)])
+               Hash Cond: (sg.t = g_1.f)
+               ->  WorkTable Scan on search_graph sg
+                     Output: sg.path, sg.t
+                     Filter: (NOT sg.is_cycle)
+               ->  Hash
+                     Output: g_1.f, g_1.t, g_1.label
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           Output: g_1.f, g_1.t, g_1.label
+                           ->  Seq Scan on pg_temp.graph g_1
+                                 Output: g_1.f, g_1.t, g_1.label
+(17 rows)
+
 with recursive search_graph(f, t, label) as (
 	select * from graph g
 	union all
@@ -2074,7 +2170,7 @@ WITH outermost(x) AS (
 )
 SELECT * FROM outermost ORDER BY 1;
 ERROR:  relation "outermost" does not exist
-LINE 4:          SELECT * FROM outermost  
+LINE 4:          SELECT * FROM outermost  -- fail
                                ^
 DETAIL:  There is a WITH item named "outermost", but it cannot be referenced from this part of the query.
 HINT:  Use WITH RECURSIVE, or re-order the WITH items to remove forward references.
@@ -2098,7 +2194,7 @@ WITH RECURSIVE outermost(x) AS (
 )
 SELECT * FROM outermost ORDER BY 1;
 ERROR:  recursive reference to query "outermost" must not appear within a subquery
-LINE 2:   WITH innermost as (SELECT 2 FROM outermost) 
+LINE 2:   WITH innermost as (SELECT 2 FROM outermost) -- fail
                                            ^
 --
 -- This test will fail with the old implementation of PARAM_EXEC parameter
@@ -3068,19 +3164,19 @@ with ordinality as (select 1 as x) select * from ordinality;
 (1 row)
 
 -- check sane response to attempt to modify CTE relation
-WITH test AS (SELECT 42) INSERT INTO test VALUES (1);
-ERROR:  relation "test" does not exist
-LINE 1: WITH test AS (SELECT 42) INSERT INTO test VALUES (1);
-                                             ^
+WITH with_test AS (SELECT 42) INSERT INTO with_test VALUES (1);
+ERROR:  relation "with_test" does not exist
+LINE 1: WITH with_test AS (SELECT 42) INSERT INTO with_test VALUES (...
+                                                  ^
 -- check response to attempt to modify table with same name as a CTE (perhaps
 -- surprisingly it works, because CTEs don't hide tables from data-modifying
 -- statements)
-create temp table test (i int);
-with test as (select 42) insert into test select * from test;
-select * from test;
+create temp table with_test (i int);
+with with_test as (select 42) insert into with_test select * from with_test;
+select * from with_test;
  i  
 ----
  42
 (1 row)
 
-drop table test;
+drop table with_test;

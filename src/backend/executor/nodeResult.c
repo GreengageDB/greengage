@@ -36,7 +36,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -262,7 +262,7 @@ ExecInitResult(Result *node, EState *estate, int eflags)
 	resstate->ps.ExecProcNode = ExecResult;
 
 	resstate->rs_done = false;
-	resstate->rs_checkqual = (node->resconstantqual == NULL) ? false : true;
+	resstate->rs_checkqual = (node->resconstantqual != NULL);
 
 	/*
 	 * Miscellaneous initialization
@@ -346,7 +346,7 @@ void
 ExecReScanResult(ResultState *node)
 {
 	node->rs_done = false;
-	node->rs_checkqual = (node->resconstantqual == NULL) ? false : true;
+	node->rs_checkqual = (node->resconstantqual != NULL);
 
 	/*
 	 * If chgParam of subnode is not null then plan will be re-scanned by

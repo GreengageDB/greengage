@@ -3,7 +3,7 @@
  * pg_publication.h
  *	  definition of the "publication" system catalog (pg_publication)
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_publication.h
@@ -111,10 +111,22 @@ typedef enum PublicationPartOpt
 extern List *GetPublicationRelations(Oid pubid, PublicationPartOpt pub_partopt);
 extern List *GetAllTablesPublications(void);
 extern List *GetAllTablesPublicationRelations(bool pubviaroot);
+extern List *GetPublicationSchemas(Oid pubid);
+extern List *GetSchemaPublications(Oid schemaid);
+extern List *GetSchemaPublicationRelations(Oid schemaid,
+										   PublicationPartOpt pub_partopt);
+extern List *GetAllSchemaPublicationRelations(Oid puboid,
+											  PublicationPartOpt pub_partopt);
+extern List *GetPubPartitionOptionRelations(List *result,
+											PublicationPartOpt pub_partopt,
+											Oid relid);
 
 extern bool is_publishable_relation(Relation rel);
+extern bool is_schema_publication(Oid pubid);
 extern ObjectAddress publication_add_relation(Oid pubid, PublicationRelInfo *targetrel,
 											  bool if_not_exists);
+extern ObjectAddress publication_add_schema(Oid pubid, Oid schemaid,
+											bool if_not_exists);
 
 extern Oid	get_publication_oid(const char *pubname, bool missing_ok);
 extern char *get_publication_name(Oid pubid, bool missing_ok);

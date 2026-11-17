@@ -90,6 +90,11 @@ bmhandler(PG_FUNCTION_ARGS)
 	amroutine->amclusterable = false;
 	amroutine->ampredlocks = false;
 	amroutine->amkeytype = InvalidOid;
+	/*
+	 * Bitmap indexes store per-tuple TIDs, so an update of an indexed column
+	 * must not be HOT (upstream 5753d4ee320 made this opt-in per AM).
+	 */
+	amroutine->amhotblocking = true;
 
 	amroutine->ambuild = bmbuild;
 	amroutine->ambuildempty = bmbuildempty;

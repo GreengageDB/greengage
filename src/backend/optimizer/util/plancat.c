@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1199,20 +1199,14 @@ estimate_rel_size(Relation rel, int32 *attr_widths,
 	BlockNumber relallvisible;
 	double		density;
 
-	switch (rel->rd_rel->relkind)
+	if (RELKIND_HAS_TABLE_AM(rel->rd_rel->relkind) ||
+		RELKIND_IS_AO_AUX(rel->rd_rel->relkind))
 	{
-		case RELKIND_RELATION:
-		case RELKIND_MATVIEW:
-		case RELKIND_TOASTVALUE:
-		case RELKIND_AOSEGMENTS:
-		case RELKIND_AOBLOCKDIR:
-		case RELKIND_AOVISIMAP:
 			table_relation_estimate_size(rel, attr_widths, pages, tuples,
 										 allvisfrac);
-			break;
-
-		case RELKIND_INDEX:
-
+	}
+	else if (rel->rd_rel->relkind == RELKIND_INDEX)
+	{
 			/*
 			 * XXX: It'd probably be good to move this into a callback,
 			 * individual index types e.g. know if they have a metapage.
@@ -1228,7 +1222,7 @@ estimate_rel_size(Relation rel, int32 *attr_widths,
 			{
 				*tuples = 0;
 				*allvisfrac = 0;
-				break;
+				return;
 			}
 
 			/* coerce values in pg_class to more desirable types */
@@ -1292,27 +1286,18 @@ estimate_rel_size(Relation rel, int32 *attr_widths,
 				*allvisfrac = 1;
 			else
 				*allvisfrac = (double) relallvisible / curpages;
-			break;
-
-		case RELKIND_SEQUENCE:
-			/* Sequences always have a known size */
-			*pages = 1;
-			*tuples = 1;
-			*allvisfrac = 0;
-			break;
-		case RELKIND_FOREIGN_TABLE:
-			/* Just use whatever's in pg_class */
-			/* Note that FDW must cope if reltuples is -1! */
+	}
+	else
+	{
+			/*
+			 * Just use whatever's in pg_class.  This covers foreign tables,
+			 * sequences, and also relkinds without storage (shouldn't get
+			 * here?); see initializations in AddNewRelationTuple().  Note
+			 * that FDW must cope if reltuples is -1!
+			 */
 			*pages = rel->rd_rel->relpages;
 			*tuples = rel->rd_rel->reltuples;
 			*allvisfrac = 0;
-			break;
-		default:
-			/* else it has no disk storage; probably shouldn't get here? */
-			*pages = 0;
-			*tuples = 0;
-			*allvisfrac = 0;
-			break;
 	}
 }
 

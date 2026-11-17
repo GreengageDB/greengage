@@ -5376,6 +5376,41 @@ where q2 = 456;
 (1 row)
 
 reset enable_hashjoin;
+-- and check a related issue where we miscompute required relids for
+-- a PHV that's been translated to a child rel
+create temp table parttbl (a integer primary key) partition by range (a);
+create temp table parttbl1 partition of parttbl for values from (1) to (100);
+insert into parttbl values (11), (12);
+explain (costs off)
+select * from
+  (select *, 12 as phv from parttbl) as ss
+  right join int4_tbl on true
+where ss.a = ss.phv and f1 = 0;
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: true
+         ->  Result
+               Filter: (((12) = 12) AND (parttbl.a = (12)))
+               ->  Dynamic Index Scan on parttbl_pkey on parttbl
+                     Index Cond: (a = 12)
+                     Number of partitions to scan: 1 (out of 1)
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on int4_tbl
+                           Filter: (f1 = 0)
+(13 rows)
+
+select * from
+  (select *, 12 as phv from parttbl) as ss
+  right join int4_tbl on true
+where ss.a = ss.phv and f1 = 0;
+ a  | phv | f1 
+----+-----+----
+ 12 |  12 |  0
+(1 row)
+
 -- bug #8444: we've historically allowed duplicate aliases within aliased JOINs
 select * from
   int8_tbl x join (int4_tbl x cross join int4_tbl y) j on q1 = f1; -- error
@@ -5550,6 +5585,7 @@ explain (costs off)
                      ->  Seq Scan on tenk1 a
                      ->  Memoize
                            Cache Key: a.two
+                           Cache Mode: binary
                            ->  Function Scan on generate_series g
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -5565,6 +5601,7 @@ explain (costs off)
                      ->  Seq Scan on tenk1 a
                      ->  Memoize
                            Cache Key: a.two
+                           Cache Mode: binary
                            ->  Function Scan on generate_series g
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -5581,6 +5618,7 @@ explain (costs off)
                      ->  Seq Scan on tenk1 a
                      ->  Memoize
                            Cache Key: a.two
+                           Cache Mode: binary
                            ->  Function Scan on generate_series g
  Optimizer: Postgres query optimizer
 (9 rows)

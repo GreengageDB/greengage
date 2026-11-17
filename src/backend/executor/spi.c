@@ -3,7 +3,7 @@
  * spi.c
  *				Server Programming Interface
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -77,12 +77,9 @@ static void _SPI_prepare_plan(const char *src, SPIPlanPtr plan);
 
 static void _SPI_prepare_oneshot_plan(const char *src, SPIPlanPtr plan);
 
-static int	_SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
+static int	_SPI_execute_plan(SPIPlanPtr plan, const SPIExecuteOptions *options,
 							  Snapshot snapshot, Snapshot crosscheck_snapshot,
-							  bool read_only, bool allow_nonatomic,
-							  bool fire_triggers, uint64 tcount,
-							  DestReceiver *caller_dest,
-							  ResourceOwner plan_owner);
+							  bool fire_triggers);
 
 static ParamListInfo _SPI_convert_params(int nargs, Oid *argtypes,
 										 Datum *Values, const char *Nulls);
@@ -525,6 +522,7 @@ int
 SPI_execute(const char *src, bool read_only, int64 tcount)
 {
 	_SPI_plan	plan;
+	SPIExecuteOptions options;
 	int			res;
 
 	if (src == NULL || tcount < 0)
@@ -541,11 +539,13 @@ SPI_execute(const char *src, bool read_only, int64 tcount)
 
 	_SPI_prepare_oneshot_plan(src, &plan);
 
-	res = _SPI_execute_plan(&plan, NULL,
+	memset(&options, 0, sizeof(options));
+	options.read_only = read_only;
+	options.tcount = tcount;
+
+	res = _SPI_execute_plan(&plan, &options,
 							InvalidSnapshot, InvalidSnapshot,
-							read_only, false,
-							true, tcount,
-							NULL, NULL);
+							true);
 
 	_SPI_end_call(true);
 	return res;
@@ -585,11 +585,9 @@ SPI_execute_extended(const char *src,
 
 	_SPI_prepare_oneshot_plan(src, &plan);
 
-	res = _SPI_execute_plan(&plan, options->params,
+	res = _SPI_execute_plan(&plan, options,
 							InvalidSnapshot, InvalidSnapshot,
-							options->read_only, options->allow_nonatomic,
-							true, options->tcount,
-							options->dest, options->owner);
+							true);
 
 	_SPI_end_call(true);
 	return res;
@@ -600,6 +598,7 @@ int
 SPI_execute_plan(SPIPlanPtr plan, Datum *Values, const char *Nulls,
 				 bool read_only, int64 tcount)
 {
+	SPIExecuteOptions options;
 	int			res;
 
 	if (plan == NULL || plan->magic != _SPI_PLAN_MAGIC || tcount < 0)
@@ -612,13 +611,15 @@ SPI_execute_plan(SPIPlanPtr plan, Datum *Values, const char *Nulls,
 	if (res < 0)
 		return res;
 
-	res = _SPI_execute_plan(plan,
-							_SPI_convert_params(plan->nargs, plan->argtypes,
-												Values, Nulls),
+	memset(&options, 0, sizeof(options));
+	options.params = _SPI_convert_params(plan->nargs, plan->argtypes,
+										 Values, Nulls);
+	options.read_only = read_only;
+	options.tcount = tcount;
+
+	res = _SPI_execute_plan(plan, &options,
 							InvalidSnapshot, InvalidSnapshot,
-							read_only, false,
-							true, tcount,
-							NULL, NULL);
+							true);
 
 	_SPI_end_call(true);
 	return res;
@@ -645,11 +646,9 @@ SPI_execute_plan_extended(SPIPlanPtr plan,
 	if (res < 0)
 		return res;
 
-	res = _SPI_execute_plan(plan, options->params,
+	res = _SPI_execute_plan(plan, options,
 							InvalidSnapshot, InvalidSnapshot,
-							options->read_only, options->allow_nonatomic,
-							true, options->tcount,
-							options->dest, options->owner);
+							true);
 
 	_SPI_end_call(true);
 	return res;
@@ -660,6 +659,7 @@ int
 SPI_execute_plan_with_paramlist(SPIPlanPtr plan, ParamListInfo params,
 								bool read_only, int64 tcount)
 {
+	SPIExecuteOptions options;
 	int			res;
 
 	if (plan == NULL || plan->magic != _SPI_PLAN_MAGIC || tcount < 0)
@@ -669,11 +669,14 @@ SPI_execute_plan_with_paramlist(SPIPlanPtr plan, ParamListInfo params,
 	if (res < 0)
 		return res;
 
-	res = _SPI_execute_plan(plan, params,
+	memset(&options, 0, sizeof(options));
+	options.params = params;
+	options.read_only = read_only;
+	options.tcount = tcount;
+
+	res = _SPI_execute_plan(plan, &options,
 							InvalidSnapshot, InvalidSnapshot,
-							read_only, false,
-							true, tcount,
-							NULL, NULL);
+							true);
 
 	_SPI_end_call(true);
 	return res;
@@ -698,6 +701,7 @@ SPI_execute_snapshot(SPIPlanPtr plan,
 					 Snapshot snapshot, Snapshot crosscheck_snapshot,
 					 bool read_only, bool fire_triggers, int64 tcount)
 {
+	SPIExecuteOptions options;
 	int			res;
 
 	if (plan == NULL || plan->magic != _SPI_PLAN_MAGIC || tcount < 0)
@@ -710,13 +714,15 @@ SPI_execute_snapshot(SPIPlanPtr plan,
 	if (res < 0)
 		return res;
 
-	res = _SPI_execute_plan(plan,
-							_SPI_convert_params(plan->nargs, plan->argtypes,
-												Values, Nulls),
+	memset(&options, 0, sizeof(options));
+	options.params = _SPI_convert_params(plan->nargs, plan->argtypes,
+										 Values, Nulls);
+	options.read_only = read_only;
+	options.tcount = tcount;
+
+	res = _SPI_execute_plan(plan, &options,
 							snapshot, crosscheck_snapshot,
-							read_only, false,
-							fire_triggers, tcount,
-							NULL, NULL);
+							fire_triggers);
 
 	_SPI_end_call(true);
 	return res;
@@ -737,6 +743,7 @@ SPI_execute_with_args(const char *src,
 	int			res;
 	_SPI_plan	plan;
 	ParamListInfo paramLI;
+	SPIExecuteOptions options;
 
 	if (src == NULL || nargs < 0 || tcount < 0)
 		return SPI_ERROR_ARGUMENT;
@@ -771,11 +778,14 @@ SPI_execute_with_args(const char *src,
 
 	_SPI_prepare_oneshot_plan(src, &plan);
 
-	res = _SPI_execute_plan(&plan, paramLI,
+	memset(&options, 0, sizeof(options));
+	options.params = paramLI;
+	options.read_only = read_only;
+	options.tcount = tcount;
+
+	res = _SPI_execute_plan(&plan, &options,
 							InvalidSnapshot, InvalidSnapshot,
-							read_only, false,
-							true, tcount,
-							NULL, NULL);
+							true);
 
 	_SPI_end_call(true);
 	return res;
@@ -2350,32 +2360,36 @@ _SPI_prepare_oneshot_plan(const char *src, SPIPlanPtr plan)
 }
 
 /*
- * Execute the given plan with the given parameter values
+ * _SPI_execute_plan: execute the given plan with the given options
  *
+ * options contains options accessible from outside SPI:
+ * params: parameter values to pass to query
+ * read_only: true for read-only execution (no CommandCounterIncrement)
+ * allow_nonatomic: true to allow nonatomic CALL/DO execution
+ * must_return_tuples: throw error if query doesn't return tuples
+ * tcount: execution tuple-count limit, or 0 for none
+ * dest: DestReceiver to receive output, or NULL for normal SPI output
+ * owner: ResourceOwner that will be used to hold refcount on plan;
+ *		if NULL, CurrentResourceOwner is used (ignored for non-saved plan)
+ *
+ * Additional, only-internally-accessible options:
  * snapshot: query snapshot to use, or InvalidSnapshot for the normal
  *		behavior of taking a new snapshot for each query.
  * crosscheck_snapshot: for RI use, all others pass InvalidSnapshot
- * read_only: true for read-only execution (no CommandCounterIncrement)
- * allow_nonatomic: true to allow nonatomic CALL/DO execution
  * fire_triggers: true to fire AFTER triggers at end of query (normal case);
  *		false means any AFTER triggers are postponed to end of outer query
- * tcount: execution tuple-count limit, or 0 for none
- * caller_dest: DestReceiver to receive output, or NULL for normal SPI output
- * plan_owner: ResourceOwner that will be used to hold refcount on plan;
- *		if NULL, CurrentResourceOwner is used (ignored for non-saved plan)
  */
 static int
-_SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
+_SPI_execute_plan(SPIPlanPtr plan, const SPIExecuteOptions *options,
 				  Snapshot snapshot, Snapshot crosscheck_snapshot,
-				  bool read_only, bool allow_nonatomic,
-				  bool fire_triggers, uint64 tcount,
-				  DestReceiver *caller_dest, ResourceOwner plan_owner)
+				  bool fire_triggers)
 {
 	int			my_res = 0;
 	uint64		my_processed = 0;
 	SPITupleTable *my_tuptable = NULL;
 	int			res = 0;
 	bool		pushed_active_snap = false;
+	ResourceOwner plan_owner = options->owner;
 	SPICallbackArg spicallbackarg;
 	ErrorContextCallback spierrcontext;
 	CachedPlan *cplan = NULL;
@@ -2415,8 +2429,8 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 	 */
 	if (snapshot != InvalidSnapshot)
 	{
-		Assert(!allow_nonatomic);
-		if (read_only)
+		Assert(!options->allow_nonatomic);
+		if (options->read_only)
 		{
 			PushActiveSnapshot(snapshot);
 			pushed_active_snap = true;
@@ -2437,6 +2451,17 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 		plan_owner = NULL;
 	else if (plan_owner == NULL)
 		plan_owner = CurrentResourceOwner;
+
+	/*
+	 * We interpret must_return_tuples as "there must be at least one query,
+	 * and all of them must return tuples".  This is a bit laxer than
+	 * SPI_is_cursor_plan's check, but there seems no reason to enforce that
+	 * there be only one query.
+	 */
+	if (options->must_return_tuples && plan->plancache_list == NIL)
+		ereport(ERROR,
+				(errcode(ERRCODE_SYNTAX_ERROR),
+				 errmsg("empty query does not return tuples")));
 
 	foreach(lc1, plan->plancache_list)
 	{
@@ -2506,10 +2531,32 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 		}
 
 		/*
+		 * If asked to, complain when query does not return tuples.
+		 * (Replanning can't change this, so we can check it before that.
+		 * However, we can't check it till after parse analysis, so in the
+		 * case of a one-shot plan this is the earliest we could check.)
+		 */
+		if (options->must_return_tuples && !plansource->resultDesc)
+		{
+			/* try to give a good error message */
+			const char *cmdtag;
+
+			/* A SELECT without resultDesc must be SELECT INTO */
+			if (plansource->commandTag == CMDTAG_SELECT)
+				cmdtag = "SELECT INTO";
+			else
+				cmdtag = GetCommandTagName(plansource->commandTag);
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+			/* translator: %s is name of a SQL command, eg INSERT */
+					 errmsg("%s query does not return tuples", cmdtag)));
+		}
+
+		/*
 		 * Replan if needed, and increment plan refcount.  If it's a saved
 		 * plan, the refcount must be backed by the plan_owner.
 		 */
-		cplan = GetCachedPlan(plansource, paramLI,
+		cplan = GetCachedPlan(plansource, options->params,
 							  plan_owner, _SPI_current->queryEnv, NULL);
 
 		stmt_list = cplan->stmt_list;
@@ -2541,7 +2588,7 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 			 * Skip it when doing non-atomic execution, though (we rely
 			 * entirely on the Portal snapshot in that case).
 			 */
-			if (!read_only && !allow_nonatomic)
+			if (!options->read_only && !options->allow_nonatomic)
 			{
 				if (pushed_active_snap)
 					PopActiveSnapshot();
@@ -2588,7 +2635,7 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 				}
 			}
 
-			if (read_only && !CommandIsReadOnly(stmt))
+			if (options->read_only && !CommandIsReadOnly(stmt))
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				/* translator: %s is a SQL statement name */
@@ -2600,7 +2647,7 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 			 * command and update the snapshot.  (But skip it if the snapshot
 			 * isn't under our control.)
 			 */
-			if (!read_only && pushed_active_snap)
+			if (!options->read_only && pushed_active_snap)
 			{
 				CommandCounterIncrement();
 				UpdateActiveSnapshotCommandId();
@@ -2612,8 +2659,8 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 			 */
 			if (!canSetTag)
 				dest = CreateDestReceiver(DestNone);
-			else if (caller_dest)
-				dest = caller_dest;
+			else if (options->dest)
+				dest = options->dest;
 			else
 				dest = CreateDestReceiver(DestSPI);
 
@@ -2631,7 +2678,8 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 										plansource->query_string,
 										snap, crosscheck_snapshot,
 										dest,
-										paramLI, _SPI_current->queryEnv,
+										options->params,
+										_SPI_current->queryEnv,
 										0);
 
 				/* GPDB hook for collecting query info */
@@ -2639,7 +2687,7 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 					(*query_info_collect_hook)(METRICS_QUERY_SUBMIT, qdesc);
 			
 				res = _SPI_pquery(qdesc, fire_triggers,
-								  canSetTag ? tcount : 0);
+								  canSetTag ? options->tcount : 0);
 				FreeQueryDesc(qdesc);
 			}
 			else
@@ -2652,7 +2700,7 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 				 * nonatomic operations, tell ProcessUtility this is an atomic
 				 * execution context.
 				 */
-				if (_SPI_current->atomic || !allow_nonatomic)
+				if (_SPI_current->atomic || !options->allow_nonatomic)
 					context = PROCESS_UTILITY_QUERY;
 				else
 					context = PROCESS_UTILITY_QUERY_NONATOMIC;
@@ -2662,7 +2710,7 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 							   plansource->query_string,
 							   true,	/* protect plancache's node tree */
 							   context,
-							   paramLI,
+							   options->params,
 							   _SPI_current->queryEnv,
 							   dest,
 							   &qc);
@@ -2748,7 +2796,7 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 		 * command.  This ensures that its effects are visible, in case it was
 		 * DDL that would affect the next CachedPlanSource.
 		 */
-		if (!read_only)
+		if (!options->read_only)
 			CommandCounterIncrement();
 	}
 

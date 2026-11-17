@@ -268,6 +268,7 @@ CloseArchive(Archive *AHX)
 	AH->ClosePtr(AH);
 
 	/* Close the output */
+	errno = 0;					/* in case gzclose() doesn't set it */
 	if (AH->gzOut)
 		res = GZCLOSE(AH->OF);
 	else if (AH->OF != stdout)
@@ -915,13 +916,10 @@ restore_toc_entry(ArchiveHandle *AH, TocEntry *te, bool is_parallel)
 						StartTransaction(&AH->public);
 
 						/*
-						 * If the server version is >= 8.4, make sure we issue
-						 * TRUNCATE with ONLY so that child tables are not
-						 * wiped.
+						 * Issue TRUNCATE with ONLY so that child tables are
+						 * not wiped.
 						 */
-						ahprintf(AH, "TRUNCATE TABLE %s%s;\n\n",
-								 (PQserverVersion(AH->connection) >= 80400 ?
-								  "ONLY " : ""),
+						ahprintf(AH, "TRUNCATE TABLE ONLY %s;\n\n",
 								 fmtQualifiedId(te->namespace, te->tag));
 					}
 
@@ -1616,6 +1614,7 @@ RestoreOutput(ArchiveHandle *AH, OutputContext savedContext)
 {
 	int			res;
 
+	errno = 0;					/* in case gzclose() doesn't set it */
 	if (AH->gzOut)
 		res = GZCLOSE(AH->OF);
 	else
@@ -2837,7 +2836,8 @@ _tocEntryRequired(TocEntry *te, teSection curSection, ArchiveHandle *AH)
 	 */
 	if (ropt->no_publications &&
 		(strcmp(te->desc, "PUBLICATION") == 0 ||
-		 strcmp(te->desc, "PUBLICATION TABLE") == 0))
+		 strcmp(te->desc, "PUBLICATION TABLE") == 0 ||
+		 strcmp(te->desc, "PUBLICATION TABLES IN SCHEMA") == 0))
 		return 0;
 
 	/* If it's a security label, maybe ignore it */

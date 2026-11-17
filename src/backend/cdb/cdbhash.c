@@ -26,6 +26,7 @@
 #include "catalog/pg_opclass.h"
 #include "cdb/cdbhash.h"
 #include "commands/defrem.h"
+#include "common/pg_prng.h"
 #include "fmgr.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
@@ -275,20 +276,8 @@ cdbhashreduce(CdbHash *h)
 unsigned int
 cdbhashrandomseg(int numsegs)
 {
-	/*
-	 * Note: Using modulo like this has a bias towards low values. But that's
-	 * acceptable for our use case.
-	 *
-	 * For example, if MAX_RANDOM_VALUE was 5, and you did "random() % 4",
-	 * value 0 would occur twice as often as others, because you would get 0
-	 * when random() returns 0 or 4, while other values would only be returned
-	 * with one return value of random(). But in reality, MAX_RANDOM_VALUE is
-	 * 2^31, and the effect is not significant when the upper bound is much
-	 * smaller than MAX_RANDOM_VALUE. This function is intended for choosing a
-	 * segment in random, and the number of segments is much smaller than
-	 * 2^31, so we're good.
-	 */
-	return random() % numsegs;
+	return (unsigned int) pg_prng_uint64_range(&pg_global_prng_state,
+											   0, numsegs - 1);
 }
 
 

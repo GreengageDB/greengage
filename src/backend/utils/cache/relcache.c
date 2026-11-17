@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -161,6 +161,24 @@ bool		criticalSharedRelcachesBuilt = false;
  * might already be obsolete.
  */
 static long relcacheInvalsReceived = 0L;
+
+/*
+ * in_progress_list is a stack of ongoing RelationBuildDesc() calls.  CREATE
+ * INDEX CONCURRENTLY makes catalog changes under ShareUpdateExclusiveLock.
+ * It critically relies on each backend absorbing those changes no later than
+ * next transaction start.  Hence, RelationBuildDesc() loops until it finishes
+ * without accepting a relevant invalidation.  (Most invalidation consumers
+ * don't do this.)
+ */
+typedef struct inprogressent
+{
+	Oid			reloid;			/* OID of relation being built */
+	bool		invalidated;	/* whether an invalidation arrived for it */
+} InProgressEnt;
+
+static InProgressEnt *in_progress_list;
+static int	in_progress_list_len;
+static int	in_progress_list_maxlen;
 
 /*
  * eoxact_list[] stores the OIDs of relations that (might) need AtEOXact
@@ -1018,6 +1036,7 @@ equalRSDesc(RowSecurityDesc *rsdesc1, RowSecurityDesc *rsdesc2)
 static Relation
 RelationBuildDesc(Oid targetRelId, bool insertIt)
 {
+	int			in_progress_offset;
 	Relation	relation;
 	Oid			relid;
 	HeapTuple	pg_class_tuple;
@@ -1051,6 +1070,21 @@ RelationBuildDesc(Oid targetRelId, bool insertIt)
 	}
 #endif
 
+	/* Register to catch invalidation messages */
+	if (in_progress_list_len >= in_progress_list_maxlen)
+	{
+		int			allocsize;
+
+		allocsize = in_progress_list_maxlen * 2;
+		in_progress_list = repalloc(in_progress_list,
+									allocsize * sizeof(*in_progress_list));
+		in_progress_list_maxlen = allocsize;
+	}
+	in_progress_offset = in_progress_list_len++;
+	in_progress_list[in_progress_offset].reloid = targetRelId;
+retry:
+	in_progress_list[in_progress_offset].invalidated = false;
+
 	/*
 	 * find the tuple in pg_class corresponding to the given relation id
 	 */
@@ -1069,6 +1103,8 @@ RelationBuildDesc(Oid targetRelId, bool insertIt)
 			MemoryContextDelete(tmpcxt);
 		}
 #endif
+		Assert(in_progress_offset + 1 == in_progress_list_len);
+		in_progress_list_len--;
 		return NULL;
 	}
 
@@ -1184,36 +1220,16 @@ RelationBuildDesc(Oid targetRelId, bool insertIt)
 	/*
 	 * initialize access method information
 	 */
-	switch (relation->rd_rel->relkind)
-	{
-		case RELKIND_INDEX:
-		case RELKIND_PARTITIONED_INDEX:
-			Assert(relation->rd_rel->relam != InvalidOid);
-			RelationInitIndexAccessInfo(relation);
-			break;
-		case RELKIND_RELATION:
-		case RELKIND_TOASTVALUE:
-		case RELKIND_MATVIEW:
-		case RELKIND_PARTITIONED_TABLE:
-			Assert(relation->rd_rel->relam != InvalidOid);
-			RelationInitTableAccessMethod(relation);
-			break;
-		case RELKIND_SEQUENCE:
-			Assert(relation->rd_rel->relam == InvalidOid);
-			RelationInitTableAccessMethod(relation);
-			break;
-		case RELKIND_VIEW:
-		case RELKIND_COMPOSITE_TYPE:
-		case RELKIND_FOREIGN_TABLE:
-			Assert(relation->rd_rel->relam == InvalidOid);
-			break;
-		case RELKIND_AOSEGMENTS:
-		case RELKIND_AOVISIMAP:
-		case RELKIND_AOBLOCKDIR:
-			Assert(relation->rd_rel->relam != InvalidOid);
-			RelationInitTableAccessMethod(relation);
-			break;
-	}
+	if (relation->rd_rel->relkind == RELKIND_INDEX ||
+		relation->rd_rel->relkind == RELKIND_PARTITIONED_INDEX)
+		RelationInitIndexAccessInfo(relation);
+	else if (RELKIND_HAS_TABLE_AM(relation->rd_rel->relkind) ||
+			 relation->rd_rel->relkind == RELKIND_SEQUENCE ||
+			 relation->rd_rel->relkind == RELKIND_PARTITIONED_TABLE ||
+			 RELKIND_IS_AO_AUX(relation->rd_rel->relkind))
+		RelationInitTableAccessMethod(relation);
+	else
+		Assert(relation->rd_rel->relam == InvalidOid);
 
 	/* extract reloptions if any */
 	RelationParseRelOptions(relation, pg_class_tuple);
@@ -1255,6 +1271,21 @@ RelationBuildDesc(Oid targetRelId, bool insertIt)
 	 * now we can free the memory allocated for pg_class_tuple
 	 */
 	heap_freetuple(pg_class_tuple);
+
+	/*
+	 * If an invalidation arrived mid-build, start over.  Between here and the
+	 * end of this function, don't add code that does or reasonably could read
+	 * system catalogs.  That range must be free from invalidation processing
+	 * for the !insertIt case.  For the insertIt case, RelationCacheInsert()
+	 * will enroll this relation in ordinary relcache invalidation processing,
+	 */
+	if (in_progress_list[in_progress_offset].invalidated)
+	{
+		RelationDestroyRelation(relation, false);
+		goto retry;
+	}
+	Assert(in_progress_offset + 1 == in_progress_list_len);
+	in_progress_list_len--;
 
 	/*
 	 * Insert newly created relation into relcache hash table, if requested.
@@ -1436,6 +1467,7 @@ RelationInitIndexAccessInfo(Relation relation)
 	/*
 	 * Look up the index's access method, save the OID of its handler function
 	 */
+	Assert(relation->rd_rel->relam != InvalidOid);
 	tuple = SearchSysCache1(AMOID, ObjectIdGetDatum(relation->rd_rel->relam));
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "cache lookup failed for access method %u",
@@ -1795,6 +1827,7 @@ RelationInitTableAccessMethod(Relation relation)
 		 * seem prudent to show that in the catalog. So just overwrite it
 		 * here.
 		 */
+		Assert(relation->rd_rel->relam == InvalidOid);
 		relation->rd_amhandler = F_HEAP_TABLEAM_HANDLER;
 	}
 	else if (IsCatalogRelation(relation))
@@ -2443,10 +2476,10 @@ RelationDestroyRelation(Relation relation, bool remember_tupdesc)
 	list_free_deep(relation->rd_fkeylist);
 	list_free(relation->rd_indexlist);
 	list_free(relation->rd_statlist);
-	bms_free(relation->rd_indexattr);
 	bms_free(relation->rd_keyattr);
 	bms_free(relation->rd_pkattr);
 	bms_free(relation->rd_idattr);
+	bms_free(relation->rd_hotblockingattr);
 	if (relation->rd_pubactions)
 		pfree(relation->rd_pubactions);
 	if (relation->rd_options)
@@ -2643,6 +2676,14 @@ RelationClearRelation(Relation relation, bool rebuild)
 
 		/* Build temporary entry, but don't link it into hashtable */
 		newrel = RelationBuildDesc(save_relid, false);
+
+		/*
+		 * Between here and the end of the swap, don't add code that does or
+		 * reasonably could read system catalogs.  That range must be free
+		 * from invalidation processing.  See RelationBuildDesc() manipulation
+		 * of in_progress_list.
+		 */
+
 		if (newrel == NULL)
 		{
 			/*
@@ -2886,6 +2927,14 @@ RelationCacheInvalidateEntry(Oid relationId)
 		relcacheInvalsReceived++;
 		RelationFlushRelation(relation);
 	}
+	else
+	{
+		int			i;
+
+		for (i = 0; i < in_progress_list_len; i++)
+			if (in_progress_list[i].reloid == relationId)
+				in_progress_list[i].invalidated = true;
+	}
 }
 
 /*
@@ -2894,11 +2943,11 @@ RelationCacheInvalidateEntry(Oid relationId)
  *	 and rebuild those with positive reference counts.  Also reset the smgr
  *	 relation cache and re-read relation mapping data.
  *
- *	 This is currently used only to recover from SI message buffer overflow,
- *	 so we do not touch relations having new-in-transaction relfilenodes; they
- *	 cannot be targets of cross-backend SI updates (and our own updates now go
- *	 through a separate linked list that isn't limited by the SI message
- *	 buffer size).
+ *	 Apart from debug_discard_caches, this is currently used only to recover
+ *	 from SI message buffer overflow, so we do not touch relations having
+ *	 new-in-transaction relfilenodes; they cannot be targets of cross-backend
+ *	 SI updates (and our own updates now go through a separate linked list
+ *	 that isn't limited by the SI message buffer size).
  *
  *	 We do this in two phases: the first pass deletes deletable items, and
  *	 the second one rebuilds the rebuildable items.  This is essential for
@@ -2916,9 +2965,14 @@ RelationCacheInvalidateEntry(Oid relationId)
  *	 second pass processes nailed-in-cache items before other nondeletable
  *	 items.  This should ensure that system catalogs are up to date before
  *	 we attempt to use them to reload information about other open relations.
+ *
+ *	 After those two phases of work having immediate effects, we normally
+ *	 signal any RelationBuildDesc() on the stack to start over.  However, we
+ *	 don't do this if called as part of debug_discard_caches.  Otherwise,
+ *	 RelationBuildDesc() would become an infinite loop.
  */
 void
-RelationCacheInvalidate(void)
+RelationCacheInvalidate(bool debug_discard)
 {
 	HASH_SEQ_STATUS status;
 	RelIdCacheEnt *idhentry;
@@ -2926,6 +2980,7 @@ RelationCacheInvalidate(void)
 	List	   *rebuildFirstList = NIL;
 	List	   *rebuildList = NIL;
 	ListCell   *l;
+	int			i;
 
 	/*
 	 * Reload relation mapping data before starting to reconstruct cache.
@@ -3012,6 +3067,11 @@ RelationCacheInvalidate(void)
 		RelationClearRelation(relation, true);
 	}
 	list_free(rebuildList);
+
+	if (!debug_discard)
+		/* Any RelationBuildDesc() on the stack must start over. */
+		for (i = 0; i < in_progress_list_len; i++)
+			in_progress_list[i].invalidated = true;
 }
 
 /*
@@ -3161,6 +3221,13 @@ AtEOXact_RelationCache(bool isCommit)
 	HASH_SEQ_STATUS status;
 	RelIdCacheEnt *idhentry;
 	int			i;
+
+	/*
+	 * Forget in_progress_list.  This is relevant when we're aborting due to
+	 * an error during RelationBuildDesc().
+	 */
+	Assert(in_progress_list_len == 0 || !isCommit);
+	in_progress_list_len = 0;
 
 	/*
 	 * Unless the eoxact_list[] overflowed, we only need to examine the rels
@@ -3323,6 +3390,14 @@ AtEOSubXact_RelationCache(bool isCommit, SubTransactionId mySubid,
 	HASH_SEQ_STATUS status;
 	RelIdCacheEnt *idhentry;
 	int			i;
+
+	/*
+	 * Forget in_progress_list.  This is relevant when we're aborting due to
+	 * an error during RelationBuildDesc().  We don't commit subtransactions
+	 * during RelationBuildDesc().
+	 */
+	Assert(in_progress_list_len == 0 || !isCommit);
+	in_progress_list_len = 0;
 
 	/*
 	 * Unless the eoxact_list[] overflowed, we only need to examine the rels
@@ -3680,15 +3755,10 @@ RelationBuildLocalRelation(const char *relname,
 	 */
 	MemoryContextSwitchTo(oldcxt);
 
-	if (relkind == RELKIND_RELATION ||
-		relkind == RELKIND_SEQUENCE ||
-		relkind == RELKIND_TOASTVALUE ||
-		relkind == RELKIND_MATVIEW)
+	if (RELKIND_HAS_TABLE_AM(relkind) || relkind == RELKIND_SEQUENCE)
 		RelationInitTableAccessMethod(rel);
 
-	if (relkind == RELKIND_AOSEGMENTS ||
-		relkind == RELKIND_AOVISIMAP ||
-		relkind == RELKIND_AOBLOCKDIR)
+	if (RELKIND_IS_AO_AUX(relkind))
 		RelationInitTableAccessMethod(rel);
 
 	/*
@@ -3777,41 +3847,36 @@ RelationSetNewRelfilenode(Relation relation, char persistence)
 	newrnode = relation->rd_node;
 	newrnode.relNode = newrelfilenode;
 
-	switch (relation->rd_rel->relkind)
+	if (RELKIND_HAS_TABLE_AM(relation->rd_rel->relkind) ||
+		RELKIND_IS_AO_AUX(relation->rd_rel->relkind))
 	{
-		case RELKIND_INDEX:
-		case RELKIND_SEQUENCE:
-			{
-				/* handle these directly, at least for now */
-				SMgrRelation srel;
+		/*
+		 * GPDB: the append-optimized auxiliary relations (aoseg, block
+		 * directory, visimap) are heaps with a table AM, but the upstream
+		 * RELKIND_HAS_TABLE_AM() macro doesn't list them.  Route them through
+		 * the table AM here too so they get a valid relfrozenxid assigned;
+		 * otherwise TRUNCATE would leave relfrozenxid invalid and a later
+		 * heap VACUUM of the aux relation would trip the wraparound-failsafe
+		 * assert.
+		 */
+		table_relation_set_new_filenode(relation, &newrnode,
+										persistence,
+										&freezeXid, &minmulti);
+	}
+	else if (RELKIND_HAS_STORAGE(relation->rd_rel->relkind))
+	{
+		/* handle these directly, at least for now */
+		SMgrRelation srel;
 
-				srel = RelationCreateStorage(newrnode, persistence,
-											 0 /* default storage implementation */);
-				smgrclose(srel);
-			}
-			break;
-
-		case RELKIND_RELATION:
-		case RELKIND_TOASTVALUE:
-		case RELKIND_MATVIEW:
-			table_relation_set_new_filenode(relation, &newrnode,
-											persistence,
-											&freezeXid, &minmulti);
-			break;
-
-		case RELKIND_AOSEGMENTS:
-		case RELKIND_AOVISIMAP:
-		case RELKIND_AOBLOCKDIR:
-			table_relation_set_new_filenode(relation, &newrnode,
-											persistence,
-											&freezeXid, &minmulti);
-			break;
-
-		default:
-			/* we shouldn't be called for anything else */
-			elog(ERROR, "relation \"%s\" does not have storage",
-				 RelationGetRelationName(relation));
-			break;
+		srel = RelationCreateStorage(newrnode, persistence,
+									 0 /* default storage implementation */);
+		smgrclose(srel);
+	}
+	else
+	{
+		/* we shouldn't be called for anything else */
+		elog(ERROR, "relation \"%s\" does not have storage",
+			 RelationGetRelationName(relation));
 	}
 
 	/*
@@ -3924,6 +3989,7 @@ void
 RelationCacheInitialize(void)
 {
 	HASHCTL		ctl;
+	int			allocsize;
 
 	/*
 	 * make sure cache memory context exists
@@ -3938,6 +4004,15 @@ RelationCacheInitialize(void)
 	ctl.entrysize = sizeof(RelIdCacheEnt);
 	RelationIdCache = hash_create("Relcache by OID", INITRELCACHESIZE,
 								  &ctl, HASH_ELEM | HASH_BLOBS);
+
+	/*
+	 * reserve enough in_progress_list slots for many cases
+	 */
+	allocsize = 4;
+	in_progress_list =
+		MemoryContextAlloc(CacheMemoryContext,
+						   allocsize * sizeof(*in_progress_list));
+	in_progress_list_maxlen = allocsize;
 
 	/*
 	 * relation mapper needs to be initialized too
@@ -4266,10 +4341,7 @@ RelationCacheInitializePhase3(void)
 
 		/* Reload tableam data if needed */
 		if (relation->rd_tableam == NULL &&
-			(relation->rd_rel->relkind == RELKIND_RELATION ||
-			 relation->rd_rel->relkind == RELKIND_SEQUENCE ||
-			 relation->rd_rel->relkind == RELKIND_TOASTVALUE ||
-			 relation->rd_rel->relkind == RELKIND_MATVIEW))
+			(RELKIND_HAS_TABLE_AM(relation->rd_rel->relkind) || relation->rd_rel->relkind == RELKIND_SEQUENCE))
 		{
 			RelationInitTableAccessMethod(relation);
 			Assert(relation->rd_tableam != NULL);
@@ -4278,9 +4350,7 @@ RelationCacheInitializePhase3(void)
 		}
 
 		if (relation->rd_tableam == NULL &&
-			(relation->rd_rel->relkind == RELKIND_AOSEGMENTS ||
-			 relation->rd_rel->relkind == RELKIND_AOBLOCKDIR ||
-			 relation->rd_rel->relkind == RELKIND_AOVISIMAP))
+			RELKIND_IS_AO_AUX(relation->rd_rel->relkind))
 		{
 			RelationInitTableAccessMethod(relation);
 			Assert(relation->rd_tableam != NULL);
@@ -4704,7 +4774,7 @@ RelationGetFKeyList(Relation relation)
 								   info->conkey,
 								   info->confkey,
 								   info->conpfeqop,
-								   NULL, NULL);
+								   NULL, NULL, NULL, NULL);
 
 		/* Add FK's node to the result list */
 		result = lappend(result, info);
@@ -5190,10 +5260,10 @@ RelationGetIndexPredicate(Relation relation)
 Bitmapset *
 RelationGetIndexAttrBitmap(Relation relation, IndexAttrBitmapKind attrKind)
 {
-	Bitmapset  *indexattrs;		/* indexed columns */
 	Bitmapset  *uindexattrs;	/* columns in unique indexes */
 	Bitmapset  *pkindexattrs;	/* columns in the primary index */
 	Bitmapset  *idindexattrs;	/* columns in the replica identity */
+	Bitmapset  *hotblockingattrs;   /* columns with HOT blocking indexes */
 	List	   *indexoidlist;
 	List	   *newindexoidlist;
 	Oid			relpkindex;
@@ -5202,18 +5272,18 @@ RelationGetIndexAttrBitmap(Relation relation, IndexAttrBitmapKind attrKind)
 	MemoryContext oldcxt;
 
 	/* Quick exit if we already computed the result. */
-	if (relation->rd_indexattr != NULL)
+	if (relation->rd_attrsvalid)
 	{
 		switch (attrKind)
 		{
-			case INDEX_ATTR_BITMAP_ALL:
-				return bms_copy(relation->rd_indexattr);
 			case INDEX_ATTR_BITMAP_KEY:
 				return bms_copy(relation->rd_keyattr);
 			case INDEX_ATTR_BITMAP_PRIMARY_KEY:
 				return bms_copy(relation->rd_pkattr);
 			case INDEX_ATTR_BITMAP_IDENTITY_KEY:
 				return bms_copy(relation->rd_idattr);
+			case INDEX_ATTR_BITMAP_HOT_BLOCKING:
+				return bms_copy(relation->rd_hotblockingattr);
 			default:
 				elog(ERROR, "unknown attrKind %u", attrKind);
 		}
@@ -5244,7 +5314,7 @@ restart:
 	relreplindex = relation->rd_replidindex;
 
 	/*
-	 * For each index, add referenced attributes to indexattrs.
+	 * For each index, add referenced attributes to appropriate bitmaps.
 	 *
 	 * Note: we consider all indexes returned by RelationGetIndexList, even if
 	 * they are not indisready or indisvalid.  This is important because an
@@ -5253,10 +5323,10 @@ restart:
 	 * CONCURRENTLY is far enough along that we should ignore the index, it
 	 * won't be returned at all by RelationGetIndexList.
 	 */
-	indexattrs = NULL;
 	uindexattrs = NULL;
 	pkindexattrs = NULL;
 	idindexattrs = NULL;
+	hotblockingattrs = NULL;
 	foreach(l, indexoidlist)
 	{
 		Oid			indexOid = lfirst_oid(l);
@@ -5321,8 +5391,9 @@ restart:
 			 */
 			if (attrnum != 0)
 			{
-				indexattrs = bms_add_member(indexattrs,
-											attrnum - FirstLowInvalidHeapAttributeNumber);
+				if (indexDesc->rd_indam->amhotblocking)
+					hotblockingattrs = bms_add_member(hotblockingattrs,
+												 attrnum - FirstLowInvalidHeapAttributeNumber);
 
 				if (isKey && i < indexDesc->rd_index->indnkeyatts)
 					uindexattrs = bms_add_member(uindexattrs,
@@ -5339,10 +5410,15 @@ restart:
 		}
 
 		/* Collect all attributes used in expressions, too */
-		pull_varattnos(indexExpressions, 1, &indexattrs);
+		if (indexDesc->rd_indam->amhotblocking)
+			pull_varattnos(indexExpressions, 1, &hotblockingattrs);
 
-		/* Collect all attributes in the index predicate, too */
-		pull_varattnos(indexPredicate, 1, &indexattrs);
+		/*
+		 * Collect all attributes in the index predicate, too. We have to ignore
+		 * amhotblocking flag, because the row might become indexable, in which
+		 * case we have to add it to the index.
+		 */
+		pull_varattnos(indexPredicate, 1, &hotblockingattrs);
 
 		index_close(indexDesc, AccessShareLock);
 	}
@@ -5370,25 +5446,25 @@ restart:
 		bms_free(uindexattrs);
 		bms_free(pkindexattrs);
 		bms_free(idindexattrs);
-		bms_free(indexattrs);
+		bms_free(hotblockingattrs);
 
 		goto restart;
 	}
 
 	/* Don't leak the old values of these bitmaps, if any */
-	bms_free(relation->rd_indexattr);
-	relation->rd_indexattr = NULL;
 	bms_free(relation->rd_keyattr);
 	relation->rd_keyattr = NULL;
 	bms_free(relation->rd_pkattr);
 	relation->rd_pkattr = NULL;
 	bms_free(relation->rd_idattr);
 	relation->rd_idattr = NULL;
+	bms_free(relation->rd_hotblockingattr);
+	relation->rd_hotblockingattr = NULL;
 
 	/*
 	 * Now save copies of the bitmaps in the relcache entry.  We intentionally
-	 * set rd_indexattr last, because that's the one that signals validity of
-	 * the values; if we run out of memory before making that copy, we won't
+	 * set rd_attrsvalid last, because that's what signals validity of the
+	 * values; if we run out of memory before making that copy, we won't
 	 * leave the relcache entry looking like the other ones are valid but
 	 * empty.
 	 */
@@ -5396,20 +5472,21 @@ restart:
 	relation->rd_keyattr = bms_copy(uindexattrs);
 	relation->rd_pkattr = bms_copy(pkindexattrs);
 	relation->rd_idattr = bms_copy(idindexattrs);
-	relation->rd_indexattr = bms_copy(indexattrs);
+	relation->rd_hotblockingattr = bms_copy(hotblockingattrs);
+	relation->rd_attrsvalid = true;
 	MemoryContextSwitchTo(oldcxt);
 
 	/* We return our original working copy for caller to play with */
 	switch (attrKind)
 	{
-		case INDEX_ATTR_BITMAP_ALL:
-			return indexattrs;
 		case INDEX_ATTR_BITMAP_KEY:
 			return uindexattrs;
 		case INDEX_ATTR_BITMAP_PRIMARY_KEY:
 			return pkindexattrs;
 		case INDEX_ATTR_BITMAP_IDENTITY_KEY:
 			return idindexattrs;
+		case INDEX_ATTR_BITMAP_HOT_BLOCKING:
+			return hotblockingattrs;
 		default:
 			elog(ERROR, "unknown attrKind %u", attrKind);
 			return NULL;
@@ -5635,6 +5712,7 @@ GetRelationPublicationActions(Relation relation)
 	List	   *puboids;
 	ListCell   *lc;
 	MemoryContext oldcxt;
+	Oid			schemaid;
 	PublicationActions *pubactions = palloc0(sizeof(PublicationActions));
 
 	/*
@@ -5650,6 +5728,9 @@ GetRelationPublicationActions(Relation relation)
 
 	/* Fetch the publication membership info. */
 	puboids = GetRelationPublications(RelationGetRelid(relation));
+	schemaid = RelationGetNamespace(relation);
+	puboids = list_concat_unique_oid(puboids, GetSchemaPublications(schemaid));
+
 	if (relation->rd_rel->relispartition)
 	{
 		/* Add publications that the ancestors are in too. */
@@ -5662,6 +5743,9 @@ GetRelationPublicationActions(Relation relation)
 
 			puboids = list_concat_unique_oid(puboids,
 											 GetRelationPublications(ancestor));
+			schemaid = get_rel_namespace(ancestor);
+			puboids = list_concat_unique_oid(puboids,
+											 GetSchemaPublications(schemaid));
 		}
 	}
 	puboids = list_concat_unique_oid(puboids, GetAllTablesPublications());
@@ -6198,15 +6282,10 @@ load_relcache_init_file(bool shared)
 				nailed_rels++;
 
 			/* Load table AM data */
-			if (rel->rd_rel->relkind == RELKIND_RELATION ||
-				rel->rd_rel->relkind == RELKIND_SEQUENCE ||
-				rel->rd_rel->relkind == RELKIND_TOASTVALUE ||
-				rel->rd_rel->relkind == RELKIND_MATVIEW)
+			if (RELKIND_HAS_TABLE_AM(rel->rd_rel->relkind) || rel->rd_rel->relkind == RELKIND_SEQUENCE)
 				RelationInitTableAccessMethod(rel);
 
-			if (rel->rd_rel->relkind == RELKIND_AOSEGMENTS ||
-				rel->rd_rel->relkind == RELKIND_AOVISIMAP ||
-				rel->rd_rel->relkind == RELKIND_AOBLOCKDIR)
+			if (RELKIND_IS_AO_AUX(rel->rd_rel->relkind))
 				RelationInitTableAccessMethod(rel);
 
 			Assert(rel->rd_index == NULL);
@@ -6263,10 +6342,11 @@ load_relcache_init_file(bool shared)
 		rel->rd_indexlist = NIL;
 		rel->rd_pkindex = InvalidOid;
 		rel->rd_replidindex = InvalidOid;
-		rel->rd_indexattr = NULL;
+		rel->rd_attrsvalid = false;
 		rel->rd_keyattr = NULL;
 		rel->rd_pkattr = NULL;
 		rel->rd_idattr = NULL;
+		rel->rd_hotblockingattr = NULL;
 		rel->rd_pubactions = NULL;
 		rel->rd_statvalid = false;
 		rel->rd_statlist = NIL;

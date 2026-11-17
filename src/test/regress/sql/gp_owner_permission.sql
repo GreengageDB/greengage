@@ -11,6 +11,10 @@ SET role = test2;
 CREATE database reindexdb2;
 
 \c reindexdb2
+-- PG15 no longer grants CREATE on schema public to PUBLIC in a freshly created
+-- database; restore it (as the regression test_setup does) so the non-owner
+-- role test1 can create the tables this reindex-by-database-owner test needs.
+GRANT ALL ON SCHEMA public TO public;
 BEGIN;
 SET role = test1;
 CREATE TABLE mytab1_heap(a int, b int);

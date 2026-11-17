@@ -7,7 +7,7 @@
  *	AccessExclusiveLocks and starting snapshots for Hot Standby mode.
  *	Plus conflict recovery processing.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -130,7 +130,7 @@ InitRecoveryTransactionEnvironment(void)
  *
  * This must be called even in shutdown of startup process if transaction
  * tracking has been initialized. Otherwise some locks the tracked
- * transactions were holding will not be released and and may interfere with
+ * transactions were holding will not be released and may interfere with
  * the processes still running (but will exit soon later) at the exit of
  * startup process.
  */
@@ -1012,9 +1012,11 @@ StandbyAcquireAccessExclusiveLock(TransactionId xid, Oid dbOid, Oid relOid)
 static void
 StandbyReleaseLockList(List *locks)
 {
-	while (locks)
+	ListCell   *lc;
+
+	foreach(lc, locks)
 	{
-		xl_standby_lock *lock = (xl_standby_lock *) linitial(locks);
+		xl_standby_lock *lock = (xl_standby_lock *) lfirst(lc);
 		LOCKTAG		locktag;
 
 		elog(trace_recovery(DEBUG4),
@@ -1028,9 +1030,9 @@ StandbyReleaseLockList(List *locks)
 				 lock->xid, lock->dbOid, lock->relOid);
 			Assert(false);
 		}
-		pfree(lock);
-		locks = list_delete_first(locks);
 	}
+
+	list_free_deep(locks);
 }
 
 static void

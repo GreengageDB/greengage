@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -144,6 +144,13 @@ static void outChar(StringInfo str, char c);
 	} while(0)
 
 #define WRITE_OID_ARRAY(fldname, len) \
+	do { \
+		appendStringInfoString(str, " :" CppAsString(fldname) " "); \
+		for (int i = 0; i < len; i++) \
+			appendStringInfo(str, " %u", node->fldname[i]); \
+	} while(0)
+
+#define WRITE_INDEX_ARRAY(fldname, len) \
 	do { \
 		appendStringInfoString(str, " :" CppAsString(fldname) " "); \
 		for (int i = 0; i < len; i++) \
@@ -784,6 +791,7 @@ _outIndexOnlyScan(StringInfo str, const IndexOnlyScan *node)
 
 	WRITE_OID_FIELD(indexid);
 	WRITE_NODE_FIELD(indexqual);
+	WRITE_NODE_FIELD(recheckqual);
 	WRITE_NODE_FIELD(indexorderby);
 	WRITE_NODE_FIELD(indextlist);
 	WRITE_ENUM_FIELD(indexorderdir, ScanDirection);
@@ -1164,7 +1172,9 @@ _outMemoize(StringInfo str, const Memoize *node)
 	WRITE_OID_ARRAY(collations, node->numKeys);
 	WRITE_NODE_FIELD(param_exprs);
 	WRITE_BOOL_FIELD(singlerow);
+	WRITE_BOOL_FIELD(binary_mode);
 	WRITE_UINT_FIELD(est_entries);
+	WRITE_BITMAPSET_FIELD(keyparamids);
 }
 
 static void
@@ -1528,7 +1538,7 @@ _outVar(StringInfo str, const Var *node)
 {
 	WRITE_NODE_TYPE("VAR");
 
-	WRITE_UINT_FIELD(varno);
+	WRITE_INT_FIELD(varno);
 	WRITE_INT_FIELD(varattno);
 	WRITE_OID_FIELD(vartype);
 	WRITE_INT_FIELD(vartypmod);
@@ -1904,7 +1914,7 @@ _outConvertRowtypeExpr(StringInfo str, const ConvertRowtypeExpr *node)
 static void
 _outCollateExpr(StringInfo str, const CollateExpr *node)
 {
-	WRITE_NODE_TYPE("COLLATE");
+	WRITE_NODE_TYPE("COLLATEEXPR");
 
 	WRITE_NODE_FIELD(arg);
 	WRITE_OID_FIELD(collOid);
@@ -1914,7 +1924,7 @@ _outCollateExpr(StringInfo str, const CollateExpr *node)
 static void
 _outCaseExpr(StringInfo str, const CaseExpr *node)
 {
-	WRITE_NODE_TYPE("CASE");
+	WRITE_NODE_TYPE("CASEEXPR");
 
 	WRITE_OID_FIELD(casetype);
 	WRITE_OID_FIELD(casecollid);
@@ -1927,7 +1937,7 @@ _outCaseExpr(StringInfo str, const CaseExpr *node)
 static void
 _outCaseWhen(StringInfo str, const CaseWhen *node)
 {
-	WRITE_NODE_TYPE("WHEN");
+	WRITE_NODE_TYPE("CASEWHEN");
 
 	WRITE_NODE_FIELD(expr);
 	WRITE_NODE_FIELD(result);
@@ -1947,7 +1957,7 @@ _outCaseTestExpr(StringInfo str, const CaseTestExpr *node)
 static void
 _outArrayExpr(StringInfo str, const ArrayExpr *node)
 {
-	WRITE_NODE_TYPE("ARRAY");
+	WRITE_NODE_TYPE("ARRAYEXPR");
 
 	WRITE_OID_FIELD(array_typeid);
 	WRITE_OID_FIELD(array_collid);
@@ -1960,7 +1970,7 @@ _outArrayExpr(StringInfo str, const ArrayExpr *node)
 static void
 _outRowExpr(StringInfo str, const RowExpr *node)
 {
-	WRITE_NODE_TYPE("ROW");
+	WRITE_NODE_TYPE("ROWEXPR");
 
 	WRITE_NODE_FIELD(args);
 	WRITE_OID_FIELD(row_typeid);
@@ -1972,7 +1982,7 @@ _outRowExpr(StringInfo str, const RowExpr *node)
 static void
 _outRowCompareExpr(StringInfo str, const RowCompareExpr *node)
 {
-	WRITE_NODE_TYPE("ROWCOMPARE");
+	WRITE_NODE_TYPE("ROWCOMPAREEXPR");
 
 	WRITE_ENUM_FIELD(rctype, RowCompareType);
 	WRITE_NODE_FIELD(opnos);
@@ -1985,7 +1995,7 @@ _outRowCompareExpr(StringInfo str, const RowCompareExpr *node)
 static void
 _outCoalesceExpr(StringInfo str, const CoalesceExpr *node)
 {
-	WRITE_NODE_TYPE("COALESCE");
+	WRITE_NODE_TYPE("COALESCEEXPR");
 
 	WRITE_OID_FIELD(coalescetype);
 	WRITE_OID_FIELD(coalescecollid);
@@ -1996,7 +2006,7 @@ _outCoalesceExpr(StringInfo str, const CoalesceExpr *node)
 static void
 _outMinMaxExpr(StringInfo str, const MinMaxExpr *node)
 {
-	WRITE_NODE_TYPE("MINMAX");
+	WRITE_NODE_TYPE("MINMAXEXPR");
 
 	WRITE_OID_FIELD(minmaxtype);
 	WRITE_OID_FIELD(minmaxcollid);
@@ -2474,6 +2484,7 @@ _outMemoizePath(StringInfo str, const MemoizePath *node)
 	WRITE_NODE_FIELD(hash_operators);
 	WRITE_NODE_FIELD(param_exprs);
 	WRITE_BOOL_FIELD(singlerow);
+	WRITE_BOOL_FIELD(binary_mode);
 	WRITE_FLOAT_FIELD(calls, "%.0f");
 	WRITE_UINT_FIELD(est_entries);
 }
@@ -3054,14 +3065,7 @@ _outPathTarget(StringInfo str, const PathTarget *node)
 	WRITE_NODE_TYPE("PATHTARGET");
 
 	WRITE_NODE_FIELD(exprs);
-	if (node->sortgrouprefs)
-	{
-		int			i;
-
-		appendStringInfoString(str, " :sortgrouprefs");
-		for (i = 0; i < list_length(node->exprs); i++)
-			appendStringInfo(str, " %u", node->sortgrouprefs[i]);
-	}
+	WRITE_INDEX_ARRAY(sortgrouprefs, list_length(node->exprs));
 	WRITE_FLOAT_FIELD(cost.startup, "%.2f");
 	WRITE_FLOAT_FIELD(cost.per_tuple, "%.2f");
 	WRITE_INT_FIELD(width);
@@ -3111,7 +3115,8 @@ _outRestrictInfo(StringInfo str, const RestrictInfo *node)
 	WRITE_NODE_FIELD(right_em);
 	WRITE_BOOL_FIELD(outer_is_left);
 	WRITE_OID_FIELD(hashjoinoperator);
-	WRITE_OID_FIELD(hasheqoperator);
+	WRITE_OID_FIELD(left_hasheqoperator);
+	WRITE_OID_FIELD(right_hasheqoperator);
 }
 
 #ifndef COMPILING_BINARY_FUNCS
@@ -3567,7 +3572,7 @@ unwrapStringList(List *list)
 
 	foreach(lc, list)
 	{
-		Value	   *val = (Value *) lfirst(lc);
+		String	   *val = (String *) lfirst(lc);
 
 		lfirst(lc) = strVal(val);
 		pfree(val);
@@ -4055,7 +4060,7 @@ _outAlterStatsStmt(StringInfo str, const AlterStatsStmt *node)
 static void
 _outNotifyStmt(StringInfo str, const NotifyStmt *node)
 {
-	WRITE_NODE_TYPE("NOTIFY");
+	WRITE_NODE_TYPE("NOTIFYSTMT");
 
 	WRITE_STRING_FIELD(conditionname);
 	WRITE_STRING_FIELD(payload);
@@ -4064,7 +4069,7 @@ _outNotifyStmt(StringInfo str, const NotifyStmt *node)
 static void
 _outDeclareCursorStmt(StringInfo str, const DeclareCursorStmt *node)
 {
-	WRITE_NODE_TYPE("DECLARECURSOR");
+	WRITE_NODE_TYPE("DECLARECURSORSTMT");
 
 	WRITE_STRING_FIELD(portalname);
 	WRITE_INT_FIELD(options);
@@ -4698,7 +4703,7 @@ _outSetOperationStmt(StringInfo str, const SetOperationStmt *node)
 static void
 _outRangeTblEntry(StringInfo str, const RangeTblEntry *node)
 {
-	WRITE_NODE_TYPE("RTE");
+	WRITE_NODE_TYPE("RANGETBLENTRY");
 
 	/* put alias + eref first to make dump more legible */
 	WRITE_NODE_FIELD(alias);
@@ -4890,52 +4895,39 @@ _outA_Expr(StringInfo str, const A_Expr *node)
 
 #ifndef COMPILING_BINARY_FUNCS
 static void
-_outValue(StringInfo str, const Value *node)
+_outInteger(StringInfo str, const Integer *node)
 {
-	switch (node->type)
-	{
-		case T_Integer:
-			appendStringInfo(str, "%d", node->val.ival);
-			break;
-		case T_Float:
-
-			/*
-			 * We assume the value is a valid numeric literal and so does not
-			 * need quoting.
-			 */
-			appendStringInfoString(str, node->val.str);
-			break;
-		case T_String:
-
-			/*
-			 * We use outToken to provide escaping of the string's content,
-			 * but we don't want it to do anything with an empty string.
-			 */
-			appendStringInfoChar(str, '"');
-			if (node->val.str[0] != '\0')
-				outToken(str, node->val.str);
-			appendStringInfoChar(str, '"');
-			break;
-		case T_BitString:
-			/* internal representation already has leading 'b' */
-			appendStringInfoString(str, node->val.str);
-			break;
-		case T_Null:
-			/* this is seen only within A_Const, not in transformed trees */
-			appendStringInfoString(str, "NULL");
-			break;
-		default:
-			elog(ERROR, "unrecognized node type: %d", (int) node->type);
-			break;
-	}
+	appendStringInfo(str, "%d", node->ival);
 }
-#endif /* COMPILING_BINARY_FUNCS */
 
-#ifndef COMPILING_BINARY_FUNCS
 static void
-_outNull(StringInfo str, const Node *n pg_attribute_unused())
+_outFloat(StringInfo str, const Float *node)
 {
-	WRITE_NODE_TYPE("NULL");
+	/*
+	 * We assume the value is a valid numeric literal and so does not
+	 * need quoting.
+	 */
+	appendStringInfoString(str, node->fval);
+}
+
+static void
+_outString(StringInfo str, const String *node)
+{
+	/*
+	 * We use outToken to provide escaping of the string's content,
+	 * but we don't want it to do anything with an empty string.
+	 */
+	appendStringInfoChar(str, '"');
+	if (node->sval[0] != '\0')
+		outToken(str, node->sval);
+	appendStringInfoChar(str, '"');
+}
+
+static void
+_outBitString(StringInfo str, const BitString *node)
+{
+	/* internal representation already has leading 'b' */
+	appendStringInfoString(str, node->bsval);
 }
 #endif /* COMPILING_BINARY_FUNCS */
 
@@ -4977,8 +4969,13 @@ _outA_Const(StringInfo str, const A_Const *node)
 {
 	WRITE_NODE_TYPE("A_CONST");
 
-	appendStringInfoString(str, " :val ");
-	_outValue(str, &(node->val));
+	if (node->isnull)
+		appendStringInfoString(str, " NULL");
+	else
+	{
+		appendStringInfoString(str, " :val ");
+		outNode(str, &node->val);
+	}
 	WRITE_LOCATION_FIELD(location);
 }
 #endif /* COMPILING_BINARY_FUNCS */
@@ -5196,6 +5193,7 @@ _outConstraint(StringInfo str, const Constraint *node)
 	WRITE_CHAR_FIELD(fk_matchtype);
 	WRITE_CHAR_FIELD(fk_upd_action);
 	WRITE_CHAR_FIELD(fk_del_action);
+	WRITE_NODE_FIELD(fk_del_set_cols);
 	WRITE_NODE_FIELD(old_conpfeqop);
 	WRITE_OID_FIELD(old_pktable_oid);
 
@@ -5569,10 +5567,21 @@ _outAlterTSDictionaryStmt(StringInfo str, const AlterTSDictionaryStmt *node)
 }
 
 /*
- * GPDB: PublicationTable is an untransformed parse node that upstream never
- * serializes, but CREATE/ALTER PUBLICATION ... FOR TABLE is dispatched to the
- * segments with its 'tables' list of PublicationTable nodes.
+ * GPDB: PublicationObjSpec and PublicationTable are untransformed parse nodes
+ * that upstream never serializes, but CREATE/ALTER PUBLICATION is dispatched
+ * to the segments with its 'pubobjects' list of PublicationObjSpec nodes.
  */
+static void
+_outPublicationObjSpec(StringInfo str, const PublicationObjSpec *node)
+{
+	WRITE_NODE_TYPE("PUBLICATIONOBJSPEC");
+
+	WRITE_ENUM_FIELD(pubobjtype, PublicationObjSpecType);
+	WRITE_STRING_FIELD(name);
+	WRITE_NODE_FIELD(pubtable);
+	WRITE_LOCATION_FIELD(location);
+}
+
 static void
 _outPublicationTable(StringInfo str, const PublicationTable *node)
 {
@@ -5588,7 +5597,7 @@ _outCreatePublicationStmt(StringInfo str, const CreatePublicationStmt *node)
 
 	WRITE_STRING_FIELD(pubname);
 	WRITE_NODE_FIELD(options);
-	WRITE_NODE_FIELD(tables);
+	WRITE_NODE_FIELD(pubobjects);
 	WRITE_BOOL_FIELD(for_all_tables);
 }
 
@@ -5599,9 +5608,9 @@ _outAlterPublicationStmt(StringInfo str, const AlterPublicationStmt *node)
 
 	WRITE_STRING_FIELD(pubname);
 	WRITE_NODE_FIELD(options);
-	WRITE_NODE_FIELD(tables);
+	WRITE_NODE_FIELD(pubobjects);
 	WRITE_BOOL_FIELD(for_all_tables);
-	WRITE_ENUM_FIELD(tableAction, DefElemAction);
+	WRITE_ENUM_FIELD(action, AlterPublicationAction);
 }
 
 static void
@@ -5727,14 +5736,15 @@ outNode(StringInfo str, const void *obj)
 		appendStringInfoString(str, "<>");
 	else if (IsA(obj, List) || IsA(obj, IntList) || IsA(obj, OidList))
 		_outList(str, obj);
-	else if (IsA(obj, Integer) ||
-			 IsA(obj, Float) ||
-			 IsA(obj, String) ||
-			 IsA(obj, BitString))
-	{
-		/* nodeRead does not want to see { } around these! */
-		_outValue(str, obj);
-	}
+	/* nodeRead does not want to see { } around these! */
+	else if (IsA(obj, Integer))
+		_outInteger(str, (Integer *) obj);
+	else if (IsA(obj, Float))
+		_outFloat(str, (Float *) obj);
+	else if (IsA(obj, String))
+		_outString(str, (String *) obj);
+	else if (IsA(obj, BitString))
+		_outBitString(str, (BitString *) obj);
 	else
 	{
 		appendStringInfoChar(str, '{');
@@ -6520,9 +6530,6 @@ outNode(StringInfo str, const void *obj)
 			case T_UpdateStmt:
 				_outUpdateStmt(str, obj);
 				break;
-			case T_Null:
-				_outNull(str, obj);
-				break;
 			case T_ReturnStmt:
 				_outReturnStmt(str, obj);
 				break;
@@ -6794,6 +6801,9 @@ outNode(StringInfo str, const void *obj)
 				_outAlterTSDictionaryStmt(str, obj);
 				break;
 
+			case T_PublicationObjSpec:
+				_outPublicationObjSpec(str, obj);
+				break;
 			case T_PublicationTable:
 				_outPublicationTable(str, obj);
 				break;

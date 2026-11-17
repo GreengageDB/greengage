@@ -3,7 +3,7 @@
  * collationcmds.c
  *	  collation-related commands support code
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -489,8 +489,8 @@ DispatchCollationCreate(char *alias, char *locale, Oid nspid, int encoding)
 	Assert(Gp_role == GP_ROLE_DISPATCH);
 
 	List *names = NIL;
-	Value *schemaname = makeString(get_namespace_name(nspid));
-	Value *relname = makeString(alias);
+	String *schemaname = makeString(get_namespace_name(nspid));
+	String *relname = makeString(alias);
 
 	names = lappend(names, schemaname);
 	names = lappend(names, relname);
@@ -638,7 +638,7 @@ pg_import_system_collations(PG_FUNCTION_ARGS)
 
 			if (len == 0 || localebuf[len - 1] != '\n')
 			{
-				elog(DEBUG1, "locale name too long, skipped: \"%s\"", localebuf);
+				elog(DEBUG1, "skipping locale with too-long name: \"%s\"", localebuf);
 				continue;
 			}
 			localebuf[len - 1] = '\0';
@@ -652,18 +652,22 @@ pg_import_system_collations(PG_FUNCTION_ARGS)
 			 */
 			if (!pg_is_ascii(localebuf))
 			{
-				elog(DEBUG1, "locale name has non-ASCII characters, skipped: \"%s\"", localebuf);
+				elog(DEBUG1, "skipping locale with non-ASCII name: \"%s\"", localebuf);
 				continue;
 			}
 
 			enc = pg_get_encoding_from_locale(localebuf, false);
 			if (enc < 0)
 			{
-				/* error message printed by pg_get_encoding_from_locale() */
+				elog(DEBUG1, "skipping locale with unrecognized encoding: \"%s\"",
+					 localebuf);
 				continue;
 			}
 			if (!PG_VALID_BE_ENCODING(enc))
-				continue;		/* ignore locales for client-only encodings */
+			{
+				elog(DEBUG1, "skipping locale with client-only encoding: \"%s\"", localebuf);
+				continue;
+			}
 			if (enc == PG_SQL_ASCII)
 				continue;		/* C/POSIX are already in the catalog */
             /*

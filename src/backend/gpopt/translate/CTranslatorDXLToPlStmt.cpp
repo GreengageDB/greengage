@@ -969,6 +969,11 @@ CTranslatorDXLToPlStmt::TranslateDXLIndexOnlyScan(
 
 	index_scan->indexqual = index_cond;
 	// index_scan->indexqualorig = index_orig_cond;
+	// The executor rechecks lossy index-only scan results with recheckqual
+	// (since 9a3ddeb519e), which planner plans get from setrefs.c.  Recheck
+	// with the index conditions, against the index tuple, as the executor did
+	// before; an empty recheckqual would accept every lossy match.
+	index_scan->recheckqual = (List *) gpdb::CopyObject(index_cond);
 	SetParamIds(plan);
 
 	return (Plan *) index_scan;
@@ -1621,7 +1626,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTvfToRangeTblEntry(
 			CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 				dxl_proj_elem->GetMdNameAlias()->GetMDName()->GetBuffer());
 
-		Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+		Node *val_colname = gpdb::MakeStringValue(col_name_char_array);
 		alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 
 		// save mapping col id -> index in translate context
@@ -1759,7 +1764,7 @@ CTranslatorDXLToPlStmt::TranslateDXLValueScanToRangeTblEntry(
 			CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 				dxl_proj_elem->GetMdNameAlias()->GetMDName()->GetBuffer());
 
-		Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+		Node *val_colname = gpdb::MakeStringValue(col_name_char_array);
 		alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 
 		// save mapping col id -> index in translate context
@@ -3254,7 +3259,7 @@ CTranslatorDXLToPlStmt::TranslateDXLSubQueryScan(
 
 		// non-system attribute
 		CHAR *col_name_char_array = PStrDup(target_entry->resname);
-		Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+		Node *val_colname = gpdb::MakeStringValue(col_name_char_array);
 		alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 
 		// get corresponding child project element
@@ -4838,7 +4843,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTblDescrToRangeTblEntry(
 			for (INT dropped_col_attno = last_attno + 1;
 				 dropped_col_attno < attno; dropped_col_attno++)
 			{
-				Value *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
+				Node *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
 				alias->colnames =
 					gpdb::LAppend(alias->colnames, val_dropped_colname);
 			}
@@ -4847,7 +4852,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTblDescrToRangeTblEntry(
 			CHAR *col_name_char_array =
 				CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 					dxl_col_descr->MdName()->GetMDName()->GetBuffer());
-			Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+			Node *val_colname = gpdb::MakeStringValue(col_name_char_array);
 
 			alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 			last_attno = attno;
@@ -4860,7 +4865,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTblDescrToRangeTblEntry(
 	// if there are any dropped columns at the end, add those too to the RangeTblEntry
 	for (ULONG ul = last_attno + 1; ul <= num_of_non_sys_cols; ul++)
 	{
-		Value *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
+		Node *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
 		alias->colnames = gpdb::LAppend(alias->colnames, val_dropped_colname);
 	}
 

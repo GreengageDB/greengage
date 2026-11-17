@@ -2,7 +2,7 @@
  * wait_event.c
  *	  Wait event reporting infrastructure.
  *
- * Copyright (c) 2001-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2001-2022, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
@@ -348,6 +348,12 @@ pgstat_get_wait_ipc(WaitEventIPC w)
 		case WAIT_EVENT_APPEND_READY:
 			event_name = "AppendReady";
 			break;
+		case WAIT_EVENT_ARCHIVE_CLEANUP_COMMAND:
+			event_name = "ArchiveCleanupCommand";
+			break;
+		case WAIT_EVENT_ARCHIVE_COMMAND:
+			event_name = "ArchiveCommand";
+			break;
 		case WAIT_EVENT_BACKEND_TERMINATION:
 			event_name = "BackendTermination";
 			break;
@@ -462,6 +468,9 @@ pgstat_get_wait_ipc(WaitEventIPC w)
 		case WAIT_EVENT_RECOVERY_CONFLICT_TABLESPACE:
 			event_name = "RecoveryConflictTablespace";
 			break;
+		case WAIT_EVENT_RECOVERY_END_COMMAND:
+			event_name = "RecoveryEndCommand";
+			break;
 		case WAIT_EVENT_RECOVERY_PAUSE:
 			event_name = "RecoveryPause";
 			break;
@@ -470,6 +479,9 @@ pgstat_get_wait_ipc(WaitEventIPC w)
 			break;
 		case WAIT_EVENT_REPLICATION_SLOT_DROP:
 			event_name = "ReplicationSlotDrop";
+			break;
+		case WAIT_EVENT_RESTORE_COMMAND:
+			event_name = "RestoreCommand";
 			break;
 		case WAIT_EVENT_SAFE_SNAPSHOT:
 			event_name = "SafeSnapshot";
@@ -769,18 +781,6 @@ pgstat_get_wait_io(WaitEventIO w)
 			break;
 		case WAIT_EVENT_WAL_WRITE:
 			event_name = "WALWrite";
-			break;
-		case WAIT_EVENT_LOGICAL_CHANGES_READ:
-			event_name = "LogicalChangesRead";
-			break;
-		case WAIT_EVENT_LOGICAL_CHANGES_WRITE:
-			event_name = "LogicalChangesWrite";
-			break;
-		case WAIT_EVENT_LOGICAL_SUBXACT_READ:
-			event_name = "LogicalSubxactRead";
-			break;
-		case WAIT_EVENT_LOGICAL_SUBXACT_WRITE:
-			event_name = "LogicalSubxactWrite";
 			break;
 
 			/* no default case, so that compiler will warn */

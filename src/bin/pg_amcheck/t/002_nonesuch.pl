@@ -1,16 +1,16 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2022, PostgreSQL Global Development Group
 
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More tests => 76;
 
 # Test set-up
 my ($node, $port);
-$node = PostgresNode->new('test');
+$node = PostgreSQL::Test::Cluster->new('test');
 $node->init;
 $node->start;
 $port = $node->port;

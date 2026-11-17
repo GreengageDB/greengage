@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -3368,8 +3368,7 @@ reindex_error_callback(void *arg)
 {
 	ReindexErrorInfo *errinfo = (ReindexErrorInfo *) arg;
 
-	Assert(errinfo->relkind == RELKIND_PARTITIONED_INDEX ||
-		   errinfo->relkind == RELKIND_PARTITIONED_TABLE);
+	Assert(RELKIND_HAS_PARTITIONS(errinfo->relkind));
 
 	if (errinfo->relkind == RELKIND_PARTITIONED_TABLE)
 		errcontext("while reindexing partitioned table \"%s.%s\"",
@@ -3398,8 +3397,7 @@ ReindexPartitions(Oid relid, ReindexParams *params, bool isTopLevel, ReindexStmt
 	ErrorContextCallback errcallback;
 	ReindexErrorInfo errinfo;
 
-	Assert(relkind == RELKIND_PARTITIONED_INDEX ||
-		   relkind == RELKIND_PARTITIONED_TABLE);
+	Assert(RELKIND_HAS_PARTITIONS(relkind));
 
 	/*
 	 * Check if this runs in a transaction block, with an error callback to
@@ -3562,8 +3560,7 @@ ReindexMultipleInternal(List *relids, ReindexParams *params, ReindexStmt *parent
 		 * Partitioned tables and indexes can never be processed directly, and
 		 * a list of their leaves should be built first.
 		 */
-		Assert(relkind != RELKIND_PARTITIONED_INDEX &&
-			   relkind != RELKIND_PARTITIONED_TABLE);
+		Assert(!RELKIND_HAS_PARTITIONS(relkind));
 
 		if ((params->options & REINDEXOPT_CONCURRENTLY) != 0 &&
 			relpersistence != RELPERSISTENCE_TEMP)

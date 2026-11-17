@@ -38,9 +38,34 @@ SELECT num_nulls();
 --
 -- Memory contexts are logged and they are not returned to the function.
 -- Furthermore, their contents can vary depending on the timing. However,
--- we can at least verify that the code doesn't fail.
+-- we can at least verify that the code doesn't fail, and that the
+-- permissions are set properly.
 --
-SELECT * FROM pg_log_backend_memory_contexts(pg_backend_pid());
+
+SELECT pg_log_backend_memory_contexts(pg_backend_pid());
+
+SELECT pg_log_backend_memory_contexts(pid) FROM pg_stat_activity
+  WHERE backend_type = 'checkpointer';
+
+CREATE ROLE regress_log_memory;
+
+SELECT has_function_privilege('regress_log_memory',
+  'pg_log_backend_memory_contexts(integer)', 'EXECUTE'); -- no
+
+GRANT EXECUTE ON FUNCTION pg_log_backend_memory_contexts(integer)
+  TO regress_log_memory;
+
+SELECT has_function_privilege('regress_log_memory',
+  'pg_log_backend_memory_contexts(integer)', 'EXECUTE'); -- yes
+
+SET ROLE regress_log_memory;
+SELECT pg_log_backend_memory_contexts(pg_backend_pid());
+RESET ROLE;
+
+REVOKE EXECUTE ON FUNCTION pg_log_backend_memory_contexts(integer)
+  FROM regress_log_memory;
+
+DROP ROLE regress_log_memory;
 
 --
 -- Test some built-in SRFs
@@ -71,6 +96,27 @@ select count(*) > 0 from
   (select pg_tablespace_databases(oid) as pts from pg_tablespace
    where spcname = 'pg_default') pts
   join pg_database db on pts.pts = db.oid;
+
+--
+-- Test replication slot directory functions
+--
+CREATE ROLE regress_slot_dir_funcs;
+-- Not available by default.
+SELECT has_function_privilege('regress_slot_dir_funcs',
+  'pg_ls_logicalsnapdir()', 'EXECUTE');
+SELECT has_function_privilege('regress_slot_dir_funcs',
+  'pg_ls_logicalmapdir()', 'EXECUTE');
+SELECT has_function_privilege('regress_slot_dir_funcs',
+  'pg_ls_replslotdir(text)', 'EXECUTE');
+GRANT pg_monitor TO regress_slot_dir_funcs;
+-- Role is now part of pg_monitor, so these are available.
+SELECT has_function_privilege('regress_slot_dir_funcs',
+  'pg_ls_logicalsnapdir()', 'EXECUTE');
+SELECT has_function_privilege('regress_slot_dir_funcs',
+  'pg_ls_logicalmapdir()', 'EXECUTE');
+SELECT has_function_privilege('regress_slot_dir_funcs',
+  'pg_ls_replslotdir(text)', 'EXECUTE');
+DROP ROLE regress_slot_dir_funcs;
 
 --
 -- Test adding a support function to a subject function

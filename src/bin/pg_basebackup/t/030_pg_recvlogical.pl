@@ -1,17 +1,17 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2022, PostgreSQL Global Development Group
 
 use strict;
 use warnings;
-use TestLib;
-use PostgresNode;
+use PostgreSQL::Test::Utils;
+use PostgreSQL::Test::Cluster;
 use Test::More tests => 20;
 
 program_help_ok('pg_recvlogical');
 program_version_ok('pg_recvlogical');
 program_options_handling_ok('pg_recvlogical');
 
-my $node = PostgresNode->new('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 
 # Initialize node without replication settings
 $node->init(allows_streaming => 1, has_archiving => 1);

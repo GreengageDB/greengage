@@ -4,7 +4,7 @@
  *	main source file
  *
  *	Portions Copyright (c) 2016-Present, VMware, Inc. or its affiliates
- *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2022, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/pg_upgrade.c
  */
 
@@ -55,7 +55,7 @@ static void prepare_new_cluster(void);
 static void prepare_new_globals(void);
 static void create_new_objects(void);
 static void copy_xact_xlog_xid(void);
-static void set_frozenxids(bool minmxid_only);
+static void set_frozenxids(void);
 static void setup(char *argv0, bool *live_check);
 static void cleanup(void);
 
@@ -233,11 +233,14 @@ main(int argc, char **argv)
 	if (!is_greenplum_dispatcher_mode())
 		reset_system_identifier();
 
-	prep_status("Sync data directory to disk");
-	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
-			  "\"%s/initdb\" --sync-only \"%s\"", new_cluster.bindir,
-			  new_cluster.pgdata);
-	check_ok();
+	if (user_opts.do_sync)
+	{
+		prep_status("Sync data directory to disk");
+		exec_prog(UTILITY_LOG_FILE, NULL, true, true,
+				  "\"%s/initdb\" --sync-only \"%s\"", new_cluster.bindir,
+				  new_cluster.pgdata);
+		check_ok();
+	}
 
 	create_script_for_old_cluster_deletion(&deletion_script_file_name);
 
@@ -482,7 +485,7 @@ prepare_new_globals(void)
 	/*
 	 * Before we restore anything, set frozenxids of initdb-created tables.
 	 */
-	set_frozenxids(false);
+	set_frozenxids();
 
 	/*
 	 * Now restore global objects (roles and tablespaces).
@@ -589,13 +592,6 @@ create_new_objects(void)
 
 	end_progress_output();
 	check_ok();
-
-	/*
-	 * We don't have minmxids for databases or relations in pre-9.3 clusters,
-	 * so set those after we have restored the schema.
-	 */
-	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 902)
-		set_frozenxids(true);
 
 	/* update new_cluster info now that we have objects in the databases */
 	get_db_and_rel_infos(&new_cluster);
@@ -774,26 +770,18 @@ copy_xact_xlog_xid(void)
 /*
  *	set_frozenxids()
  *
- * This is called on the new cluster before we restore anything, with
- * minmxid_only = false.  Its purpose is to ensure that all initdb-created
- * vacuumable tables have relfrozenxid/relminmxid matching the old cluster's
- * xid/mxid counters.  We also initialize the datfrozenxid/datminmxid of the
- * built-in databases to match.
+ * This is called on the new cluster before we restore anything.  Its purpose
+ * is to ensure that all initdb-created vacuumable tables have
+ * relfrozenxid/relminmxid matching the old cluster's xid/mxid counters.  We
+ * also initialize the datfrozenxid/datminmxid of the built-in databases to
+ * match.
  *
  * As we create user tables later, their relfrozenxid/relminmxid fields will
  * be restored properly by the binary-upgrade restore script.  Likewise for
- * user-database datfrozenxid/datminmxid.  However, if we're upgrading from a
- * pre-9.3 database, which does not store per-table or per-DB minmxid, then
- * the relminmxid/datminmxid values filled in by the restore script will just
- * be zeroes.
- *
- * Hence, with a pre-9.3 source database, a second call occurs after
- * everything is restored, with minmxid_only = true.  This pass will
- * initialize all tables and databases, both those made by initdb and user
- * objects, with the desired minmxid value.  frozenxid values are left alone.
+ * user-database datfrozenxid/datminmxid.
  */
 static void
-set_frozenxids(bool minmxid_only)
+set_frozenxids(void)
 {
 	int			dbnum;
 	PGconn	   *conn,
@@ -803,10 +791,7 @@ set_frozenxids(bool minmxid_only)
 	int			i_datname;
 	int			i_datallowconn;
 
-	if (!minmxid_only)
-		prep_status("Setting frozenxid and minmxid counters in new cluster");
-	else
-		prep_status("Setting minmxid counter in new cluster");
+	prep_status("Setting frozenxid and minmxid counters in new cluster");
 
 	conn_template1 = connectToServer(&new_cluster, "template1");
 
@@ -817,12 +802,11 @@ set_frozenxids(bool minmxid_only)
 	PQclear(executeQueryOrDie(conn_template1,
 							  "set allow_system_table_mods=true"));
 
-	if (!minmxid_only)
-		/* set pg_database.datfrozenxid */
-		PQclear(executeQueryOrDie(conn_template1,
-								  "UPDATE pg_catalog.pg_database "
-								  "SET	datfrozenxid = '%u'",
-								  old_cluster.controldata.chkpnt_nxtxid));
+	/* set pg_database.datfrozenxid */
+	PQclear(executeQueryOrDie(conn_template1,
+							  "UPDATE pg_catalog.pg_database "
+							  "SET	datfrozenxid = '%u'",
+							  old_cluster.controldata.chkpnt_nxtxid));
 
 	/* set pg_database.datminmxid */
 	PQclear(executeQueryOrDie(conn_template1,
@@ -873,27 +857,26 @@ set_frozenxids(bool minmxid_only)
 		 * database in pg_database. Its fast and safe worth than assuming for
 		 * template0.
 		 */
-		if (!minmxid_only && strcmp(datallowconn, "f") == 0)
+		if (strcmp(datallowconn, "f") == 0)
 		{
 			PQclear(executeQueryOrDie(conn, "VACUUM FREEZE"));
 		}
 
-		if (!minmxid_only)
-			/* set pg_class.relfrozenxid */
-			PQclear(executeQueryOrDie(conn,
-									  "UPDATE	pg_catalog.pg_class "
-									  "SET	relfrozenxid = '%u' "
+		/* set pg_class.relfrozenxid */
+		PQclear(executeQueryOrDie(conn,
+								  "UPDATE	pg_catalog.pg_class "
+								  "SET	relfrozenxid = '%u' "
 			/*
 			 * GPDB: if we ever backport this to Greenplum 5X, remove 'm' first
 			 * and then replace 'M' with 'm', because 'm' used to be RELKIND
 			 * visimap in 4.3/5X, not matview
 			 */
 			/* only heap, materialized view, and TOAST are vacuumed */
-									  "WHERE	relkind IN ("
-									  CppAsString2(RELKIND_RELATION) ", "
-									  CppAsString2(RELKIND_MATVIEW) ", "
-									  CppAsString2(RELKIND_TOASTVALUE) ")",
-									  old_cluster.controldata.chkpnt_nxtxid));
+								  "WHERE	relkind IN ("
+								  CppAsString2(RELKIND_RELATION) ", "
+								  CppAsString2(RELKIND_MATVIEW) ", "
+								  CppAsString2(RELKIND_TOASTVALUE) ")",
+								  old_cluster.controldata.chkpnt_nxtxid));
 
 		/* set pg_class.relminmxid */
 		PQclear(executeQueryOrDie(conn,

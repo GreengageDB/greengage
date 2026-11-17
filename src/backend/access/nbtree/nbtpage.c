@@ -4,7 +4,7 @@
  *	  BTree-specific page management code for the Postgres btree access
  *	  method.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1120,8 +1120,7 @@ _bt_conditionallockbuf(Relation rel, Buffer buf)
 }
 
 /*
- *	_bt_upgradelockbufcleanup() -- upgrade lock to super-exclusive/cleanup
- *	lock.
+ *	_bt_upgradelockbufcleanup() -- upgrade lock to a full cleanup lock.
  */
 void
 _bt_upgradelockbufcleanup(Relation rel, Buffer buf)
@@ -1152,7 +1151,7 @@ _bt_pageinit(Page page, Size size)
 /*
  * Delete item(s) from a btree leaf page during VACUUM.
  *
- * This routine assumes that the caller has a super-exclusive write lock on
+ * This routine assumes that the caller already has a full cleanup lock on
  * the buffer.  Also, the given deletable and updatable arrays *must* be
  * sorted in ascending order.
  *
@@ -1202,7 +1201,7 @@ _bt_delitems_vacuum(Relation rel, Buffer buf,
 	 *
 	 * PageIndexTupleOverwrite() won't unset each item's LP_DEAD bit when it
 	 * happens to already be set.  It's important that we not interfere with
-	 * _bt_delitems_delete().
+	 * any future simple index tuple deletion operations.
 	 */
 	for (int i = 0; i < nupdatable; i++)
 	{
@@ -1235,7 +1234,7 @@ _bt_delitems_vacuum(Relation rel, Buffer buf,
 	 * This flag indicates the presence of LP_DEAD items on the page (though
 	 * not reliably).  Note that we only rely on it with pg_upgrade'd
 	 * !heapkeyspace indexes.  That's why clearing it here won't usually
-	 * interfere with _bt_delitems_delete().
+	 * interfere with simple index tuple deletion.
 	 */
 	opaque->btpo_flags &= ~BTP_HAS_GARBAGE;
 

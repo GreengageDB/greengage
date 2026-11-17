@@ -3,7 +3,7 @@
  * pg_rewind.c
  *	  Synchronizes a PostgreSQL data directory to a new timeline
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  *
  *-------------------------------------------------------------------------
  */
@@ -789,14 +789,9 @@ progress_report(bool finished)
 	if (fetch_done > fetch_size)
 		fetch_size = fetch_done;
 
-	/*
-	 * Separate step to keep platform-dependent format code out of
-	 * translatable strings.  And we only test for INT64_FORMAT availability
-	 * in snprintf, not fprintf.
-	 */
-	snprintf(fetch_done_str, sizeof(fetch_done_str), INT64_FORMAT,
+	snprintf(fetch_done_str, sizeof(fetch_done_str), UINT64_FORMAT,
 			 fetch_done / 1024);
-	snprintf(fetch_size_str, sizeof(fetch_size_str), INT64_FORMAT,
+	snprintf(fetch_size_str, sizeof(fetch_size_str), UINT64_FORMAT,
 			 fetch_size / 1024);
 
 	fprintf(stderr, _("%*s/%s kB (%d%%) copied"),

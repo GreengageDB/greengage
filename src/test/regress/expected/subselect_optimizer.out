@@ -991,6 +991,45 @@ where (exists(select 1 from tenk1 k where k.unique1 = t.unique2) or ten < 0)
     10
 (1 row)
 
+-- It's possible for the same EXISTS to get resolved both ways
+create temp table exists_tbl (c1 int, c2 int, c3 int) partition by list (c1);
+create temp table exists_tbl_null partition of exists_tbl for values in (null);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create temp table exists_tbl_def partition of exists_tbl default;
+NOTICE:  table has parent, setting distribution columns to match parent table
+-- GGDB: use enough rows for the default partition to choose the hashed
+-- alternative, so the two partitions resolve the copies differently.
+insert into exists_tbl select x, x/2, x+1 from generate_series(0,1000) x;
+analyze exists_tbl;
+explain (costs off)
+select * from exists_tbl t1
+  where (exists(select 1 from exists_tbl t2 where t1.c1 = t2.c2) or c3 < 0);
+                                                               QUERY PLAN
+-----------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: exists_tbl.c1, exists_tbl.c2, exists_tbl.c3, exists_tbl.ctid, exists_tbl.tableoid, exists_tbl.gp_segment_id, (true)
+         ->  Result
+               Filter: (CASE WHEN (NOT ((true) IS NULL)) THEN true ELSE false END OR (exists_tbl.c3 < 0))
+               ->  Hash Left Join
+                     Hash Cond: (exists_tbl.c1 = exists_tbl_1.c2)
+                     ->  Dynamic Seq Scan on exists_tbl
+                           Number of partitions to scan: 2 (out of 2)
+                     ->  Hash
+                           ->  Result
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                       Hash Key: exists_tbl_1.c2
+                                       ->  Dynamic Seq Scan on exists_tbl exists_tbl_1
+                                             Number of partitions to scan: 2 (out of 2)
+(15 rows)
+
+select count(*) as matching_rows from exists_tbl t1
+  where (exists(select 1 from exists_tbl t2 where t1.c1 = t2.c2) or c3 < 0);
+ matching_rows 
+---------------
+           501
+(1 row)
+
 --
 -- Test case for planner bug with nested EXISTS handling
 --
@@ -1171,6 +1210,7 @@ where o.ten = 1;
                      ->  Materialize
                            ->  Memoize
                                  Cache Key: o.four
+                                 Cache Mode: binary
                                  ->  Recursive Union
                                        ->  Result
                                        ->  WorkTable Scan on x

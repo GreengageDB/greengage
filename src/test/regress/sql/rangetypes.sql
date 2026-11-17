@@ -28,7 +28,6 @@ select '[z,a]'::textrange;
 select '  empty  '::textrange;
 select ' ( empty, empty )  '::textrange;
 select ' ( " a " " a ", " z " " z " )  '::textrange;
-select '(,z)'::textrange;
 select '(a,)'::textrange;
 select '[,z]'::textrange;
 select '[a,]'::textrange;

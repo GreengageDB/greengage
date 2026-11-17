@@ -13,7 +13,7 @@
  *
  * Author: Andreas Pflug <pgadmin@pse-consulting.de>
  *
- * Copyright (c) 2004-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2004-2022, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
@@ -94,7 +94,7 @@ static bool rotation_disabled = false;
 static FILE *syslogFile = NULL;
 static FILE *csvlogFile = NULL;
 NON_EXEC_STATIC pg_time_t first_syslogger_file_time = 0;
-static char *last_file_name = NULL;
+static char *last_sys_file_name = NULL;
 static char *last_csv_file_name = NULL;
 
 /*
@@ -135,7 +135,8 @@ ignore_returned_result(long long int result)
 
 static bool chunk_is_postgres_chunk(PipeProtoHeader *hdr)
 {
-    return hdr->zero == 0 && hdr->pid != 0 && hdr->thid != 0 &&
+	return hdr->zero == 0 && hdr->len > 0 && hdr->len <= PIPE_MAX_PAYLOAD &&
+		hdr->pid != 0 && hdr->thid != 0 &&
 		(hdr->log_format == 't' || hdr->log_format == 'c') &&
 		(hdr->is_last == 't' || hdr->is_last == 'f');
 }
@@ -152,6 +153,8 @@ static volatile sig_atomic_t rotation_requested = false;
 
 /* Local subroutines */
 #ifdef EXEC_BACKEND
+static int	syslogger_fdget(FILE *file);
+static FILE *syslogger_fdopen(int fd);
 static pid_t syslogger_forkexec(void);
 static void syslogger_parseArgs(int argc, char *argv[]);
 #endif
@@ -370,7 +373,7 @@ SysLoggerMain(int argc, char *argv[])
 	 * time because passing down just the pg_time_t is a lot cheaper than
 	 * passing a whole file path in the EXEC_BACKEND case.
 	 */
-	last_file_name = logfile_getname(first_syslogger_file_time, NULL, Log_directory, Log_filename);
+	last_sys_file_name = logfile_getname(first_syslogger_file_time, NULL, Log_directory, Log_filename);
 	if (csvlogFile != NULL)
 		last_csv_file_name = logfile_getname(first_syslogger_file_time, ".csv", Log_directory, Log_filename);
 
@@ -540,7 +543,7 @@ SysLoggerMain(int argc, char *argv[])
 			all_rotations_occurred &=
 				logfile_rotate(time_based_rotation, (size_rotation_for & LOG_DESTINATION_STDERR) != 0,
 							   NULL, Log_directory, Log_filename,
-							   &syslogFile, &last_file_name);
+							   &syslogFile, &last_sys_file_name);
 			all_rotations_occurred &=
 				logfile_rotate(time_based_rotation, (size_rotation_for & LOG_DESTINATION_CSVLOG) != 0,
 							   ".csv", Log_directory, Log_filename,
@@ -988,6 +991,60 @@ SysLogger_Start(void)
 #ifdef EXEC_BACKEND
 
 /*
+ * syslogger_fdget() -
+ *
+ * Utility wrapper to grab the file descriptor of an opened error output
+ * file.  Used when building the command to fork the logging collector.
+ */
+static int
+syslogger_fdget(FILE *file)
+{
+#ifndef WIN32
+	if (file != NULL)
+		return fileno(file);
+	else
+		return -1;
+#else
+	if (file != NULL)
+		return (int) _get_osfhandle(_fileno(file));
+	else
+		return 0;
+#endif							/* WIN32 */
+}
+
+/*
+ * syslogger_fdopen() -
+ *
+ * Utility wrapper to re-open an error output file, using the given file
+ * descriptor.  Used when parsing arguments in a forked logging collector.
+ */
+static FILE *
+syslogger_fdopen(int fd)
+{
+	FILE	   *file = NULL;
+
+#ifndef WIN32
+	if (fd != -1)
+	{
+		file = fdopen(fd, "a");
+		setvbuf(file, NULL, PG_IOLBF, 0);
+	}
+#else							/* WIN32 */
+	if (fd != 0)
+	{
+		fd = _open_osfhandle(fd, _O_APPEND | _O_TEXT);
+		if (fd > 0)
+		{
+			file = fdopen(fd, "a");
+			setvbuf(file, NULL, PG_IOLBF, 0);
+		}
+	}
+#endif							/* WIN32 */
+
+	return file;
+}
+
+/*
  * syslogger_forkexec() -
  *
  * Format up the arglist for, then fork and exec, a syslogger process
@@ -1006,34 +1063,11 @@ syslogger_forkexec(void)
 	av[ac++] = NULL;			/* filled in by postmaster_forkexec */
 
 	/* static variables (those not passed by write_backend_variables) */
-#ifndef WIN32
-	if (syslogFile != NULL)
-		snprintf(filenobuf, sizeof(filenobuf), "%d",
-				 fileno(syslogFile));
-	else
-		strcpy(filenobuf, "-1");
-#else							/* WIN32 */
-	if (syslogFile != NULL)
-		snprintf(filenobuf, sizeof(filenobuf), "%ld",
-				 (long) _get_osfhandle(_fileno(syslogFile)));
-	else
-		strcpy(filenobuf, "0");
-#endif							/* WIN32 */
+	snprintf(filenobuf, sizeof(filenobuf), "%d",
+			 syslogger_fdget(syslogFile));
 	av[ac++] = filenobuf;
-
-#ifndef WIN32
-	if (csvlogFile != NULL)
-		snprintf(csvfilenobuf, sizeof(csvfilenobuf), "%d",
-				 fileno(csvlogFile));
-	else
-		strcpy(csvfilenobuf, "-1");
-#else							/* WIN32 */
-	if (csvlogFile != NULL)
-		snprintf(csvfilenobuf, sizeof(csvfilenobuf), "%ld",
-				 (long) _get_osfhandle(_fileno(csvlogFile)));
-	else
-		strcpy(csvfilenobuf, "0");
-#endif							/* WIN32 */
+	snprintf(csvfilenobuf, sizeof(csvfilenobuf), "%d",
+			 syslogger_fdget(csvlogFile));
 	av[ac++] = csvfilenobuf;
 
 	av[ac] = NULL;
@@ -1063,41 +1097,10 @@ syslogger_parseArgs(int argc, char *argv[])
 	 * fails there's not a lot we can do to report the problem anyway.  As
 	 * coded, we'll just crash on a null pointer dereference after failure...
 	 */
-#ifndef WIN32
 	fd = atoi(*argv++);
-	if (fd != -1)
-	{
-		syslogFile = fdopen(fd, "a");
-		setvbuf(syslogFile, NULL, PG_IOLBF, 0);
-	}
+	syslogFile = syslogger_fdopen(fd);
 	fd = atoi(*argv++);
-	if (fd != -1)
-	{
-		csvlogFile = fdopen(fd, "a");
-		setvbuf(csvlogFile, NULL, PG_IOLBF, 0);
-	}
-#else							/* WIN32 */
-	fd = atoi(*argv++);
-	if (fd != 0)
-	{
-		fd = _open_osfhandle(fd, _O_APPEND | _O_TEXT);
-		if (fd > 0)
-		{
-			syslogFile = fdopen(fd, "a");
-			setvbuf(syslogFile, NULL, PG_IOLBF, 0);
-		}
-	}
-	fd = atoi(*argv++);
-	if (fd != 0)
-	{
-		fd = _open_osfhandle(fd, _O_APPEND | _O_TEXT);
-		if (fd > 0)
-		{
-			csvlogFile = fdopen(fd, "a");
-			setvbuf(csvlogFile, NULL, PG_IOLBF, 0);
-		}
-	}
-#endif							/* WIN32 */
+	csvlogFile = syslogger_fdopen(fd);
 }
 #endif							/* EXEC_BACKEND */
 
@@ -1932,10 +1935,10 @@ static void syslogger_handle_chunk(PipeProtoChunk *chunk)
  * This routine interprets the log pipe protocol which sends log messages as
  * (hopefully atomic) chunks - such chunks are detected and reassembled here.
  *
- * The protocol has a header that starts with two nul bytes, then has a 16 bit
- * length, the pid of the sending process, and a flag to indicate if it is
- * the last chunk in a message. Incomplete chunks are saved until we read some
- * more, and non-final chunks are accumulated until we get the final chunk.
+ * The protocol has a header that starts with a 32-bit zero, followed by a
+ * 32-bit length, the pid and thread id of the sending process, and flags that
+ * describe the chunk. Incomplete chunks are saved until we read some more, and
+ * non-final chunks are accumulated until we get the final chunk.
  *
  * All of this is to avoid 2 problems:
  * . partial messages being written to logfiles (messes rotation), and
@@ -1954,28 +1957,18 @@ process_pipe_input(char *logbuffer, int *bytes_in_logbuffer)
 {
 	char	   *cursor = logbuffer;
 	int			count = *bytes_in_logbuffer;
-	int			dest = LOG_DESTINATION_STDERR;
 
 	/* While we have enough for a header, process data... */
-	while (count >= (int) (offsetof(PipeProtoHeader, data) + 1))
+	while (count >= PIPE_HEADER_SIZE)
 	{
 		PipeProtoHeader p;
 		int			chunklen;
 
 		/* Do we have a valid header? */
-		memcpy(&p, cursor, offsetof(PipeProtoHeader, data));
-		if (p.nuls[0] == '\0' && p.nuls[1] == '\0' &&
-			p.len > 0 && p.len <= PIPE_MAX_PAYLOAD &&
-			p.pid != 0 &&
-			p.thid != 0 &&
-			(p.is_last == 't' || p.is_last == 'f' ||
-			 p.is_last == 'T' || p.is_last == 'F'))
+		memcpy(&p, cursor, PIPE_HEADER_SIZE);
+		if (chunk_is_postgres_chunk(&p))
 		{
-			List	   *buffer_list;
-			ListCell   *cell;
-			save_buffer *existing_slot = NULL,
-					   *free_slot = NULL;
-			StringInfo	str;
+			PipeProtoChunk *chunk;
 
 			chunklen = PIPE_HEADER_SIZE + p.len;
 
@@ -1983,8 +1976,10 @@ process_pipe_input(char *logbuffer, int *bytes_in_logbuffer)
 			if (count < chunklen)
 				break;
 
-			dest = (p.log_format == 'c' || p.log_format == 'f') ?
-			 	LOG_DESTINATION_CSVLOG : LOG_DESTINATION_STDERR;
+			/* Reassemble and write the chunk using Greengage's chunk lists. */
+			chunk = get_avail_chunk();
+			memcpy(chunk, cursor, chunklen);
+			syslogger_handle_chunk(chunk);
 
 			/* Finished processing this chunk */
 			cursor += chunklen;
@@ -2009,7 +2004,7 @@ process_pipe_input(char *logbuffer, int *bytes_in_logbuffer)
 					break;
 			}
 			/* fall back on the stderr log as the destination */
-			write_syslogger_file(cursor, chunklen /*, LOG_DESTINATION_STDERR*/);
+			write_syslogger_file(cursor, chunklen, LOG_DESTINATION_STDERR);
 			cursor += chunklen;
 			count -= chunklen;
 		}
@@ -2030,7 +2025,13 @@ process_pipe_input(char *logbuffer, int *bytes_in_logbuffer)
 static void
 flush_pipe_input(char *logbuffer, int *bytes_in_logbuffer)
 {
-    syslogger_flush_chunks(); 
+	/* Write any unprocessed input remaining at EOF. */
+	if (*bytes_in_logbuffer > 0)
+		write_syslogger_file(logbuffer, *bytes_in_logbuffer,
+							 LOG_DESTINATION_STDERR);
+	*bytes_in_logbuffer = 0;
+
+	syslogger_flush_chunks();
 }
 #endif
 
@@ -2137,7 +2138,7 @@ pipeThread(void *arg)
 		 * section.
 		 */
 		EnterCriticalSection(&sysloggerSection);
-		if (result)
+		if (!result)
 		{
 			DWORD		error = GetLastError();
 
@@ -2535,9 +2536,9 @@ update_metainfo_datafile(void)
 		return;
 	}
 
-	if (last_file_name && (Log_destination & LOG_DESTINATION_STDERR))
+	if (last_sys_file_name && (Log_destination & LOG_DESTINATION_STDERR))
 	{
-		if (fprintf(fh, "stderr %s\n", last_file_name) < 0)
+		if (fprintf(fh, "stderr %s\n", last_sys_file_name) < 0)
 		{
 			ereport(LOG,
 					(errcode_for_file_access(),

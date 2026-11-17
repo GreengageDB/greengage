@@ -7,7 +7,7 @@
  * Client-side code should include postgres_fe.h instead.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1995, Regents of the University of California
  *
  * src/include/postgres.h
@@ -44,6 +44,14 @@
 #define POSTGRES_H
 
 #include "c.h"
+
+/*
+ * GPDB: the varlena header macros below keep the length word in network
+ * byte order on every platform, so they need ntohl()/htonl().  Until PG15
+ * port.h included <netdb.h>, which brought them in.
+ */
+#include <arpa/inet.h>
+
 #include "utils/elog.h"
 #include "utils/palloc.h"
 #include "storage/itemptr.h"

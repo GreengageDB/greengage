@@ -1,15 +1,15 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2022, PostgreSQL Global Development Group
 
 use strict;
 use warnings;
 
 use Config;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More;
 
-my $tempdir       = TestLib::tempdir;
+my $tempdir       = PostgreSQL::Test::Utils::tempdir;
 
 ###############################################################
 # Definition of the pg_dump runs to make.
@@ -25,7 +25,7 @@ my $tempdir       = TestLib::tempdir;
 # the full command and arguments to run.  Note that this is run
 # using $node->command_ok(), so the port does not need to be
 # specified and is pulled from $PGPORT, which is set by the
-# PostgresNode system.
+# PostgreSQL::Test::Cluster system.
 #
 # restore_cmd is the pg_restore command to run, if any.  Note
 # that this should generally be used when the pg_dump goes to
@@ -214,6 +214,13 @@ my %pgdump_runs = (
 			'--exclude-table-data=dump_test.test_table',
 			'--no-unlogged-table-data',
 			'postgres',
+		],
+	},
+	inserts => {
+		dump_cmd => [
+			'pg_dump',                     '--no-sync',
+			"--file=$tempdir/inserts.sql", '-a',
+			'--inserts',                   'postgres',
 		],
 	},
 	pg_dumpall_globals => {
@@ -611,6 +618,7 @@ my %tests = (
 #			%full_runs,
 #			column_inserts         => 1,
 #			data_only              => 1,
+#			inserts                => 1,
 #			section_pre_data       => 1,
 #			test_schema_plus_blobs => 1,
 #		},
@@ -648,7 +656,9 @@ my %tests = (
 	},
 
 	'ALTER SCHEMA public OWNER TO' => {
-		# see test "REVOKE CREATE ON SCHEMA public" for causative create_sql
+		create_order => 15,
+		create_sql =>
+		  'ALTER SCHEMA public OWNER TO "regress_quoted  \"" role";',
 		regexp => qr/^ALTER SCHEMA public OWNER TO .+;/m,
 		like   => {
 			%full_runs, section_pre_data => 1,
@@ -960,6 +970,7 @@ my %tests = (
 #			%full_runs,
 #			column_inserts         => 1,
 #			data_only              => 1,
+#			inserts                => 1,
 #			section_pre_data       => 1,
 #			test_schema_plus_blobs => 1,
 #		},
@@ -981,6 +992,7 @@ my %tests = (
 #			%full_runs,
 #			column_inserts         => 1,
 #			data_only              => 1,
+#			inserts                => 1,
 #			section_data           => 1,
 #			test_schema_plus_blobs => 1,
 #		},
@@ -1136,6 +1148,7 @@ my %tests = (
 #			%full_runs,
 #			column_inserts         => 1,
 #			data_only              => 1,
+#			inserts                => 1,
 #			section_pre_data       => 1,
 #			test_schema_plus_blobs => 1,
 #		},
@@ -1335,6 +1348,27 @@ my %tests = (
 		},
 	},
 
+	'COPY test_third_table' => {
+		create_order => 7,
+		create_sql =>
+		  'INSERT INTO dump_test.test_third_table VALUES (123, DEFAULT, 456);',
+		regexp => qr/^
+			\QCOPY dump_test.test_third_table (f1, "F3") FROM stdin;\E
+			\n123\t456\n\\\.\n
+			/xm,
+		like => {
+			%full_runs,
+			%dump_test_schema_runs,
+			data_only    => 1,
+			section_data => 1,
+		},
+		unlike => {
+			binary_upgrade           => 1,
+			exclude_dump_test_schema => 1,
+			schema_only              => 1,
+		},
+	},
+
 	'COPY test_fourth_table' => {
 		create_order => 7,
 		create_sql =>
@@ -1426,10 +1460,22 @@ my %tests = (
 		like => { column_inserts => 1, },
 	},
 
+	'INSERT INTO test_third_table (colnames)' => {
+		regexp =>
+		  qr/^INSERT INTO dump_test\.test_third_table \(f1, "F3"\) VALUES \(123, 456\);\n/m,
+		like => { column_inserts => 1, },
+	},
+
+	'INSERT INTO test_third_table' => {
+		regexp =>
+		  qr/^INSERT INTO dump_test\.test_third_table VALUES \(123, DEFAULT, 456, DEFAULT\);\n/m,
+		like => { inserts => 1, },
+	},
+
 	'INSERT INTO test_fourth_table' => {
 		regexp =>
 		  qr/^(?:INSERT INTO dump_test\.test_fourth_table DEFAULT VALUES;\n){2}/m,
-		like => { column_inserts => 1, rows_per_insert => 1, },
+		like => { column_inserts => 1, inserts => 1, rows_per_insert => 1, },
 	},
 
 	'INSERT INTO test_fifth_table' => {
@@ -1574,13 +1620,16 @@ my %tests = (
 		               COLLATE "C"
 					   DEFAULT \'10014\'
 					   CHECK(VALUE ~ \'^\d{5}$\' OR
-							 VALUE ~ \'^\d{5}-\d{4}$\');',
+							 VALUE ~ \'^\d{5}-\d{4}$\');
+					   COMMENT ON CONSTRAINT us_postal_code_check
+						 ON DOMAIN dump_test.us_postal_code IS \'check it\';',
 		regexp => qr/^
 			\QCREATE DOMAIN dump_test.us_postal_code AS text COLLATE pg_catalog."C" DEFAULT '10014'::text\E\n\s+
 			\QCONSTRAINT us_postal_code_check CHECK \E
 			\Q(((VALUE ~ '^\d{5}\E
 			\$\Q'::text) OR (VALUE ~ '^\d{5}-\d{4}\E\$
-			\Q'::text)));\E
+			\Q'::text)));\E(.|\n)*
+			\QCOMMENT ON CONSTRAINT us_postal_code_check ON DOMAIN dump_test.us_postal_code IS 'check it';\E
 			/xm,
 		like =>
 		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
@@ -2410,6 +2459,15 @@ my %tests = (
 		like => { %full_runs, section_post_data => 1, },
 	},
 
+	'CREATE PUBLICATION pub3' => {
+		create_order => 50,
+		create_sql   => 'CREATE PUBLICATION pub3;',
+		regexp => qr/^
+			\QCREATE PUBLICATION pub3 WITH (publish = 'insert, update, delete, truncate');\E
+			/xm,
+		like => { %full_runs, section_post_data => 1, },
+	},
+
 	'CREATE SUBSCRIPTION sub1' => {
 		create_order => 50,
 		create_sql   => 'CREATE SUBSCRIPTION sub1
@@ -2444,6 +2502,27 @@ my %tests = (
 			/xm,
 		like => { %full_runs, section_post_data => 1, },
 		unlike => { exclude_dump_test_schema => 1, },
+	},
+
+	'ALTER PUBLICATION pub3 ADD ALL TABLES IN SCHEMA dump_test' => {
+		create_order => 51,
+		create_sql =>
+		  'ALTER PUBLICATION pub3 ADD ALL TABLES IN SCHEMA dump_test;',
+		regexp => qr/^
+			\QALTER PUBLICATION pub3 ADD ALL TABLES IN SCHEMA dump_test;\E
+			/xm,
+		like   => { %full_runs, section_post_data => 1, },
+		unlike => { exclude_dump_test_schema => 1, },
+	},
+
+	'ALTER PUBLICATION pub3 ADD ALL TABLES IN SCHEMA public' => {
+		create_order => 52,
+		create_sql =>
+		  'ALTER PUBLICATION pub3 ADD ALL TABLES IN SCHEMA public;',
+		regexp => qr/^
+			\QALTER PUBLICATION pub3 ADD ALL TABLES IN SCHEMA public;\E
+			/xm,
+		like => { %full_runs, section_post_data => 1, },
 	},
 
 	'CREATE SCHEMA public' => {
@@ -2484,7 +2563,9 @@ my %tests = (
 						   col3 text,
 						   col4 text,
 						   CHECK (col1 <= 1000)
-					   ) WITH (autovacuum_enabled = false, fillfactor=80);',
+					   ) WITH (autovacuum_enabled = false, fillfactor=80);
+					   COMMENT ON CONSTRAINT test_table_col1_check
+						 ON dump_test.test_table IS \'bounds check\';',
 		regexp => qr/^
 			\QCREATE TABLE dump_test.test_table (\E\n
 			\s+\Qcol1 integer NOT NULL,\E\n
@@ -2493,7 +2574,9 @@ my %tests = (
 			\s+\Qcol4 text,\E\n
 			\s+\QCONSTRAINT test_table_col1_check CHECK ((col1 <= 1000))\E\n
 			\Q)\E\n
-			\QWITH (autovacuum_enabled='false', fillfactor='80');\E\n/xm,
+			\QWITH (autovacuum_enabled='false', fillfactor='80');\E\n(.|\n)*
+			\QCOMMENT ON CONSTRAINT test_table_col1_check ON dump_test.test_table IS 'bounds check';\E
+			/xm,
 		like => {
 			%full_runs,
 			%dump_test_schema_runs,
@@ -2693,6 +2776,28 @@ my %tests = (
 	'Triggers on partitions are not dropped' => {
 		regexp => qr/DROP TRIGGER test_trigger.*ON dump_test_second_schema/,
 		like   => {}
+	},
+
+	'CREATE TABLE test_third_table_generated_cols' => {
+		create_order => 6,
+		create_sql   => 'CREATE TABLE dump_test.test_third_table (
+						f1 int, junk int,
+						g1 int generated always as (f1 * 2) stored,
+						"F3" int,
+						g2 int generated always as ("F3" * 3) stored
+					);
+					ALTER TABLE dump_test.test_third_table DROP COLUMN junk;',
+		regexp => qr/^
+			\QCREATE TABLE dump_test.test_third_table (\E\n
+			\s+\Qf1 integer,\E\n
+			\s+\Qg1 integer GENERATED ALWAYS AS ((f1 * 2)) STORED,\E\n
+			\s+\Q"F3" integer,\E\n
+			\s+\Qg2 integer GENERATED ALWAYS AS (("F3" * 3)) STORED\E\n
+			\);\n
+			/xm,
+		like =>
+		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
+		unlike => { binary_upgrade => 1, exclude_dump_test_schema => 1, },
 	},
 
 	'CREATE TABLE test_fourth_table_zero_col' => {
@@ -3382,6 +3487,7 @@ my %tests = (
 #			%full_runs,
 #			column_inserts         => 1,
 #			data_only              => 1,
+#			inserts                => 1,
 #			section_pre_data       => 1,
 #			test_schema_plus_blobs => 1,
 #			binary_upgrade         => 1,
@@ -3589,24 +3695,19 @@ my %tests = (
 		unlike => { no_privs => 1, },
 	},
 
-	'REVOKE CREATE ON SCHEMA public FROM public' => {
+	'REVOKE ALL ON SCHEMA public' => {
 		create_order => 16,
-		create_sql   => '
-			REVOKE CREATE ON SCHEMA public FROM public;
-			ALTER SCHEMA public OWNER TO "regress_quoted  \"" role";
-			REVOKE ALL ON SCHEMA public FROM "regress_quoted  \"" role";',
-		regexp => qr/^
-			\QREVOKE ALL ON SCHEMA public FROM "regress_quoted  \E\\""\ role";
-			\n\QREVOKE ALL ON SCHEMA public FROM PUBLIC;\E
-			\n\QGRANT USAGE ON SCHEMA public TO PUBLIC;\E
-			/xm,
+		create_sql =>
+		  'REVOKE ALL ON SCHEMA public FROM "regress_quoted  \"" role";',
+		regexp =>
+		  qr/^REVOKE ALL ON SCHEMA public FROM "regress_quoted  \\"" role";/m,
 		like => { %full_runs, section_pre_data => 1, },
-		unlike => { binary_upgrade => 1, no_privs => 1, },
+		unlike => { no_privs => 1, },
 	},
 
 	# GPDB: binary upgrade re-creates the public schema, so its ACL is dumped
 	# relative to the CREATE SCHEMA default, which has no PUBLIC privileges.
-	'REVOKE CREATE ON SCHEMA public FROM public (binary upgrade)' => {
+	'REVOKE ALL ON SCHEMA public (binary upgrade)' => {
 		regexp => qr/^
 			\QREVOKE ALL ON SCHEMA public FROM "regress_quoted  \E\\""\ role";
 			\n\QGRANT USAGE ON SCHEMA public TO PUBLIC;\E
@@ -3688,7 +3789,7 @@ my %tests = (
 #########################################
 # Create a PG instance to test actually dumping from
 
-my $node = PostgresNode->new('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init;
 $node->start;
 

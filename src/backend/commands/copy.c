@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -308,9 +308,8 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 				{
 					/*
 					 * Build the ColumnRef for each column.  The ColumnRef
-					 * 'fields' property is a String 'Value' node (see
-					 * nodes/value.h) that corresponds to the column name
-					 * respectively.
+					 * 'fields' property is a String node that corresponds to
+					 * the column name respectively.
 					 */
 					cr = makeNode(ColumnRef);
 					cr->fields = list_make1(lfirst(lc));

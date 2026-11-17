@@ -4,7 +4,7 @@
  * src/backend/utils/adt/formatting.c
  *
  *
- *	 Portions Copyright (c) 1999-2021, PostgreSQL Global Development Group
+ *	 Portions Copyright (c) 1999-2022, PostgreSQL Global Development Group
  *
  *
  *	 TO_CHAR(); TO_TIMESTAMP(); TO_DATE(); TO_NUMBER();
@@ -92,7 +92,6 @@
 #include "utils/datetime.h"
 #include "utils/float.h"
 #include "utils/formatting.h"
-#include "utils/int8.h"
 #include "utils/memutils.h"
 #include "utils/numeric.h"
 #include "utils/pg_locale.h"

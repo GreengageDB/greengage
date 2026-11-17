@@ -64,18 +64,18 @@ DROP ROLE test_psql_du_e2;
 -- pg_catalog.pg_roles.rolcreatewextgpfd
 CREATE ROLE test_psql_du_e3 WITH SUPERUSER CREATEEXTTABLE (type = 'writable', protocol = 'gpfdist');
 \du test_psql_du_e3
-                                      List of roles
-    Role name    |                         Attributes                         | Member of 
------------------+------------------------------------------------------------+-----------
- test_psql_du_e3 | Superuser, Wri Ext gpfdist Table, Cannot login, Bypass RLS | {}
+                                List of roles
+    Role name    |                   Attributes                   | Member of 
+-----------------+------------------------------------------------+-----------
+ test_psql_du_e3 | Superuser, Wri Ext gpfdist Table, Cannot login | {}
 
 DROP ROLE test_psql_du_e3;
 CREATE ROLE test_psql_du_e4 WITH SUPERUSER CREATEEXTTABLE (type = 'writable', protocol = 'gpfdists');
 \du test_psql_du_e4
-                                      List of roles
-    Role name    |                         Attributes                         | Member of 
------------------+------------------------------------------------------------+-----------
- test_psql_du_e4 | Superuser, Wri Ext gpfdist Table, Cannot login, Bypass RLS | {}
+                                List of roles
+    Role name    |                   Attributes                   | Member of 
+-----------------+------------------------------------------------+-----------
+ test_psql_du_e4 | Superuser, Wri Ext gpfdist Table, Cannot login | {}
 
 DROP ROLE test_psql_du_e4;
 -- pg_catalog.pg_roles.rolcreaterexthttp

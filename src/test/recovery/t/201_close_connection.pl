@@ -6,8 +6,8 @@
 # in pipeline (either let installcheck recurse into modules, or run modules separately).
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More;
 use File::Copy;
 
@@ -31,7 +31,7 @@ my $set_guc_off = q{
 };
 my ($pid, $timed_out);
 
-my $node = PostgresNode->new('node');
+my $node = PostgreSQL::Test::Cluster->new('node');
 $node->init;
 $node->start;
 

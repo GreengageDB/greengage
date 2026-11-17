@@ -37,7 +37,7 @@
  * the data is valid in the current encoding.
  *
  * In binary mode, the pipeline is much simpler.  Input is loaded into
- * into 'raw_buf', and encoding conversion is done in the datatype-specific
+ * 'raw_buf', and encoding conversion is done in the datatype-specific
  * receive functions, if required.  'input_buf' and 'line_buf' are not used,
  * but 'attribute_buf' is used as a temporary buffer to hold one attribute's
  * data when it's passed the receive function.
@@ -47,7 +47,7 @@
  * and 'attribute_buf' are expanded on demand, to hold the longest line
  * encountered so far.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *

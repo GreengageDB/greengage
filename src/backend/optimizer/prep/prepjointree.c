@@ -16,7 +16,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -86,7 +86,7 @@ static Node *pull_up_simple_union_all(PlannerInfo *root, Node *jtnode,
 static void pull_up_union_leaf_queries(Node *setOp, PlannerInfo *root,
 									   int parentRTindex, Query *setOpQuery,
 									   int childRToffset);
-static void make_setop_translation_list(Query *query, Index newvarno,
+static void make_setop_translation_list(Query *query, int newvarno,
 										AppendRelInfo *appinfo);
 static Node *pull_up_simple_values(PlannerInfo *root, Node *jtnode,
 								   RangeTblEntry *rte);
@@ -1556,7 +1556,7 @@ pull_up_union_leaf_queries(Node *setOp, PlannerInfo *root, int parentRTindex,
  *	  Also create the rather trivial reverse-translation array.
  */
 static void
-make_setop_translation_list(Query *query, Index newvarno,
+make_setop_translation_list(Query *query, int newvarno,
 							AppendRelInfo *appinfo)
 {
 	List	   *vars = NIL;

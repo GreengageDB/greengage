@@ -3,7 +3,7 @@
  * partbounds.c
  *		Support routines for manipulating partition bounds
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -2563,6 +2563,9 @@ build_merged_partition_bounds(char strategy, List *merged_datums,
 		Assert(merged_kinds == NIL);
 		merged_bounds->kind = NULL;
 	}
+
+	/* interleaved_parts is always NULL for join relations. */
+	merged_bounds->interleaved_parts = NULL;
 
 	Assert(list_length(merged_indexes) == ndatums);
 	merged_bounds->nindexes = ndatums;

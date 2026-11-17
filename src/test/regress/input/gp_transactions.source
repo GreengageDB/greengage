@@ -19,3 +19,22 @@ SELECT * from temptest;
 SELECT nextval('tempseq');
 SELECT setval('tempseq', 5);
 SELECT nextval('tempseq');
+
+-- COMMIT/ROLLBACK AND CHAIN after a distributed transaction: the chained
+-- transaction needs a distributed transaction of its own (the coordinator
+-- used to PANIC at its commit).
+SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE;
+CREATE TABLE chain_test (a int) DISTRIBUTED BY (a);
+BEGIN;
+INSERT INTO chain_test VALUES (1);
+COMMIT AND CHAIN;
+INSERT INTO chain_test VALUES (2);
+COMMIT;
+BEGIN;
+INSERT INTO chain_test VALUES (3);
+ROLLBACK AND CHAIN;
+INSERT INTO chain_test VALUES (4);
+COMMIT AND CHAIN;
+COMMIT;
+SELECT * FROM chain_test ORDER BY a;
+DROP TABLE chain_test;

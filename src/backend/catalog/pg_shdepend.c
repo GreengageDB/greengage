@@ -3,7 +3,7 @@
  * pg_shdepend.c
  *	  routines to support manipulation of the pg_shdepend relation
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -65,6 +65,7 @@
 #include "storage/lmgr.h"
 #include "utils/acl.h"
 #include "utils/fmgroids.h"
+#include "utils/memutils.h"
 #include "utils/syscache.h"
 
 typedef enum
@@ -903,15 +904,18 @@ copyTemplateDependencies(Oid templateDbId, Oid newDbId)
 
 		ExecClearTuple(slot[slot_stored_count]);
 
+		memset(slot[slot_stored_count]->tts_isnull, false,
+			   slot[slot_stored_count]->tts_tupleDescriptor->natts * sizeof(bool));
+
 		shdep = (Form_pg_shdepend) GETSTRUCT(tup);
 
-		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_dbid] = ObjectIdGetDatum(newDbId);
-		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_classid] = shdep->classid;
-		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_objid] = shdep->objid;
-		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_objsubid] = shdep->objsubid;
-		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_refclassid] = shdep->refclassid;
-		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_refobjid] = shdep->refobjid;
-		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_deptype] = shdep->deptype;
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_dbid - 1] = ObjectIdGetDatum(newDbId);
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_classid - 1] = shdep->classid;
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_objid - 1] = shdep->objid;
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_objsubid - 1] = shdep->objsubid;
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_refclassid - 1] = shdep->refclassid;
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_refobjid - 1] = shdep->refobjid;
+		slot[slot_stored_count]->tts_values[Anum_pg_shdepend_deptype - 1] = shdep->deptype;
 
 		ExecStoreVirtualTuple(slot[slot_stored_count]);
 		slot_stored_count++;
@@ -1231,6 +1235,12 @@ storeObjectDescription(StringInfo descs,
 {
 	char	   *objdesc = getObjectDescription(object, false);
 
+	/*
+	 * An object being dropped concurrently doesn't need to be reported.
+	 */
+	if (objdesc == NULL)
+		return;
+
 	/* separate entries with a newline */
 	if (descs->len != 0)
 		appendStringInfoChar(descs, '\n');
@@ -1488,6 +1498,8 @@ shdepReassignOwned(List *roleids, Oid newrole)
 		while ((tuple = systable_getnext(scan)) != NULL)
 		{
 			Form_pg_shdepend sdepForm = (Form_pg_shdepend) GETSTRUCT(tuple);
+			MemoryContext cxt,
+						oldcxt;
 
 			/*
 			 * We only operate on shared objects and objects in the current
@@ -1500,6 +1512,18 @@ shdepReassignOwned(List *roleids, Oid newrole)
 			/* We leave non-owner dependencies alone */
 			if (sdepForm->deptype != SHARED_DEPENDENCY_OWNER)
 				continue;
+
+			/*
+			 * The various ALTER OWNER routines tend to leak memory in
+			 * CurrentMemoryContext.  That's not a problem when they're only
+			 * called once per command; but in this usage where we might be
+			 * touching many objects, it can amount to a serious memory leak.
+			 * Fix that by running each call in a short-lived context.
+			 */
+			cxt = AllocSetContextCreate(CurrentMemoryContext,
+										"shdepReassignOwned",
+										ALLOCSET_DEFAULT_SIZES);
+			oldcxt = MemoryContextSwitchTo(cxt);
 
 			/* Issue the appropriate ALTER OWNER call */
 			switch (sdepForm->classid)
@@ -1589,6 +1613,11 @@ shdepReassignOwned(List *roleids, Oid newrole)
 					elog(ERROR, "unexpected classid %u", sdepForm->classid);
 					break;
 			}
+
+			/* Clean up */
+			MemoryContextSwitchTo(oldcxt);
+			MemoryContextDelete(cxt);
+
 			/* Make sure the next iteration will see my changes */
 			CommandCounterIncrement();
 		}

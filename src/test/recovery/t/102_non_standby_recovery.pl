@@ -1,10 +1,10 @@
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More tests => 3;
 
-my $node = PostgresNode->new('master');
+my $node = PostgreSQL::Test::Cluster->new('master');
 
 # Create a data directory with initdb
 $node->init(has_archiving    => 1);
@@ -35,7 +35,7 @@ $node->safe_psql(
 $node->stop;
 
 # Restore it to create a new independent node
-my $restored_node = PostgresNode->new('restored_node');
+my $restored_node = PostgreSQL::Test::Cluster->new('restored_node');
 
 # Recovery in non-standby mode
 $restored_node->init_from_backup($node, 'testbackup', has_restoring => 1, standby => 0);

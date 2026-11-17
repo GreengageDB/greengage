@@ -1,7 +1,7 @@
 /*
  * psql - the PostgreSQL interactive terminal
  *
- * Copyright (c) 2000-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2000-2022, PostgreSQL Global Development Group
  *
  * src/bin/psql/copy.c
  */
@@ -715,7 +715,6 @@ handleCopyIn(PGconn *conn, FILE *copystream, bool isbinary, PGresult **res)
 				if (PQputCopyData(conn, buf, buflen) <= 0)
 				{
 					OK = false;
-					copydone = true;
 					break;
 				}
 

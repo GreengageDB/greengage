@@ -1,4 +1,4 @@
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2022, PostgreSQL Global Development Group
 
 # Tests for already-propagated WAL segments ending in incomplete WAL records.
 
@@ -6,8 +6,8 @@ use strict;
 use warnings;
 
 use FindBin;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More;
 
 plan tests => 3;
@@ -17,13 +17,13 @@ plan tests => 3;
 # that the replica replays the "overwrite contrecord" from that new
 # file and the standby promotes successfully.
 
-my $node = PostgresNode->new('primary');
+my $node = PostgreSQL::Test::Cluster->new('primary');
 $node->init(allows_streaming => 1);
 # We need these settings for stability of WAL behavior.
 $node->append_conf(
 	'postgresql.conf', qq(
 autovacuum = off
-wal_keep_size = 1024
+wal_keep_size = 1GB
 ));
 $node->start;
 
@@ -58,8 +58,9 @@ $$;
 my $initfile = $node->safe_psql('postgres',
 	'SELECT pg_walfile_name(pg_current_wal_insert_lsn())');
 $node->safe_psql('postgres',
-qq{SELECT pg_logical_emit_message(true, 'test 026', repeat('xyzxz', 123456))}
+	qq{SELECT pg_logical_emit_message(true, 'test 026', repeat('xyzxz', 123456))}
 );
+#$node->safe_psql('postgres', qq{create table foo ()});
 my $endfile = $node->safe_psql('postgres',
 	'SELECT pg_walfile_name(pg_current_wal_insert_lsn())');
 ok($initfile ne $endfile, "$initfile differs from $endfile");
@@ -74,7 +75,7 @@ unlink $node->basedir . "/pgdata/pg_wal/$endfile"
 
 # OK, create a standby at this spot.
 $node->backup_fs_cold('backup');
-my $node_standby = PostgresNode->new('standby');
+my $node_standby = PostgreSQL::Test::Cluster->new('standby');
 $node_standby->init_from_backup($node, 'backup', has_streaming => 1);
 
 $node_standby->start;

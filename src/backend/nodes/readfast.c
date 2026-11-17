@@ -450,29 +450,43 @@ _readAConst(void)
 {
 	READ_LOCALS(A_Const);
 
-	READ_ENUM_FIELD(val.type, NodeTag);
+	READ_BOOL_FIELD(isnull);
 
-	switch (local_node->val.type)
+	if (!local_node->isnull)
 	{
-		case T_Integer:
-			memcpy(&local_node->val.val.ival, read_str_ptr, sizeof(long)); read_str_ptr+=sizeof(long);
-			break;
-		case T_Float:
-		case T_String:
-		case T_BitString:
+		READ_ENUM_FIELD(val.node.type, NodeTag);
+
+		switch (nodeTag(&local_node->val))
 		{
-			int slen; char * nn;
-			memcpy(&slen, read_str_ptr, sizeof(int));
-			read_str_ptr+=sizeof(int);
-			nn = palloc(slen+1);
-			memcpy(nn,read_str_ptr,slen);
-			nn[slen] = '\0';
-			local_node->val.val.str = nn; read_str_ptr+=slen;
+			case T_Integer:
+			{
+				long ival;
+				memcpy(&ival, read_str_ptr, sizeof(long)); read_str_ptr+=sizeof(long);
+				local_node->val.ival.ival = (int) ival;
+			}
+				break;
+			case T_Float:
+			case T_String:
+			case T_BitString:
+			{
+				int slen; char * nn;
+				memcpy(&slen, read_str_ptr, sizeof(int));
+				read_str_ptr+=sizeof(int);
+				nn = palloc(slen+1);
+				memcpy(nn,read_str_ptr,slen);
+				nn[slen] = '\0';
+				read_str_ptr+=slen;
+				if (nodeTag(&local_node->val) == T_Float)
+					local_node->val.fval.fval = nn;
+				else if (nodeTag(&local_node->val) == T_String)
+					local_node->val.sval.sval = nn;
+				else
+					local_node->val.bsval.bsval = nn;
+			}
+				break;
+			default:
+				break;
 		}
-			break;
-	 	case T_Null:
-	 	default:
-	 		break;
 	}
 
     READ_LOCATION_FIELD(location);   /*CDB*/
@@ -1643,12 +1657,6 @@ _readValue(NodeTag nt)
 		memcpy(&ival, read_str_ptr, sizeof(long)); read_str_ptr+=sizeof(long);
 		result = (Node *) makeInteger(ival);
 	}
-	else if (nt == T_Null)
-	{
-		Value *val = makeNode(Value);
-		val->type = T_Null;
-		result = (Node *)val;
-	}
 	else
 	{
 		int slen;
@@ -1659,7 +1667,7 @@ _readValue(NodeTag nt)
 		/*
 		 * For the String case we want to create an empty string if slen is
 		 * equal to zero, since otherwise we'll set the string to NULL, which
-		 * has a different meaning and the NULL case is handed above.
+		 * has a different meaning.
 		 */
 		if (slen > 0 || nt == T_String)
 		{
@@ -1763,7 +1771,7 @@ readNodeBinary(void)
 	}
 
 	if (nt == T_Integer || nt == T_Float || nt == T_String ||
-	   	nt == T_BitString || nt == T_Null)
+	   	nt == T_BitString)
 	{
 		return _readValue(nt);
 	}
@@ -2656,6 +2664,9 @@ readNodeBinary(void)
 				return_value = _readAlterTableMoveAllStmt();
 				break;
 
+			case T_PublicationObjSpec:
+				return_value = _readPublicationObjSpec();
+				break;
 			case T_PublicationTable:
 				return_value = _readPublicationTable();
 				break;

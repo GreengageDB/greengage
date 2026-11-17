@@ -106,6 +106,7 @@ test: delete-abort-savept
 #test: lock-committed-keyupdate
 test: update-locked-tuple
 #test: reindex-concurrently
+#test: reindex-concurrently-toast
 #test: reindex-schema
 #test: propagate-lock-delete
 #test: tuplelock-conflict

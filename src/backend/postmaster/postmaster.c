@@ -34,7 +34,7 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -106,6 +106,7 @@
 #include "catalog/pg_control.h"
 #include "common/file_perm.h"
 #include "common/ip.h"
+#include "common/pg_prng.h"
 #include "common/string.h"
 #include "lib/ilist.h"
 #include "libpq/auth.h"
@@ -718,16 +719,6 @@ PostmasterMain(int argc, char *argv[])
 	umask(PG_MODE_MASK_OWNER);
 
 	/*
-	 * Initialize random(3) so we don't get the same values in every run.
-	 *
-	 * Note: the seed is pretty predictable from externally-visible facts such
-	 * as postmaster start time, so avoid using random() for security-critical
-	 * random values during postmaster startup.  At the time of first
-	 * connection, PostmasterRandom will select a hopefully-more-random seed.
-	 */
-	srandom((unsigned int) (MyProcPid ^ MyStartTime));
-
-	/*
 	 * By default, palloc() requests in the postmaster will be allocated in
 	 * the PostmasterContext, which is space that can be recycled by backends.
 	 * Allocated data that needs to be available to backends should be
@@ -1052,15 +1043,31 @@ PostmasterMain(int argc, char *argv[])
 	if (output_config_variable != NULL)
 	{
 		/*
-		 * "-C guc" was specified, so print GUC's value and exit.  No extra
-		 * permission check is needed because the user is reading inside the
-		 * data dir.
+		 * If this is a runtime-computed GUC, it hasn't yet been initialized,
+		 * and the present value is not useful.  However, this is a convenient
+		 * place to print the value for most GUCs because it is safe to run
+		 * postmaster startup to this point even if the server is already
+		 * running.  For the handful of runtime-computed GUCs that we cannot
+		 * provide meaningful values for yet, we wait until later in
+		 * postmaster startup to print the value.  We won't be able to use -C
+		 * on running servers for those GUCs, but using this option now would
+		 * lead to incorrect results for them.
 		 */
-		const char *config_val = GetConfigOption(output_config_variable,
-												 false, false);
+		int			flags = GetConfigOptionFlags(output_config_variable, true);
 
-		puts(config_val ? config_val : "");
-		ExitPostmaster(0);
+		if ((flags & GUC_RUNTIME_COMPUTED) == 0)
+		{
+			/*
+			 * "-C guc" was specified, so print GUC's value and exit.  No
+			 * extra permission check is needed because the user is reading
+			 * inside the data dir.
+			 */
+			const char *config_val = GetConfigOption(output_config_variable,
+													 false, false);
+
+			puts(config_val ? config_val : "");
+			ExitPostmaster(0);
+		}
 	}
 
 	/* Verify that DataDir looks reasonable */
@@ -1112,6 +1119,11 @@ PostmasterMain(int argc, char *argv[])
 		ereport(ERROR,
 				(errmsg("WAL streaming (max_wal_senders > 0) requires wal_level \"replica\" or \"logical\"")));
 
+	/*
+	 * GPDB: "postgres -C" of a runtime-computed parameter (e.g. pg_checksums
+	 * reading data_checksums from an offline data directory) gets here
+	 * without a segment identity, and it doesn't need one.
+	 */
     if ( GpIdentity.dbid == -1 && Gp_role == GP_ROLE_UTILITY)
     {
         /**
@@ -1119,7 +1131,7 @@ PostmasterMain(int argc, char *argv[])
          *  we don't actually know the dbid.
          */
     }
-	else if ( GpIdentity.dbid < 0 )
+	else if ( GpIdentity.dbid < 0 && output_config_variable == NULL )
 	{
 	    ereport(FATAL,
             (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -1127,7 +1139,7 @@ PostmasterMain(int argc, char *argv[])
              "The dbid value to pass can be determined from this server's entry in the segment configuration; it may be -1 if running in utility mode.")));
 	}
 
-    if ( GpIdentity.segindex < -1 ) /* -1 is okay -- that means the master */
+    if ( GpIdentity.segindex < -1 && output_config_variable == NULL ) /* -1 is okay -- that means the master */
 	{
 	    ereport(FATAL,
             (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -1248,6 +1260,26 @@ PostmasterMain(int argc, char *argv[])
 	 * depend on the amount of shared memory required.
 	 */
 	InitializeShmemGUCs();
+
+	/*
+	 * If -C was specified with a runtime-computed GUC, we held off printing
+	 * the value earlier, as the GUC was not yet initialized.  We handle -C
+	 * for most GUCs before we lock the data directory so that the option may
+	 * be used on a running server.  However, a handful of GUCs are runtime-
+	 * computed and do not have meaningful values until after locking the data
+	 * directory, and we cannot safely calculate their values earlier on a
+	 * running server.  At this point, such GUCs should be properly
+	 * initialized, and we haven't yet set up shared memory, so this is a good
+	 * time to handle the -C option for these special GUCs.
+	 */
+	if (output_config_variable != NULL)
+	{
+		const char *config_val = GetConfigOption(output_config_variable,
+												 false, false);
+
+		puts(config_val ? config_val : "");
+		ExitPostmaster(0);
+	}
 
 	/*
 	 * Set up shared memory and semaphores.
@@ -2386,6 +2418,18 @@ retry1:
 #endif
 
 		/*
+		 * At this point we should have no data already buffered.  If we do,
+		 * it was received before we performed the SSL handshake, so it wasn't
+		 * encrypted and indeed may have been injected by a man-in-the-middle.
+		 * We report this case to the client.
+		 */
+		if (pq_buffer_has_data())
+			ereport(FATAL,
+					(errcode(ERRCODE_PROTOCOL_VIOLATION),
+					 errmsg("received unencrypted data after SSL request"),
+					 errdetail("This could be either a client-software bug or evidence of an attempted man-in-the-middle attack.")));
+
+		/*
 		 * regular startup packet, cancel, etc packet should follow, but not
 		 * another SSL negotiation request, and a GSS request should only
 		 * follow if SSL was rejected (client may negotiate in either order)
@@ -2416,6 +2460,18 @@ retry1:
 		if (GSSok == 'G' && secure_open_gssapi(port) == -1)
 			return STATUS_ERROR;
 #endif
+
+		/*
+		 * At this point we should have no data already buffered.  If we do,
+		 * it was received before we performed the GSS handshake, so it wasn't
+		 * encrypted and indeed may have been injected by a man-in-the-middle.
+		 * We report this case to the client.
+		 */
+		if (pq_buffer_has_data())
+			ereport(FATAL,
+					(errcode(ERRCODE_PROTOCOL_VIOLATION),
+					 errmsg("received unencrypted data after GSSAPI encryption request"),
+					 errdetail("This could be either a client-software bug or evidence of an attempted man-in-the-middle attack.")));
 
 		/*
 		 * regular startup packet, cancel, etc packet should follow, but not
@@ -3144,19 +3200,19 @@ ClosePostmasterPorts(bool am_syslogger)
 void
 InitProcessGlobals(void)
 {
-	unsigned int rseed;
-
 	MyProcPid = getpid();
 	MyStartTimestamp = GetCurrentTimestamp();
 	MyStartTime = timestamptz_to_time_t(MyStartTimestamp);
 
 	/*
-	 * Set a different seed for random() in every process.  We want something
+	 * Set a different global seed in every process.  We want something
 	 * unpredictable, so if possible, use high-quality random bits for the
 	 * seed.  Otherwise, fall back to a seed based on timestamp and PID.
 	 */
-	if (!pg_strong_random(&rseed, sizeof(rseed)))
+	if (unlikely(!pg_prng_strong_seed(&pg_global_prng_state)))
 	{
+		uint64		rseed;
+
 		/*
 		 * Since PIDs and timestamps tend to change more frequently in their
 		 * least significant bits, shift the timestamp left to allow a larger
@@ -3167,8 +3223,17 @@ InitProcessGlobals(void)
 		rseed = ((uint64) MyProcPid) ^
 			((uint64) MyStartTimestamp << 12) ^
 			((uint64) MyStartTimestamp >> 20);
+
+		pg_prng_seed(&pg_global_prng_state, rseed);
 	}
-	srandom(rseed);
+
+	/*
+	 * Also make sure that we've set a good seed for random(3).  Use of that
+	 * is deprecated in core Postgres, but extensions might use it.
+	 */
+#ifndef WIN32
+	srandom(pg_prng_uint32(&pg_global_prng_state));
+#endif
 }
 
 
@@ -4789,6 +4854,15 @@ BackendStartup(Port *port)
 		/* Perform additional initialization and collect startup packet */
 		BackendInitialize(port);
 
+		/*
+		 * Create a per-backend PGPROC struct in shared memory. We must do
+		 * this before we can use LWLocks. In the !EXEC_BACKEND case (here)
+		 * this could be delayed a bit further, but EXEC_BACKEND needs to do
+		 * stuff with LWLocks before PostgresMain(), so we do it here as well
+		 * for symmetry.
+		 */
+		InitProcess();
+
 		/* And run the backend */
 		BackendRun(port);
 	}
@@ -5062,19 +5136,13 @@ BackendInitialize(Port *port)
 static void
 BackendRun(Port *port)
 {
-	char	   *av[2];
-	const int	ac = 1;
-
-	av[0] = "postgres";
-	av[1] = NULL;
-
 	/*
 	 * Make sure we aren't in PostmasterContext anymore.  (We can't delete it
 	 * just yet, though, because InitPostgres will need the HBA data.)
 	 */
 	MemoryContextSwitchTo(TopMemoryContext);
 
-	PostgresMain(ac, av, port->database_name, port->user_name);
+	PostgresMain(port->database_name, port->user_name);
 }
 
 

@@ -1,5 +1,5 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2022, PostgreSQL Global Development Group
 
 use strict;
 use warnings;
@@ -8,17 +8,17 @@ use Config;
 use File::Basename qw(basename dirname);
 use File::Path qw(rmtree);
 use Fcntl qw(:seek);
-use PostgresNode;
-use TestLib;
-use Test::More tests => 110 + 15;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More tests => 115 + 15;
 
 program_help_ok('pg_basebackup');
 program_version_ok('pg_basebackup');
 program_options_handling_ok('pg_basebackup');
 
-my $tempdir = TestLib::tempdir;
+my $tempdir = PostgreSQL::Test::Utils::tempdir;
 
-my $node = PostgresNode->new('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 
 # Set umask so test directories and files are created with default permissions
 umask(0077);
@@ -242,14 +242,14 @@ $node->start;
 # to our physical temp location.  That way we can use shorter names
 # for the tablespace directories, which hopefully won't run afoul of
 # the 99 character length limit.
-my $sys_tempdir = TestLib::tempdir_short;
-my $real_sys_tempdir = TestLib::perl2host($sys_tempdir) . "/tempdir";
+my $sys_tempdir = PostgreSQL::Test::Utils::tempdir_short;
+my $real_sys_tempdir = PostgreSQL::Test::Utils::perl2host($sys_tempdir) . "/tempdir";
 my $shorter_tempdir =  $sys_tempdir . "/tempdir";
 dir_symlink "$tempdir", $shorter_tempdir;
 
 mkdir "$tempdir/tblspc1";
 my $realTsDir    = "$real_sys_tempdir/tblspc1";
-my $real_tempdir = TestLib::perl2host($tempdir);
+my $real_tempdir = PostgreSQL::Test::Utils::perl2host($tempdir);
 $node->safe_psql('postgres',
 	"CREATE TABLESPACE tblspc1 LOCATION '$realTsDir';");
 $node->safe_psql('postgres',
@@ -271,10 +271,13 @@ is(scalar(@tblspc_tars), 1, 'one tablespace tar was created');
 SKIP:
 {
 	my $tar = $ENV{TAR};
+	# don't check for a working tar here, to accomodate various odd
+	# cases such as AIX. If tar doesn't work the init_from_backup below
+	# will fail.
 	skip "no tar program available", 1
 	  if (!defined $tar || $tar eq '');
 
-	my $node2 = PostgresNode->new('replica');
+	my $node2 = PostgreSQL::Test::Cluster->new('replica');
 
 	# Recover main data directory
 	$node2->init_from_backup($node, 'tarbackup2', tar_program => $tar);
@@ -283,7 +286,7 @@ SKIP:
 	my $repTsDir     = "$tempdir/tblspc1replica";
 	my $realRepTsDir = "$real_sys_tempdir/tblspc1replica";
 	mkdir $repTsDir;
-	TestLib::system_or_bail($tar, 'xf', $tblspc_tars[0], '-C', $repTsDir);
+	PostgreSQL::Test::Utils::system_or_bail($tar, 'xf', $tblspc_tars[0], '-C', $repTsDir);
 
 	# Update tablespace map to point to new directory.
 	# XXX Ideally pg_basebackup would handle this.
@@ -722,3 +725,53 @@ $node->command_ok([ 'pg_basebackup', '-D', $gpbackup_test_dir, '--target-gp-dbid
 
 ok(! -d "$gpbackup_test_dir/backups", 'gpbackup default backup directory should be excluded');
 rmtree($gpbackup_test_dir);
+
+note "Testing pg_basebackup with compression methods";
+
+# Check ZLIB compression if available.
+SKIP:
+{
+	skip "postgres was not built with ZLIB support", 5
+	  if (!check_pg_config("#define HAVE_LIBZ 1"));
+
+	$node->command_ok(
+		[
+			'pg_basebackup',        '-D',
+			"$tempdir/backup_gzip", '--compress',
+			'1',                    '--no-sync',
+			'--format',             't',
+			'--target-gp-dbid',     '123'
+		],
+		'pg_basebackup with --compress');
+	$node->command_ok(
+		[
+			'pg_basebackup',         '-D',
+			"$tempdir/backup_gzip2", '--gzip',
+			'--no-sync',             '--format',
+			't',                     '--target-gp-dbid',
+			'123'
+		],
+		'pg_basebackup with --gzip');
+
+	# Verify that the stored files are generated with their expected
+	# names.
+	my @zlib_files = glob "$tempdir/backup_gzip/*.tar.gz";
+	is(scalar(@zlib_files), 2,
+		"two files created with --compress (base.tar.gz and pg_wal.tar.gz)");
+	my @zlib_files2 = glob "$tempdir/backup_gzip2/*.tar.gz";
+	is(scalar(@zlib_files2), 2,
+		"two files created with --gzip (base.tar.gz and pg_wal.tar.gz)");
+
+	# Check the integrity of the files generated.
+	my $gzip = $ENV{GZIP_PROGRAM};
+	skip "program gzip is not found in your system", 1
+	  if ( !defined $gzip
+		|| $gzip eq ''
+		|| system_log($gzip, '--version') != 0);
+
+	my $gzip_is_valid =
+	  system_log($gzip, '--test', @zlib_files, @zlib_files2);
+	is($gzip_is_valid, 0, "gzip verified the integrity of compressed data");
+	rmtree("$tempdir/backup_gzip");
+	rmtree("$tempdir/backup_gzip2");
+}
