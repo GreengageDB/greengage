@@ -649,6 +649,8 @@ typedef enum ICTraceOperation {
 	IC_OP_UNACK_QUEUE_DELETE,
 	IC_OP_RING_INSERT,
 	IC_OP_RING_DELETE,
+	IC_OP_RX_FREELIST_APPEND,
+	IC_OP_RX_FREELIST_DELETE,
 } ICTraceOperation;
 typedef struct ICTrace
 {
@@ -672,6 +674,25 @@ static uint32 ic_trace_idx = 0;
 	t->numOutStanding = unack_queue_ring.numOutStanding; \
 	t->route = (r); \
 	t->seq = t->buf->pkt->seq; \
+} while(0)
+
+/*
+ * RX-pool variant of IC_TRACE: the receive buffer is an icpkthdr, not an
+ * ICBuffer, and the rx free list is the crash site of the rx-thread segfault
+ * family, so the rx_buffer_pool operations are traced as well. Guarded on
+ * ic_trace != NULL because the pool can be used after the trace buffer is
+ * released at interconnect shutdown.
+ */
+#define IC_TRACE_RX(o,b,now,r) do { \
+	if (ic_trace != NULL) { \
+		ICTrace *t = &ic_trace[ic_trace_idx++ % IC_TRACE_MAX_SIZE]; \
+		t->timestamp = (now); \
+		t->operation = (o); \
+		t->buf = (ICBuffer *) (b); \
+		t->numOutStanding = rx_buffer_pool.count; \
+		t->route = (r); \
+		t->seq = (b)->seq; \
+	} \
 } while(0)
 
 /*=========================================================================
@@ -2247,9 +2268,29 @@ getRxBuffer(RxBufferPool *p)
 static inline void
 putRxBufferToFreeList(RxBufferPool *p, icpkthdr *buf)
 {
+#ifdef USE_ASSERT_CHECKING
+	{
+		/*
+		 * TEST ONLY canary: detect double-return of an rx buffer. The magic
+		 * is written at payload offset 8 on every return; a live reuse of the
+		 * buffer (recvfrom) always overwrites it. If the magic is still here
+		 * on return, this buffer was returned twice.
+		 */
+		uint64		canary;
+
+		memcpy(&canary, (char *) buf + 8, sizeof(canary));
+		if (canary == 0x525843414e415259ULL)	/* "RXCANARY" */
+			write_log("UDPIC CANARY: DOUBLE RETURN of rx buffer %p (freeList %p count %d maxCount %d)",
+					  buf, (void *) p->freeList, p->count, p->maxCount);
+		canary = 0x525843414e415259ULL;
+		memcpy((char *) buf + 8, &canary, sizeof(canary));
+	}
+#endif
 	/* return the buffer into the free list. */
 	*(char **) buf = p->freeList;
 	p->freeList = (char *) buf;
+
+	IC_TRACE_RX(IC_OP_RX_FREELIST_APPEND, buf, getCurrentTime(), (int16) buf->motNodeId);
 }
 
 /*
@@ -2273,6 +2314,9 @@ getRxBufferFromFreeList(RxBufferPool *p)
 
 	buf = (icpkthdr *) p->freeList;
 	p->freeList = *(char **) (p->freeList);
+
+	IC_TRACE_RX(IC_OP_RX_FREELIST_DELETE, buf, getCurrentTime(), (int16) buf->motNodeId);
+
 	return buf;
 }
 
@@ -4721,6 +4765,14 @@ prepareXmit(MotionConn *conn)
 {
 	Assert(conn != NULL);
 
+	if (conn->pBuff == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
+				 errmsg("interconnect error: send buffer of connection is lost"),
+				 errdetail("pBuff NULL msgSize %d seq %d stillActive %d",
+						   conn->msgSize, conn->conn_info.seq,
+						   (int) conn->stillActive)));
+
 	conn->conn_info.len = conn->msgSize;
 	conn->conn_info.crc = 0;
 
@@ -5638,6 +5690,32 @@ SendChunkUDPIFC(ChunkTransportState *transportStates,
 	bool		gotStops = false;
 
 	Assert(conn->msgSize > 0);
+
+	if (conn->pBuff == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
+				 errmsg("interconnect error: send buffer of connection is lost"),
+				 errdetail("pBuff NULL msgSize %d seq %d stillActive %d",
+						   conn->msgSize, conn->conn_info.seq,
+						   (int) conn->stillActive)));
+
+#ifdef USE_ASSERT_CHECKING
+	/*
+	 * TEST ONLY: emulate an error unwinding out of this function with the
+	 * aggregation buffer unset, followed by a swallower above (elog_demote /
+	 * elog_dismiss) resuming execution on the poisoned state. The next call
+	 * on this connection must fail cleanly (pBuff NULL guards); without them
+	 * it crashes in prepareXmit().
+	 */
+	if (FINC_HAS_FAULT(FINC_SEND_DISMISS) &&
+		testmode_inject_fault(gp_udpic_fault_inject_percent))
+	{
+		conn->curBuff = NULL;
+		conn->pBuff = NULL;
+		conn->msgSize = Gp_max_packet_size;
+		return true;
+	}
+#endif
 
 #ifdef AMS_VERBOSE_LOGGING
 	elog(DEBUG3, "sendChunk: msgSize %d this chunk length %d conn seq %d",

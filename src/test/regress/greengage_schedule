@@ -321,4 +321,7 @@ test: gp_orphaned_files
 test: gp_libpq_events
 
 test: gp_local_extension
+
+# needs an assert-enabled build: uses the FINC fault framework
+test: interconnect_send_dismiss
 # end of tests
