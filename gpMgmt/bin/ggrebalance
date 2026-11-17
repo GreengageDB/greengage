@@ -166,7 +166,8 @@ def validate_options(options, args, parser):
             'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
             'skip_resource_estimation', 'analyze', 'replay_lag', 'hba_hostnames', 'inplace_swap_roles',
             'duration', 'end',
-            'detailed_progress', 'simple_progress', 'no_progress', 'seed'
+            'detailed_progress', 'simple_progress', 'no_progress', 'seed',
+            'rollback_required'
         ]),
 
         ('rollback_required', [

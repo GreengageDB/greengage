@@ -62,6 +62,8 @@ Feature: ggrebalance behave tests
           | -r --simple-progress                                        | Can't use together options '--rollback-required' and '--simple-progress'   | stub     |stub|
           | -r --no-progress                                            | Can't use together options '--rollback-required' and '--no-progress'       | stub     |stub|
           | -r --inplace-swap-roles                                     | Can't use together options '--rollback-required' and '--inplace-swap-roles'     | stub     |stub|
+          | -r --clean                                                  | Can't use together options '--clean-required' and '--rollback-required'    | stub     |stub|
+          | -c --rollback                                               | Can't use together options '--clean-required' and '--rollback-required'    | stub     |stub|
           | -c --duration 00:00:01                                      | Can't use together options '--clean-required' and '--duration'                  | stub     |stub|
           | -c --end '2099-01-01 01:01:01'                              | Can't use together options '--clean-required' and '--end'                       | stub     |stub|
           | --duration 00:00:01 --end '2099-01-01 01:01:01'             | Can't use together options '--duration' and '--end'                             | stub     |stub|
