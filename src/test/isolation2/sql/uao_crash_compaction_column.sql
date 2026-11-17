@@ -89,60 +89,66 @@
 2:DROP TABLE IF EXISTS crash_coordinator_before_cleanup_phase CASCADE;
 -- Function that:
 --
--- 1. Finds oldest xid that leaves segfiles in
---    AOSEG_STATE_AWAITING_DROP.
+-- 1. Computes a conservative threshold: the maximum, across segments, of
+--    each segment's oldest xid still leaving segfiles in
+--    AOSEG_STATE_AWAITING_DROP. (Segments have independent xid counters;
+--    pg_stat_activity does not expose gp_segment_id, so an exact
+--    per-segment comparison is not expressible without a per-segment loop.)
 --
--- 2. Waits until procarry progresses to newer oldest xid.
---    This will happen when uncommited oldest transaction will dissapear
---    after recreation of procarray during recovery both on coordinator
---    and segments.
+-- 2. Waits until no backend on any segment has a horizon (backend_xmin or
+--    backend_xid) at or below that threshold, excluding the waiting session.
+--    This happens after the crashed transaction is reaped during recovery.
 --
 2:CREATE OR REPLACE FUNCTION wait_for_new_oldest_xid(tbl regclass, timeout_secs int DEFAULT 10)
 RETURNS text AS $$
 DECLARE
-    blocking_xid xid; /*in func*/
-    own_sess_id bigint; /*in func*/
+    segrel text; /*in func*/
+    own_sess bigint; /*in func*/
+    bx_max bigint; /*in func*/
     n int; /*in func*/
     msg text; /*in func*/
 BEGIN
-    -- Find the oldest xmin among rows which are in AOSEG_STATE_AWAITING_DROP state.
-    EXECUTE format(
-        'SELECT min(xmin::text::bigint)::text::xid FROM gp_dist_random(%L) WHERE state = 2',
-        (SELECT segrelid::regclass::text
-           FROM pg_catalog.pg_appendonly
-          WHERE relid = $1)
-    ) INTO blocking_xid; /*in func*/
-
-    IF blocking_xid IS NULL THEN
-        RETURN 'OK'; /*in func*/
+    -- Resolve the per-table aux catalog.
+    SELECT segrelid::regclass::text INTO segrel FROM pg_appendonly WHERE relid = tbl; /*in func*/
+    IF segrel IS NULL THEN RETURN 'OK'; /*in func*/
     END IF; /*in func*/
 
-    -- Wait until procarray synchronizes, so there is a new oldest xmin across 
-    -- all segments, which is the last normally commited transaction.
-    -- Don't be blocked by transactions going because of the wait function.
-    SELECT sess_id::bigint FROM pg_stat_activity WHERE pid = pg_backend_pid() INTO own_sess_id; /*in func*/
-    FOR i IN 1..timeout_secs*10 LOOP
-        SELECT count(*) INTO n
-        FROM gp_dist_random('pg_stat_activity')
-        WHERE backend_xmin IS NOT NULL
-          AND backend_xmin::text::bigint <= blocking_xid::text::bigint
-          AND sess_id <> own_sess_id; /*in func*/
+    -- Capture our own session id so the wait does not observe itself.
+    SELECT sess_id::bigint INTO own_sess FROM pg_stat_activity WHERE pid = pg_backend_pid(); /*in func*/
 
-        IF n = 0 THEN
-            RETURN 'OK'; /*in func*/
+    FOR i IN 1..timeout_secs*10 LOOP
+        -- Per-segment oldest AWAITING_DROP xmin, then its maximum.
+        EXECUTE format(
+            'SELECT max(bx) FROM ('
+            '  SELECT gp_segment_id, min(xmin::text::bigint) AS bx '
+            '    FROM gp_dist_random(%L) '
+            '   WHERE state = 2 '
+            '   GROUP BY gp_segment_id) s',
+            segrel) INTO bx_max; /*in func*/
+        IF bx_max IS NULL THEN RETURN 'OK'; /*in func*/
+        END IF; /*in func*/
+
+        -- Any backend whose horizon is at or below the conservative threshold.
+        EXECUTE format(
+            'SELECT count(*) FROM gp_dist_random(%L) '
+            ' WHERE LEAST(backend_xmin::text::bigint, backend_xid::text::bigint) <= %s '
+            '   AND sess_id <> %s',
+            'pg_stat_activity', bx_max, own_sess) INTO n; /*in func*/
+
+        IF n = 0 THEN RETURN 'OK'; /*in func*/
         END IF; /*in func*/
         PERFORM pg_sleep(0.1); /*in func*/
     END LOOP; /*in func*/
 
-    SELECT string_agg(format('pid=%s xmin=%s state=%s query=%s',
-                             pid, backend_xmin, state, query), ' | ')
-    INTO msg
-    FROM gp_dist_random('pg_stat_activity')
-    WHERE backend_xmin IS NOT NULL
-      AND backend_xmin::text::bigint <= blocking_xid::text::bigint
-      AND sess_id <> own_sess_id; /*in func*/
-    RETURN format('FAIL: still blocked by %s txns at or below xid %s [%s]',
-                  n, blocking_xid, coalesce(msg, 'no rows')); /*in func*/
+    EXECUTE format(
+        'SELECT string_agg(format(''pid=%s xid=%s xmin=%s state=%s'', '
+        '  pid, backend_xid, backend_xmin, state), '' | '') '
+        '  FROM gp_dist_random(%L) '
+        ' WHERE LEAST(backend_xmin::text::bigint, backend_xid::text::bigint) <= %s '
+        '   AND sess_id <> %s',
+        'pg_stat_activity', bx_max, own_sess) INTO msg; /*in func*/
+
+    RETURN format('FAIL: still blocked by %s txns [%s]', n, coalesce(msg, 'no rows')); /*in func*/
 END; /*in func*/
 $$ LANGUAGE plpgsql;
 2:CREATE TABLE crash_coordinator_before_cleanup_phase (a INT, b INT, c CHAR(20));
