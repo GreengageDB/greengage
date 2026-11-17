@@ -183,7 +183,7 @@ class TestResourceEstimator(GpTestCase):
         self.options.skip_rebalance = False
         self.options.skip_resource_estimation = False
         self.options.batch_size = 16
-        self.options.solver_seed = 42
+        self.options.seed = 42
     
     @patch('ggrebalance_modules.planner.dbconn')
     def test_estimate_segment_sizes_from_unbalanced_cluster(self, mock_dbconn):
@@ -1092,6 +1092,31 @@ class TestResourceEstimator(GpTestCase):
         
         # Verify warning was logged
         self.logger.warning.assert_any_call("Skipping resource estimation")
+
+    @patch('ggrebalance_modules.planner.dbconn')
+    @patch('ggrebalance_modules.rebalance_schema.dbconn.queryRow', side_effect=check_query)
+    @patch('ggrebalance_modules.planner.HostResolver.resolve_hostname')
+    @patch('ggrebalance_modules.planner.HostResolver.get_address')
+    def test_planner_uses_zero_seed(self, mock_get_address, mock_resolve, mock_schema, mock_conn):
+        """Test Planner doesn't replace '--seed 0' with a random seed"""
+        mock_resolve.return_value = None
+        mock_get_address.side_effect = lambda hostname: {
+            'sdw1': '172.20.0.6',
+            'sdw2': '172.20.0.7',
+            'sdw3': '172.20.0.8'
+        }.get(hostname, hostname)
+
+        self.options.skip_resource_estimation = True
+        self.options.seed = 0
+
+        Planner(
+            logger=self.logger,
+            dburl=self.dburl,
+            gpArray=self.gparray,
+            options=self.options
+        ).plan()
+
+        self.logger.info.assert_any_call("Running randomized plan improvement with seed:0")
 
 class TestPortAllocator(GpTestCase):
     """

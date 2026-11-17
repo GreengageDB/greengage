@@ -103,7 +103,7 @@ def parseargs():
                       help='Allows to place primary and mirror at the same host during rebalance.')
     parser.add_option('-q', '--quiet', action='store_true', default=False,
                       help='Run in quiet mode.')
-    parser.add_option('--seed', dest="solver_seed", type="int", help='seed value for stable plan generation')
+    parser.add_option('--seed', dest="seed", type="int", help='seed value for stable plan generation')
 
     # Parse the command line arguments
     options, args = parser.parse_args()
@@ -144,7 +144,7 @@ def validate_options(options, args, parser):
             'Invalid value of --target-segment-count. It must be >= 1 and <= %d' % MAX_SEGMENTS)
         parser.exit(1)
     
-    if options.solver_seed and options.solver_seed < 0:
+    if options.seed is not None and options.seed < 0:
         logger.error('Invalid value of --seed. Must be >= 0')
         parser.exit(1)
 
