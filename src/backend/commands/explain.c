@@ -67,6 +67,10 @@ ExplainOneQuery_hook_type ExplainOneQuery_hook = NULL;
 /* Hook for plugins to get control in explain_get_index_name() */
 explain_get_index_name_hook_type explain_get_index_name_hook = NULL;
 
+/* per-plan and per-node hooks for plugins to print additional info */
+explain_per_plan_hook_type explain_per_plan_hook = NULL;
+explain_per_node_hook_type explain_per_node_hook = NULL;
+
 
 /* OR-able flags for ExplainXMLTag() */
 #define X_OPENING 0
@@ -763,6 +767,11 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 		else
 			ExplainPrintJITSummary(es,queryDesc);
 	}
+
+	/* Allow plugins to print additional information */
+	if (explain_per_plan_hook)
+		(*explain_per_plan_hook) (plannedstmt, into, es, queryString,
+								  params, queryEnv);
 
 	/*
 	 * Close down the query and free resources.  Include time for this in the
@@ -2738,6 +2747,11 @@ ExplainNode(PlanState *planstate, List *ancestors,
 		if (opened_group)
 			ExplainCloseGroup("Workers", "Workers", false, es);
 	}
+
+	/* Allow plugins to print additional information */
+	if (explain_per_node_hook)
+		(*explain_per_node_hook) (planstate, ancestors, relationship,
+								  plan_name, es);
 
 	/*
 	 * If partition pruning was done during executor initialization, the
