@@ -186,7 +186,9 @@ def validate_options(options, args, parser):
         if not hasattr(options, opt_name):
             return False
         value = getattr(options, opt_name)
-        return value is not None and value != False
+        # Compare with False by identity: a numeric option set to 0 is equal
+        # to False, but it is still an option passed by the user.
+        return value is not None and value is not False
     
     for rule in incompatibility_rules:
         condition_opt, incompatible_opts = rule

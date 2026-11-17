@@ -96,9 +96,9 @@ class TestRebalanceUtilityCLI(GpTestCase):
     def set_seed(self, value):
         setattr(self.options, self.parser.get_option('--seed').dest, value)
 
-    def check_seed_is_incompatible_with(self, option):
+    def check_seed_is_incompatible_with(self, option, seed=1):
         setattr(self.options, option, True)
-        self.set_seed(1)
+        self.set_seed(seed)
         with self.assertRaises(SystemExit):
             self.subject.validate_options(self.options, self.args, self.parser)
         self.subject.logger.error.assert_any_call(
@@ -109,6 +109,13 @@ class TestRebalanceUtilityCLI(GpTestCase):
 
     def test_seed_is_incompatible_with_clean(self):
         self.check_seed_is_incompatible_with('clean_required')
+
+    # 0 is a valid seed, so it should be treated as a set option too
+    def test_zero_seed_is_incompatible_with_rollback(self):
+        self.check_seed_is_incompatible_with('rollback_required', seed=0)
+
+    def test_zero_seed_is_incompatible_with_clean(self):
+        self.check_seed_is_incompatible_with('clean_required', seed=0)
 
     def test_zero_seed_is_accepted(self):
         self.set_seed(0)
