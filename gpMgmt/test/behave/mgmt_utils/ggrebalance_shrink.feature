@@ -1228,7 +1228,7 @@ Feature: ggrebalance behave tests
          And distribution information from table "public.test_table" with data in "noconn_db" is equal to segment count = 4, row count = 100
 
     Examples:
-        | fault_name                                          | segments_before_continue |
+        | fault_name                                            | segments_before_continue |
         | on_enter_STATE_PREPARE_SHRINK_SCHEMA_STARTED_begin    | 6                        |
         | on_enter_STATE_SHRINK_CATALOG_STARTED_begin           | 4                        |
 
