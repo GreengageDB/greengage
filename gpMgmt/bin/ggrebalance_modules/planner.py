@@ -1165,9 +1165,9 @@ class Planner:
         
         if resource_estimator:
             resource_estimator.reserve_space(
-                hostname=host.hostname,
-                host_address=host.address,
-                data_directory=self._get_datadir_for_segment(host, content_id, is_mirror=True),
+                hostname=selected_host.hostname,
+                host_address=selected_host.address,
+                data_directory=self._get_datadir_for_segment(selected_host, content_id, is_mirror=True),
                 dbid=mirror_move.seg.dbid,
                 required_size=mirror_move.segment_size
             )
