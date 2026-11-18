@@ -221,8 +221,7 @@ CXformExpandDynamicGetWithForeignPartitions::Transform(CXformContext *pxfctxt,
 				mp, new_alias, popGet->Ptabdesc(), popGet->ScanId(), pdrgpcrNew,
 				popGet->PdrgpdrgpcrPart(), all_part_mdids,
 				popGet->GetPartitionConstraintsDisj(), popGet->FStaticPruned(),
-				selected_parts_set,
-				foreign_server.m_foreign_server_oid,
+				selected_parts_set, foreign_server.m_foreign_server_oid,
 				foreign_server.m_exec_location);
 		CExpression *pexprDynamicForeignGet =
 			GPOS_NEW(mp) CExpression(mp, dynamicForeignGet);

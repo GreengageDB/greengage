@@ -178,7 +178,6 @@ CLogicalDynamicForeignGet::PstatsDerive(CMemoryPool *mp,
 										IStatisticsArray *	// not used
 ) const
 {
-	
 	CExpression *expr = nullptr;
 	if (m_partition_cnstrs_disj)
 	{
@@ -204,11 +203,13 @@ CLogicalDynamicForeignGet::PstatsDerive(CMemoryPool *mp,
 //---------------------------------------------------------------------------
 IStatistics *
 CLogicalDynamicForeignGet::PstatsDeriveFilter(CMemoryPool *mp,
-									   CExpressionHandle &exprhdl,
-									   CExpression *pexprFilter) const
+											  CExpressionHandle &exprhdl,
+											  CExpression *pexprFilter) const
 {
-	GPOS_ASSERT(COperator::EopLogicalDynamicForeignGet == exprhdl.Pop()->Eopid());
-	CLogicalDynamicForeignGet *dyn_get = CLogicalDynamicForeignGet::PopConvert(exprhdl.Pop());
+	GPOS_ASSERT(COperator::EopLogicalDynamicForeignGet ==
+				exprhdl.Pop()->Eopid());
+	CLogicalDynamicForeignGet *dyn_get =
+		CLogicalDynamicForeignGet::PopConvert(exprhdl.Pop());
 
 	CColRefSet *pcrsStat = GPOS_NEW(mp) CColRefSet(mp);
 
@@ -301,7 +302,8 @@ CLogicalDynamicForeignGet::PstatsDeriveFilter(CMemoryPool *mp,
 				partition_mdid->AddRef();
 				CMDIdRelStats *rel_stats_mdid = GPOS_NEW(mp)
 					CMDIdRelStats(CMDIdGPDB::CastMdid(partition_mdid));
-				const IMDRelStats *rel_stats = md_accessor->Pmdrelstats(rel_stats_mdid);
+				const IMDRelStats *rel_stats =
+					md_accessor->Pmdrelstats(rel_stats_mdid);
 				if (!rel_stats->IsEmpty())
 				{
 					part_rows = rel_stats->Rows();
@@ -322,7 +324,7 @@ CLogicalDynamicForeignGet::PstatsDeriveFilter(CMemoryPool *mp,
 	IStatistics *result_stats = CFilterStatsProcessor::MakeStatsFilter(
 		mp, pstatsFullTable, pred_stats, true /* do_cap_NDVs */,
 		selected_partitions_rows);
-	
+
 	pred_stats->Release();
 	pstatsFullTable->Release();
 

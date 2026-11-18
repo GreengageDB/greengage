@@ -50,8 +50,8 @@ public:
 							  CColRef2dArray *pdrgpdrgpcrPart,
 							  IMdIdArray *partition_mdids,
 							  CConstraint *partition_cnstrs_disj,
-							  BOOL static_pruned,
-							  CBitSet *selected_parts, OID foreign_server_oid,
+							  BOOL static_pruned, CBitSet *selected_parts,
+							  OID foreign_server_oid,
 							  IMDRelation::Ereldistrpolicy exec_location);
 
 	~CLogicalDynamicForeignGet() override;

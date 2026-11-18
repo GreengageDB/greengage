@@ -207,7 +207,7 @@ CLogicalUnionAll::PstatsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	for (ULONG ul = 0; ul < arity; ul++)
 	{
 		CColRefArray *pdrgpcrChildInput = (*pdrgpdrgpcrInput)[ul];
-		
+
 		// If this child's input colrefs are the same as the output colrefs
 		// (common for user-written UNION ALL and ConstTableGet), skip remapping.
 		// Otherwise (e.g. xforms that synthesize new colrefs like
@@ -219,8 +219,8 @@ CLogicalUnionAll::PstatsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl,
 		}
 		else
 		{
-			UlongToColRefMap *mapping =
-				CUtils::PhmulcrMapping(mp, pdrgpcrOutput, (*pdrgpdrgpcrInput)[ul]);
+			UlongToColRefMap *mapping = CUtils::PhmulcrMapping(
+				mp, pdrgpcrOutput, (*pdrgpdrgpcrInput)[ul]);
 			CColRefArray *pdrgpcrInputStats =
 				CUtils::PdrgpcrRemap(mp, pdrgpcrOutputStats, mapping, true);
 			pdrgpdrgpcrInputStats->Append(pdrgpcrInputStats);
