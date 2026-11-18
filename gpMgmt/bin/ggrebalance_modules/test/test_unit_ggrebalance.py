@@ -10,12 +10,15 @@ import socket
 from gppylib.test.unit.gp_unittest import *
 from mock import *
 from gppylib.db.dbconn import DbURL
+from gppylib.gparray import Segment
 from gppylib.gplog import *
 from gppylib.system.configurationInterface import GpConfigurationProvider
 from gppylib.system.environment import GpCoordinatorEnvironment
 
 from ggrebalance_modules.test.config import initGparrayFromFile
-from ggrebalance_modules.planner import Planner
+from ggrebalance_modules.planner import LogicalMove, Planner
+from ggrebalance_modules.ggrebalance_sm import RebalanceSM
+from ggrebalance_modules.rebalance_step import RebalanceStepMoveMirror
 from ggrebalance_modules.rebalance_commons import Host, HostStatus, ValidationError
 
 def rebalance_only(numsegs):
@@ -420,6 +423,91 @@ class TestHostsOptions(GpTestCase):
         with self.assertRaises(ValidationError) as ctx:
             self.plan_hosts()
         self.assertIn("--add-hosts: Host 'sdw2.example.com' already exists in cluster as 'sdw2'", str(ctx.exception))
+
+class TestMirrorMoveConfig(GpTestCase):
+    def setUp(self):
+        self.subject = RebalanceSM(Mock(), Mock(), Mock(), Mock(), Mock())
+        self.segment = Segment.initFromString(
+            '7|2|m|m|s|u|sdw3|172.19.0.5|21500|/data/mirror/gpseg2')
+        self.move = LogicalMove(
+            seg=self.segment,
+            srcHost=Host('sdw3', '172.19.0.5'),
+            dstHost=Host('sdw1', '172.19.0.3'),
+            target_port=21501,
+            target_datadir='/new/mirror/gpseg2')
+        self.step = RebalanceStepMoveMirror(self.move)
+        self.catalog = Mock()
+        self.catalog.getDbList.return_value = [self.segment]
+
+    def assert_config(self, expected):
+        with patch('ggrebalance_modules.ggrebalance_sm.GpArray.initFromCatalog',
+                   return_value=self.catalog), \
+             patch('ggrebalance_modules.ggrebalance_sm.open', mock_open()) as output:
+            self.subject.create_config_file([self.step])
+        output().write.assert_called_once_with(expected)
+
+    def update_catalog(self):
+        self.catalog.getDbList.return_value = [Segment.initFromString(
+            '7|2|m|m|s|u|sdw1|172.19.0.3|21501|/new/mirror/gpseg2')]
+
+    def test_normal_move_uses_addresses(self):
+        self.assert_config('sdw3|172.19.0.5|21500|/data/mirror/gpseg2 '
+                           'sdw1|172.19.0.3|21501|/new/mirror/gpseg2\n')
+
+    def test_source_address_comes_from_catalog_row_for_dbid(self):
+        other = self.segment.copy()
+        other.setSegmentDbId(8)
+        current = self.segment.copy()
+        current.setSegmentAddress('172.19.1.5')
+        self.catalog.getDbList.return_value = [other, current]
+        self.assert_config('sdw3|172.19.1.5|21500|/data/mirror/gpseg2 '
+                           'sdw1|172.19.0.3|21501|/new/mirror/gpseg2\n')
+
+    def test_unrelated_catalog_location_is_rejected(self):
+        current = self.segment.copy()
+        current.setSegmentDataDirectory('/other/mirror/gpseg2')
+        self.catalog.getDbList.return_value = [current]
+        with patch('ggrebalance_modules.ggrebalance_sm.GpArray.initFromCatalog', return_value=self.catalog), \
+             patch('ggrebalance_modules.ggrebalance_sm.open', mock_open()) as output:
+            with self.assertRaisesRegex(ValidationError, 'Unexpected catalog location for dbid 7'):
+                self.subject.create_config_file([self.step])
+        output().write.assert_not_called()
+
+    def test_retry_after_catalog_update_uses_destination_address(self):
+        self.update_catalog()
+        self.assert_config('sdw1|172.19.0.3|21501|/new/mirror/gpseg2 '
+                           'sdw1|172.19.0.3|21501|/new/mirror/gpseg2\n')
+
+    def test_rollback_after_catalog_update_uses_original_address(self):
+        self.update_catalog()
+        self.step.setStatus(self.step.Status.PLANNED, rollback=True)
+        self.assert_config('sdw1|172.19.0.3|21501|/new/mirror/gpseg2 '
+                           'sdw3|172.19.0.5|21500|/data/mirror/gpseg2\n')
+
+    def test_pre_upgrade_retry_uses_catalog_hostname_as_address(self):
+        self.update_catalog()
+        self.catalog.getDbList.return_value[0].setSegmentAddress('sdw1')
+        self.assert_config('sdw1|sdw1|21501|/new/mirror/gpseg2 '
+                           'sdw1|sdw1|21501|/new/mirror/gpseg2\n')
+
+    def test_pre_upgrade_rollback_uses_catalog_hostname_as_address(self):
+        self.update_catalog()
+        self.catalog.getDbList.return_value[0].setSegmentAddress('sdw1')
+        self.step.setStatus(self.step.Status.PLANNED, rollback=True)
+        self.assert_config('sdw1|sdw1|21501|/new/mirror/gpseg2 '
+                           'sdw3|172.19.0.5|21500|/data/mirror/gpseg2\n')
+
+    def test_rollback_before_catalog_update_uses_original_address(self):
+        self.step.setStatus(self.step.Status.PLANNED, rollback=True)
+        self.assert_config('sdw3|172.19.0.5|21500|/data/mirror/gpseg2 '
+                           'sdw3|172.19.0.5|21500|/data/mirror/gpseg2\n')
+
+    def test_hostname_equals_address(self):
+        self.segment.setSegmentAddress('sdw3')
+        self.move.dstHost.address = 'sdw1'
+        self.assert_config('sdw3|sdw3|21500|/data/mirror/gpseg2 '
+                           'sdw1|sdw1|21501|/new/mirror/gpseg2\n')
+
 
 if __name__ == '__main__':
     run_tests()
