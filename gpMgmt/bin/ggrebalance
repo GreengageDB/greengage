@@ -67,7 +67,7 @@ def parseargs():
     parser.add_option('-p', '--show-plan', dest='show_plan', metavar='<show_plan>', action='store_true', default=False,
                       help='Show rebalance plan')
     parser.add_option('-d', '--target-datadirs', dest='target_datadirs', metavar='<target_datadirs>',
-                      help='segment datadirs on new hosts')
+                      help='Target segment datadirs on new and existing hosts')
     parser.add_option('--target-hosts-file', dest='target_hosts_file', metavar='<target_hosts_file>',
                       help='Target hosts list file. One host per line')
     parser.add_option('--target-datadirs-file', dest='target_datadirs_file', metavar='<target_datadirs_file>',
