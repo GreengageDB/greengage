@@ -262,6 +262,7 @@ TerminateMppBackends()
 	const char *term_buf = "select pg_terminate_backend(pid)"
 		" from pg_stat_activity"
 		" where pid != pg_backend_pid() and sess_id > 0";
+	MemoryContext oldcontext = CurrentMemoryContext;
 
 	PG_TRY();
 	{
@@ -269,6 +270,7 @@ TerminateMppBackends()
 	}
 	PG_CATCH();
 	{
+		MemoryContextSwitchTo(oldcontext);
 		FlushErrorState();
 		DisconnectAndDestroyAllGangs(true);
 	}
@@ -303,6 +305,7 @@ gatherRMInDoubtTransactions(int prepared_seconds, bool raiseError)
 				j,
 				rows;
 	bool		found;
+	MemoryContext oldcontext = CurrentMemoryContext;
 
 	snprintf(cmdbuf, sizeof(cmdbuf), "select gid from pg_prepared_xacts where "
 			 "prepared < now() - interval'%d seconds'",
@@ -314,6 +317,7 @@ gatherRMInDoubtTransactions(int prepared_seconds, bool raiseError)
 	}
 	PG_CATCH();
 	{
+		MemoryContextSwitchTo(oldcontext);
 		cdbdisp_clearCdbPgResults(&cdb_pgresults);
 
 		if (raiseError)

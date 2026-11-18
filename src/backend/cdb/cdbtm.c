@@ -567,8 +567,8 @@ doNotifyingCommitPrepared(void)
 {
 	bool		succeeded;
 	int			retry = 0;
-	volatile int savedInterruptHoldoffCount;
-	MemoryContext oldcontext = CurrentMemoryContext;;
+	int32		savedInterruptHoldoffCount;
+	MemoryContext oldcontext = CurrentMemoryContext;
 
 	elogif(Debug_print_full_dtm, LOG,
 		   "doNotifyingCommitPrepared entering in state = %s", DtxStateToString(MyTmGxactLocal->state));
@@ -688,8 +688,8 @@ retryAbortPrepared(void)
 {
 	int			retry = 0;
 	bool		succeeded = false;
-	volatile int savedInterruptHoldoffCount;
-	MemoryContext oldcontext = CurrentMemoryContext;;
+	int32		savedInterruptHoldoffCount;
+	MemoryContext oldcontext = CurrentMemoryContext;
 
 	while (!succeeded && dtx_phase2_retry_count > retry++)
 	{
@@ -763,7 +763,7 @@ static void
 doNotifyingAbort(void)
 {
 	bool		succeeded;
-	volatile int savedInterruptHoldoffCount;
+	int32		savedInterruptHoldoffCount;
 	MemoryContext oldcontext = CurrentMemoryContext;
 
 	elogif(Debug_print_full_dtm, LOG,
