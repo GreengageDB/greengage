@@ -34,7 +34,6 @@
 
 #include <libgen.h>
 #include <limits.h>
-#include <mntent.h>
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
 #include <sys/sysmacros.h>
@@ -185,22 +184,22 @@ fill_bdi_list(TblSpcIOLimit *iolimit)
 /*
  * Get BDI of a path.
  *
- * First find mountpoint from /proc/self/mounts, then find bdi of mountpoints.
- * Check this bdi is a disk or a partition(via check 'start' file in
+ * Take the device id of the filesystem containing the path from st_dev, then
+ * check this bdi is a disk or a partition(via check 'start' file in
  * /sys/dev/block/{bdi}), if it is a disk, just return it, if not, find the disk
  * and return it's bdi.
+ *
+ * Deliberately do not resolve the device through /proc/self/mounts and
+ * stat(mnt_fsname): the device node (e.g. under /dev/mapper) may not exist in
+ * a container even though the filesystem it backs is perfectly usable, while
+ * st_dev of the path itself is always available.
  */
 bdi_t
 get_bdi_of_path(const char *ori_path)
 {
 	int maj;
 	int min;
-	size_t max_match_len = 0;
-	struct mntent *mnt;
-	struct mntent result;
-	struct mntent match_mnt = {};
-	/* default size of glibc */
-	char mntent_buffer[PATH_MAX];
+	struct stat sb;
 	char sysfs_path[PATH_MAX];
 	char sysfs_path_start[PATH_MAX];
 	char real_path[PATH_MAX];
@@ -212,57 +211,15 @@ get_bdi_of_path(const char *ori_path)
 				(errcode(ERRCODE_IO_ERROR),
 				errmsg("io limit: cannot find realpath of %s, details: %m.", ori_path)));
 
-	FILE *fp = setmntent("/proc/self/mounts", "r");
-
-	/* find mount point of path */
-	while ((mnt = getmntent_r(fp, &result, mntent_buffer, sizeof(mntent_buffer))) != NULL)
-	{
-		size_t dir_len = strlen(mnt->mnt_dir);
-
-		if (strstr(path, mnt->mnt_dir) != NULL && strncmp(path, mnt->mnt_dir, dir_len) == 0)
-		{
-			if (dir_len > max_match_len)
-			{
-				max_match_len = dir_len;
-				match_mnt.mnt_passno = mnt->mnt_passno;
-				match_mnt.mnt_freq = mnt->mnt_freq;
-
-				/* copy string */
-				if (match_mnt.mnt_fsname != NULL)
-					pfree(match_mnt.mnt_fsname);
-				match_mnt.mnt_fsname = pstrdup(mnt->mnt_fsname);
-
-				if (match_mnt.mnt_dir != NULL)
-					pfree(match_mnt.mnt_dir);
-				match_mnt.mnt_dir = pstrdup(mnt->mnt_dir);
-
-				if (match_mnt.mnt_type != NULL)
-					pfree(match_mnt.mnt_type);
-				match_mnt.mnt_type = pstrdup(mnt->mnt_type);
-
-				if (match_mnt.mnt_opts != NULL)
-					pfree(match_mnt.mnt_opts);
-				match_mnt.mnt_opts = pstrdup(mnt->mnt_opts);
-			}
-		}
-	}
-	endmntent(fp);
-
-	struct stat sb;
-	if (stat(match_mnt.mnt_fsname, &sb) == -1)
+	if (stat(path, &sb) == -1)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_IO_ERROR),
-				 errmsg("cannot find disk of %s, details: %m", path),
-				 errhint("mount point of %s is: %s", path, match_mnt.mnt_fsname)));
+				 errmsg("cannot find disk of %s, details: %m", path)));
 	}
-	pfree(match_mnt.mnt_fsname);
-	pfree(match_mnt.mnt_dir);
-	pfree(match_mnt.mnt_type);
-	pfree(match_mnt.mnt_opts);
 
-	maj = major(sb.st_rdev);
-	min = minor(sb.st_rdev);
+	maj = major(sb.st_dev);
+	min = minor(sb.st_dev);
 
 	snprintf(sysfs_path, sizeof(sysfs_path), "/sys/dev/block/%d:%d", maj, min);
 
