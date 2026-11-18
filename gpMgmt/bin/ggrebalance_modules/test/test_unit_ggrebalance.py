@@ -89,6 +89,44 @@ class TestRebalanceUtilityCLI(GpTestCase):
         sys.argv = self.old_sys_argv
         super(TestRebalanceUtilityCLI, self).tearDown()
 
+    # The tests below set the options directly instead of parsing a command
+    # line, because 'open' is mocked in setUp(), and optparse can't be
+    # instantiated again. The attribute name is taken from the parser to check
+    # that validate_options() looks at the attribute '--seed' is stored to.
+    def set_seed(self, value):
+        setattr(self.options, self.parser.get_option('--seed').dest, value)
+
+    def check_seed_is_incompatible_with(self, option, seed=1):
+        setattr(self.options, option, True)
+        self.set_seed(seed)
+        with self.assertRaises(SystemExit):
+            self.subject.validate_options(self.options, self.args, self.parser)
+        self.subject.logger.error.assert_any_call(
+            f"Can't use together options '--{option.replace('_', '-')}' and '--seed'")
+
+    def test_seed_is_incompatible_with_rollback(self):
+        self.check_seed_is_incompatible_with('rollback_required')
+
+    def test_seed_is_incompatible_with_clean(self):
+        self.check_seed_is_incompatible_with('clean_required')
+
+    # 0 is a valid seed, so it should be treated as a set option too
+    def test_zero_seed_is_incompatible_with_rollback(self):
+        self.check_seed_is_incompatible_with('rollback_required', seed=0)
+
+    def test_zero_seed_is_incompatible_with_clean(self):
+        self.check_seed_is_incompatible_with('clean_required', seed=0)
+
+    def test_zero_seed_is_accepted(self):
+        self.set_seed(0)
+        self.subject.validate_options(self.options, self.args, self.parser)
+
+    def test_negative_seed_is_rejected(self):
+        self.set_seed(-1)
+        with self.assertRaises(SystemExit):
+            self.subject.validate_options(self.options, self.args, self.parser)
+        self.subject.logger.error.assert_any_call('Invalid value of --seed. Must be >= 0')
+
     @patch('gppylib.db.dbconn.query', side_effect=mock_query)
     @patch('gppylib.db.dbconn.execSQL')
     @patch('gppylib.db.dbconn.connect', return_value=MagicMock())

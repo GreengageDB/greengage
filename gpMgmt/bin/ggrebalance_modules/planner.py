@@ -792,8 +792,9 @@ class Planner:
                                                                          self.resolver)
         id_to_host = {v: k for k, v in host_mapping.items()}
         self.logger.info("Planning rebalance moves. Can take up to 60s.")
-        if self.options.solver_seed:
-            planning_seed_value = self.options.solver_seed
+        # 0 is a valid seed, so compare with None instead of checking truthiness
+        if self.options.seed is not None:
+            planning_seed_value = self.options.seed
         else:
             planning_seed_value = int.from_bytes(os.urandom(16) , 'big')
         self.logger.info(f"Running randomized plan improvement with seed:{planning_seed_value}")
