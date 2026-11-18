@@ -582,8 +582,35 @@ select * from part_mixed;
  17 | 18
 (10 rows)
 
+-- Test that foreign table statistic is used in estimation of selectivity.
+create server file_server5 foreign data wrapper file_fdw;
+create foreign table ft5 (
+	a int,
+	b int
+) server file_server5
+options ( filename '@abs_srcdir@/data/part3.csv', format 'csv');
+create table part_stats (a int, b int) distributed by (a) partition by range (b) (start (0) end (30) every (10));
+insert into part_stats select i, i % 20 from generate_series(1, 10000) i;
+alter table part_stats exchange partition for (25) with table ft5;
+analyze part_stats;
+explain select * from part_stats where a in (5,10,15,20,25);
+                                            QUERY PLAN                                            
+--------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.26 rows=6 width=8)
+   ->  Result  (cost=0.00..862.26 rows=2 width=8)
+         Filter: (part_stats.a = ANY ('{5,10,15,20,25}'::integer[]))
+         ->  Append  (cost=0.00..862.15 rows=3367 width=8)
+               ->  Dynamic Seq Scan on part_stats  (cost=0.00..431.07 rows=3334 width=8)
+                     Number of partitions to scan: 2 (out of 3)
+               ->  Redistribute Motion 1:3  (slice2)  (cost=0.00..431.01 rows=34 width=8)
+                     ->  Dynamic Foreign Scan on part_stats  (cost=0.00..431.00 rows=100 width=8)
+                           Number of partitions to scan: 1 (out of 3)
+ Optimizer: GPORCA
+(10 rows)
+
 drop table if exists filter_table;
 drop table if exists part_mixed cascade;
+drop table if exists part_stats;
 drop external table if exists p_e1;
 NOTICE:  foreign table "p_e1" does not exist, skipping
 drop external table if exists p_e2;
@@ -592,3 +619,4 @@ drop table if exists p_0;
 drop table if exists p_1;
 drop table if exists p_2;
 drop table if exists p_3;
+drop table if exists ft5;

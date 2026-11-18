@@ -32,6 +32,12 @@ private:
 
 	CBitSet *m_selected_parts{nullptr};
 
+	// Disjunction of selected child partition's constraints after static pruning
+	CConstraint *m_partition_cnstrs_disj{nullptr};
+
+	// Has done static pruning
+	BOOL m_static_pruned{false};
+
 public:
 	CLogicalDynamicForeignGet(const CLogicalDynamicForeignGet &) = delete;
 
@@ -43,6 +49,8 @@ public:
 							  CColRefArray *pdrgpcrOutput,
 							  CColRef2dArray *pdrgpdrgpcrPart,
 							  IMdIdArray *partition_mdids,
+							  CConstraint *partition_cnstrs_disj,
+							  BOOL static_pruned,
 							  CBitSet *selected_parts, OID foreign_server_oid,
 							  IMDRelation::Ereldistrpolicy exec_location);
 
@@ -75,6 +83,20 @@ public:
 	GetForeignServerOid() const
 	{
 		return m_foreign_server_oid;
+	}
+
+	// return disjunctive constraint of selected partitions
+	CConstraint *
+	GetPartitionConstraintsDisj() const
+	{
+		return m_partition_cnstrs_disj;
+	}
+
+	// return whether static pruning is performed
+	BOOL
+	FStaticPruned() const
+	{
+		return m_static_pruned;
 	}
 
 	IMDRelation::Ereldistrpolicy
@@ -116,6 +138,10 @@ public:
 	// derive statistics
 	IStatistics *PstatsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl,
 							  IStatisticsArray *stats_ctxt) const override;
+
+	// derive stats from base table using filters on partition and/or index columns
+	IStatistics *PstatsDeriveFilter(CMemoryPool *mp, CExpressionHandle &exprhdl,
+									CExpression *pexprFilter) const;
 
 	// stat promise
 	EStatPromise

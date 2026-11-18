@@ -254,11 +254,29 @@ ALTER TABLE part_mixed ATTACH PARTITION p_3 FOR VALUES FROM (30) TO (40);
 explain (costs off) select * from part_mixed;
 select * from part_mixed;
 
+-- Test that foreign table statistic is used in estimation of selectivity.
+create server file_server5 foreign data wrapper file_fdw;
+create foreign table ft5 (
+	a int,
+	b int
+) server file_server5
+options ( filename '@abs_srcdir@/data/part3.csv', format 'csv');
+
+create table part_stats (a int, b int) distributed by (a) partition by range (b) (start (0) end (30) every (10));
+insert into part_stats select i, i % 20 from generate_series(1, 10000) i;
+alter table part_stats exchange partition for (25) with table ft5;
+
+analyze part_stats;
+
+explain select * from part_stats where a in (5,10,15,20,25);
+
 drop table if exists filter_table;
 drop table if exists part_mixed cascade;
+drop table if exists part_stats;
 drop external table if exists p_e1;
 drop external table if exists p_e2;
 drop table if exists p_0;
 drop table if exists p_1;
 drop table if exists p_2;
 drop table if exists p_3;
+drop table if exists ft5;

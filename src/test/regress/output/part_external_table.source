@@ -579,8 +579,37 @@ select * from part_mixed;
  17 | 18
 (10 rows)
 
+-- Test that foreign table statistic is used in estimation of selectivity.
+create server file_server5 foreign data wrapper file_fdw;
+create foreign table ft5 (
+	a int,
+	b int
+) server file_server5
+options ( filename '@abs_srcdir@/data/part3.csv', format 'csv');
+create table part_stats (a int, b int) distributed by (a) partition by range (b) (start (0) end (30) every (10));
+insert into part_stats select i, i % 20 from generate_series(1, 10000) i;
+alter table part_stats exchange partition for (25) with table ft5;
+analyze part_stats;
+explain select * from part_stats where a in (5,10,15,20,25);
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Append  (cost=0.00..70.00 rows=15 width=8)
+   ->  Gather Motion 2:1  (slice1; segments: 2)  (cost=0.00..29.15 rows=5 width=8)
+         ->  Seq Scan on part_stats_1_prt_1  (cost=0.00..29.08 rows=2 width=8)
+               Filter: (a = ANY ('{5,10,15,20,25}'::integer[]))
+   ->  Gather Motion 2:1  (slice2; segments: 2)  (cost=0.00..29.15 rows=5 width=8)
+         ->  Seq Scan on part_stats_1_prt_2  (cost=0.00..29.08 rows=2 width=8)
+               Filter: (a = ANY ('{5,10,15,20,25}'::integer[]))
+   ->  Foreign Scan on part_stats_1_prt_3  (cost=0.00..11.63 rows=5 width=8)
+         Filter: (a = ANY ('{5,10,15,20,25}'::integer[]))
+         Foreign File: @abs_srcdir@/data/part3.csv
+         Foreign File Size: 592 b
+ Optimizer: Postgres-based planner
+(12 rows)
+
 drop table if exists filter_table;
 drop table if exists part_mixed cascade;
+drop table if exists part_stats;
 drop external table if exists p_e1;
 NOTICE:  foreign table "p_e1" does not exist, skipping
 drop external table if exists p_e2;
@@ -589,3 +618,4 @@ drop table if exists p_0;
 drop table if exists p_1;
 drop table if exists p_2;
 drop table if exists p_3;
+drop table if exists ft5;
