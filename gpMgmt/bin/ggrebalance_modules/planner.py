@@ -1225,11 +1225,7 @@ class Planner:
         
         # Phase 3: Move mirror from intermediate to final location (primary's original host)
         final_datadir = mirror_move.target_datadir
-        final_port = port_allocator.allocate_port(
-            host=mirror_move.dstHost,
-            current_port=mirror_move.seg.getSegmentPort(),
-            is_mirror=True
-        )
+        final_port = mirror_move.target_port
         
         # Create a copy of mirror segment with updated location (now on intermediate)
         intermediate_seg = copy.deepcopy(mirror_move.seg)

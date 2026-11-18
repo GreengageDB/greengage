@@ -1612,7 +1612,74 @@ class TestPortAllocatorIntegration(GpTestCase):
         # Move content 2 mirror from host1 to host2
         port_m = allocator.allocate_port(host2, current_port=7000, is_mirror=True)
         self.assertEqual(port_m, 7001)  # 7000 in use, get next
-    
+
+    def test_mirror_move_schenario(self):
+        """Test port allocation when rebalance needs to move a mirror to an intemediate host"""
+        segments = [
+            self._create_segment(1, 0, 'host1', 6000, 'p'),
+            self._create_segment(2, 1, 'host2', 6000, 'p'),
+            self._create_segment(3, 2, 'host3', 7000, 'p'),
+            self._create_segment(4, 0, 'host2', 7000, 'm'),
+            self._create_segment(5, 1, 'host3', 7001, 'm'),
+            self._create_segment(6, 2, 'host1', 7000, 'm'),
+        ]
+        gparray_mock = Mock(spec=gparray.GpArray)
+        gparray_mock.getSegDbList.return_value = segments
+
+        host1 = Host(hostname='host1', address='10.0.0.1', status=HostStatus.ACTIVE)
+        host2 = Host(hostname='host2', address='10.0.0.2', status=HostStatus.ACTIVE)
+        host3 = Host(hostname='host3', address='10.0.0.3', status=HostStatus.ACTIVE)
+
+        """
+        This test assumes that logical moves are created in form_moves(),
+        and that it is also responsible for allocating new ports on the
+        target hosts.
+
+        To avoid dealing with planning, simulate this behavior manually.
+        """
+        moved_primary = segments[0]
+        moved_mirror = segments[3]
+
+        allocator = PortAllocator(gparray_mock, self.logger, False)
+        new_primary_port = allocator.allocate_port(host2, moved_primary.port, False)
+        new_mirror_port = allocator.allocate_port(host1, moved_mirror.port, True)
+
+        primary_move = LogicalMove(
+            seg = moved_primary,
+            srcHost = host1,
+            dstHost = host2,
+            target_datadir = moved_primary.datadir,
+            target_port = new_primary_port,
+            segment_size = 1024
+        )
+        mirror_move = LogicalMove(
+            seg = moved_mirror,
+            srcHost = host2,
+            dstHost = host1,
+            target_datadir = moved_mirror.datadir,
+            target_port = new_mirror_port,
+            segment_size = 1024
+        )
+
+        """
+        Preparations are done, now check the ports of the decomposed phases.
+
+        It is expected that:
+            - Phase 1 should allocate a new port on the intemediate host,
+              because it hasn't been done in form_moves().
+              Ports 7000 and 7001 are already taken, so it uses port 7002.
+            - Phase 2 and 3 should use 'target_port' that is specified in
+              the move.
+        """
+        planner = Mock()
+        phase1, phase2, phase3 = Planner.decompose_swap(planner, primary_move, mirror_move, host3, allocator)
+        self.assertEqual(phase1.dstHost.hostname, "host3")
+        self.assertEqual(phase1.target_port, 7002)
+        self.assertEqual(phase2.dstHost.hostname, "host2")
+        self.assertEqual(phase2.target_port, new_primary_port)
+        self.assertEqual(phase3.dstHost.hostname, "host1")
+        self.assertEqual(phase3.target_port, new_mirror_port)
+
     def test_rebalance_after_failure(self):
         """Test rebalance scenario after segment failure and recovery"""
         # Scenario: segment recovered with different port, need to rebalance
