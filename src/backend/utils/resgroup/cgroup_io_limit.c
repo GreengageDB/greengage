@@ -45,6 +45,7 @@ const char *IOconfigFields[4] = {"rbps", "wbps", "riops", "wiops"};
 const char	*IOStatFields[4] = {"rbytes", "wbytes", "rios", "wios"};
 
 static int bdi_cmp(const void *a, const void *b);
+static bdi_t get_bdi_from_sysfs(int maj, int min, const char *path);
 
 typedef struct BDICmp
 {
@@ -183,62 +184,6 @@ fill_bdi_list(TblSpcIOLimit *iolimit)
 }
 
 /*
- * Get BDI of the block device {maj:min} via sysfs.
- *
- * Check this bdi is a disk or a partition(via check 'start' file in
- * /sys/dev/block/{bdi}), if it is a disk, just return it, if not, find the
- * disk and return it's bdi.
- */
-static bdi_t
-get_bdi_from_sysfs(int maj, int min, const char *path)
-{
-	char sysfs_path[PATH_MAX];
-	char sysfs_path_start[PATH_MAX];
-	char real_path[PATH_MAX];
-
-	snprintf(sysfs_path, sizeof(sysfs_path), "/sys/dev/block/%d:%d", maj, min);
-
-	snprintf(sysfs_path_start, sizeof(sysfs_path_start), "%s/start", sysfs_path);
-
-	if (access(sysfs_path_start, F_OK) == -1)
-		return make_bdi(maj, min);
-
-	char *res = realpath(sysfs_path, real_path);
-	if (res == NULL)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_IO_ERROR),
-				errmsg("io limit: cannot find realpath of %s, details: %m.", sysfs_path)));
-	}
-
-	dirname(real_path);
-
-	snprintf(real_path + strlen(real_path), sizeof(real_path) - strlen(real_path), "/dev");
-
-	FILE *f = fopen(real_path, "r");
-	if (f == NULL)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_IO_ERROR),
-				 errmsg("cannot find disk of %s\n", path)));
-	}
-
-	int parent_maj;
-	int parent_min;
-	int scan_result = fscanf(f, "%d:%d", &parent_maj, &parent_min);
-	if (scan_result < 2)
-	{
-		fclose(f);
-		ereport(ERROR,
-				(errcode(ERRCODE_IO_ERROR),
-				errmsg("io limit: cannot read block device id from %s, details: %m.", real_path)));
-	}
-	fclose(f);
-
-	return make_bdi(parent_maj, parent_min);
-}
-
-/*
  * Get BDI of a path via /proc/self/mounts.
  *
  * Find the covering mount entry and stat its device name. Used as a fallback
@@ -305,6 +250,62 @@ get_bdi_from_mounts(const char *path)
 	pfree(match_mnt.mnt_opts);
 
 	return get_bdi_from_sysfs(major(sb.st_rdev), minor(sb.st_rdev), path);
+}
+
+/*
+ * Get BDI of the block device {maj:min} via sysfs.
+ *
+ * Check this bdi is a disk or a partition(via check 'start' file in
+ * /sys/dev/block/{bdi}), if it is a disk, just return it, if not, find the
+ * disk and return it's bdi.
+ */
+static bdi_t
+get_bdi_from_sysfs(int maj, int min, const char *path)
+{
+	char sysfs_path[PATH_MAX];
+	char sysfs_path_start[PATH_MAX];
+	char real_path[PATH_MAX];
+
+	snprintf(sysfs_path, sizeof(sysfs_path), "/sys/dev/block/%d:%d", maj, min);
+
+	snprintf(sysfs_path_start, sizeof(sysfs_path_start), "%s/start", sysfs_path);
+
+	if (access(sysfs_path_start, F_OK) == -1)
+		return make_bdi(maj, min);
+
+	char *res = realpath(sysfs_path, real_path);
+	if (res == NULL)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_IO_ERROR),
+				errmsg("io limit: cannot find realpath of %s, details: %m.", sysfs_path)));
+	}
+
+	dirname(real_path);
+
+	snprintf(real_path + strlen(real_path), sizeof(real_path) - strlen(real_path), "/dev");
+
+	FILE *f = fopen(real_path, "r");
+	if (f == NULL)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_IO_ERROR),
+				 errmsg("cannot find disk of %s\n", path)));
+	}
+
+	int parent_maj;
+	int parent_min;
+	int scan_result = fscanf(f, "%d:%d", &parent_maj, &parent_min);
+	if (scan_result < 2)
+	{
+		fclose(f);
+		ereport(ERROR,
+				(errcode(ERRCODE_IO_ERROR),
+				errmsg("io limit: cannot read block device id from %s, details: %m.", real_path)));
+	}
+	fclose(f);
+
+	return make_bdi(parent_maj, parent_min);
 }
 
 /*
