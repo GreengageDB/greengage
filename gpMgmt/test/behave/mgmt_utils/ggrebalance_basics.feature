@@ -175,3 +175,29 @@ Feature: ggrebalance behave tests
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 4, row count = 100
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 4, row count = 100
+
+    # The main state machine is suspended at the start of the planning state, and gets
+    # SIGINT there. No sub-state machine is running at this moment, so ggrebalance must
+    # stop right away: no planning, no rebalance schema, nothing to continue afterwards.
+    @ggrebalance_sigint_during_planning
+    Scenario: test 5. check that ggrebalance interrupted during planning stops without creating the rebalance schema
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
+         And all files in gpAdminLogs directory are deleted
+        When set fault inject "on_enter_STATE_PLANNING_STARTED_begin"
+         And set fault inject type to suspend
+         And the user asynchronously runs "ggrebalance --non-interactive-mode -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'" and the process is saved
+         And the user waits till ggrebalance prints "Init gparray from catalog" in the logs (with timeout of "60" sec)
+         And waiting "5" seconds
+         And the user asynchronously sets up to end ggrebalance process with SIGINT
+         And the user waits till ggrebalance prints "shutdown requested" in the logs (with timeout of "60" sec)
+         And unset fault inject
+        Then the async process finished with a return code of 1
+         And ggrebalance should not print "Planning rebalance moves" to logfile with latest timestamp
+         And ggrebalance should not print "Created "ggrebalance" schema" to logfile with latest timestamp
+         And ggrebalance should not print "Rebalance was interrupted" to logfile with latest timestamp
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance -c --non-interactive-mode"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Rebalance schema doesn't exist. Cleanup is not required." to logfile with latest timestamp
