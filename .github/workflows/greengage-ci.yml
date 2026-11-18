@@ -61,10 +61,6 @@ jobs:
   regression-tests:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
-    strategy:
-      fail-fast: false
-      matrix:
-        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -72,17 +68,14 @@ jobs:
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v51
     with:
       version: 7
-      target_os: ${{ matrix.target_os }}
+      target_os: ubuntu
+      target_os_version: "24.04"
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   orca-tests:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
-    strategy:
-      fail-fast: false
-      matrix:
-        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -90,17 +83,14 @@ jobs:
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-orca.yml@v51
     with:
       version: 7
-      target_os: ${{ matrix.target_os }}
+      target_os: ubuntu
+      target_os_version: "24.04"
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   resgroup-tests:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
-    strategy:
-      fail-fast: false
-      matrix:
-        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -108,17 +98,14 @@ jobs:
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@v31
     with:
       version: 7
-      target_os: ${{ matrix.target_os }}
+      target_os: ubuntu
+      target_os_version: "24.04"
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   resgroup-v2-tests:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
-    strategy:
-      fail-fast: false
-      matrix:
-        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -126,17 +113,14 @@ jobs:
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup-v2.yml@v57
     with:
       version: 7
-      target_os: ${{ matrix.target_os }}
+      target_os: ubuntu
+      target_os_version: "24.04"
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   jit-tests:
     needs: build
     if: github.event_name == 'pull_request'  # Only for PR
-    strategy:
-      fail-fast: false
-      matrix:
-        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -144,7 +128,8 @@ jobs:
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-jit.yml@v51
     with:
       version: 7
-      target_os: ${{ matrix.target_os }}
+      target_os: ubuntu
+      target_os_version: "24.04"
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
