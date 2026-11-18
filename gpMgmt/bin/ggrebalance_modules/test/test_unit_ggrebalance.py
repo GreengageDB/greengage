@@ -307,6 +307,7 @@ class TestHostsOptions(GpTestCase):
         self.options.target_hosts = "172.20.0.7, 172.20.0.8, 172.20.0.9"
         mockHostResolver.return_value.resolve_hostname.side_effect = ['172.20.0.6', '172.20.0.7', '172.20.0.8', '172.20.0.9']
         mockHostResolver.return_value.resolve_ip.side_effect = ['sdw2', 'sdw3', 'sdw4']
+        mockHostResolver.return_value.find_matching_hostname.return_value = None
         mockHostResolver.return_value.get_address.side_effect = ['172.20.0.6', '172.20.0.7', '172.20.0.8', '172.20.0.9']
         planner = Planner(logger=Mock(),
                           dburl=Mock(),
@@ -315,6 +316,72 @@ class TestHostsOptions(GpTestCase):
         self.assertEqual(len(planner.target_hosts), 4)
         self.assertTrue(planner.target_hosts[3].status == HostStatus.NEW)
         self.assertTrue(planner.target_hosts[0].status == HostStatus.DECOMMISSIONED)
+
+    # 'balanced_grouped_6' cluster consists of 'cdw', 'sdw1' and 'sdw2'. The names
+    # ending with '.example.com' are the other names of the same machines, and
+    # 'sdw3.example.com' is a machine, which is not a part of the cluster.
+    HOST_ADDRESSES = {
+        'cdw': '172.20.0.5',
+        'sdw1': '172.20.0.6',
+        'sdw1.example.com': '172.20.0.6',
+        'sdw2': '172.20.0.7',
+        'sdw2.example.com': '172.20.0.7',
+        'sdw3.example.com': '172.20.0.8',
+    }
+
+    @staticmethod
+    def fake_getaddrinfo(hostname, *args):
+        if hostname not in TestHostsOptions.HOST_ADDRESSES:
+            raise socket.gaierror(f'Name or service not known: {hostname}')
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', (TestHostsOptions.HOST_ADDRESSES[hostname], 0))]
+
+    def plan_hosts(self) -> Planner:
+        with patch('socket.getaddrinfo', side_effect=TestHostsOptions.fake_getaddrinfo):
+            return Planner(logger=Mock(),
+                           dburl=Mock(),
+                           gpArray=initGparrayFromFile('balanced_grouped_6'),
+                           options=self.options)
+
+    def test_remove_hosts_alias(self):
+        self.options.remove_hosts = "sdw2.example.com"
+        planner = self.plan_hosts()
+        statuses = {host.hostname: host.status for host in planner.target_hosts}
+        self.assertEqual(statuses, {'sdw1': HostStatus.ACTIVE, 'sdw2': HostStatus.DECOMMISSIONED})
+        self.assertTrue(planner.host_set_changed)
+
+    def test_target_hosts_alias(self):
+        self.options.target_hosts = "sdw1, sdw2.example.com"
+        planner = self.plan_hosts()
+        statuses = {host.hostname: host.status for host in planner.target_hosts}
+        self.assertEqual(statuses, {'sdw1': HostStatus.ACTIVE, 'sdw2': HostStatus.ACTIVE})
+        self.assertFalse(planner.host_set_changed)
+
+    def test_target_hosts_alias_and_new_host(self):
+        self.options.target_hosts = "sdw1.example.com, sdw3.example.com"
+        planner = self.plan_hosts()
+        statuses = {host.hostname: host.status for host in planner.target_hosts}
+        self.assertEqual(statuses, {'sdw1': HostStatus.ACTIVE,
+                                    'sdw2': HostStatus.DECOMMISSIONED,
+                                    'sdw3.example.com': HostStatus.NEW})
+        self.assertTrue(planner.host_set_changed)
+
+    def test_target_hosts_same_host_twice(self):
+        self.options.target_hosts = "sdw1, sdw2, sdw2.example.com"
+        with self.assertRaises(ValidationError) as ctx:
+            self.plan_hosts()
+        self.assertIn("--target-hosts: Hosts 'sdw2' and 'sdw2.example.com' refer to the same host 'sdw2'", str(ctx.exception))
+
+    def test_remove_hosts_same_host_twice(self):
+        self.options.remove_hosts = "sdw2.example.com, sdw2"
+        with self.assertRaises(ValidationError) as ctx:
+            self.plan_hosts()
+        self.assertIn("--remove-hosts: Hosts 'sdw2.example.com' and 'sdw2' refer to the same host 'sdw2'", str(ctx.exception))
+
+    def test_add_hosts_alias(self):
+        self.options.add_hosts = "sdw2.example.com"
+        with self.assertRaises(ValidationError) as ctx:
+            self.plan_hosts()
+        self.assertIn("--add-hosts: Host 'sdw2.example.com' already exists in cluster as 'sdw2'", str(ctx.exception))
 
 if __name__ == '__main__':
     run_tests()
