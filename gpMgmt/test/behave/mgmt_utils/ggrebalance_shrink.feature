@@ -131,7 +131,63 @@ Feature: ggrebalance behave tests
         | fault_segment_stop_dbid_3                                                   |
         | before_set_status_test_db_2.test_schema_2.test_table_1                      |
 
-    Scenario Outline: test 1.3. test shrink continue after cluster restart
+    Scenario Outline: test 1.3. shrink - check continue after interrupted state following segments stop
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1"
+         And segment information for content 1 is saved in context
+         And all files in gpAdminLogs directory are deleted
+         And set fault inject "<fault_name>"
+         And database "test_db_1" exists
+         And schema "test_schema_1" exists in "test_db_1"
+         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "100" rows
+         And there is a "ao" table "test_schema_1.test_table_2" in "test_db_1" with "100" rows
+         And there is a "heap" partition table "test_schema_1.part_test_table_1" in "test_db_1" with "100" rows
+         And there is a "ao" partition table "test_schema_1.part_test_table_2" in "test_db_1" with "100" rows
+         And there is an unlogged "heap" table "test_schema_1.unlogged_test_table_1" in "test_db_1" with "100" rows
+         And a materialized view "test_schema_1.mv_test_table_1" exists on table "test_schema_1.test_table_1"
+         And database "gptest" exists
+         And the user create a writable external table with name "ext_test"
+         And database "test_db_2" exists
+         And schema "test_schema_2" exists in "test_db_2"
+         And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
+         And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
+        When the user runs "ggrebalance -x 1 --parallel 1 --batch-size 1 --skip-rebalance"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
+         And unset fault inject
+        When the user runs "ggrebalance -x 1 --parallel 1 --batch-size 1 --skip-rebalance"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "Can't start a new operation, because the previous one was interrupted" to logfile with latest timestamp
+        When the user runs "ggrebalance -x 1 --parallel 1 --batch-size 1 --skip-rebalance"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "Can't start a new operation, because the previous one was interrupted" to logfile with latest timestamp
+        When user will answer "yes" to the prompt "Proceed with continue?"
+         And the user runs "ggrebalance --parallel 1 --batch-size 1"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+         And clear user's answers
+         And verify no segment running for saved segment information
+         And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
+         And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 1, row count = 100
+         And distribution information from table "test_schema_1.part_test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
+         And distribution information from table "test_schema_1.part_test_table_2" with data in "test_db_1" is equal to segment count = 1, row count = 100
+         And distribution information from table "test_schema_1.unlogged_test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
+         And distribution information from table "test_schema_1.mv_test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
+         And the numsegments of table "ext_test" is 1
+         And distribution information from table "test_schema_2.test_table_1" with data in "test_db_2" is equal to segment count = 1, row count = 100
+         And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 1, row count = 100
+        When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
+        Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 1, row count = 100
+
+    Examples:
+            | fault_name                                                                  |
+            | on_enter_STATE_SHRINK_DONE_begin                                            |
+            | on_enter_STATE_SHRINK_DONE_end                                              |
+            | on_enter_STATE_END_begin                                                    |
+            | on_enter_STATE_END_end                                                      |
+
+    Scenario Outline: test 1.4. test shrink continue after cluster restart
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1"
@@ -184,7 +240,7 @@ Feature: ggrebalance behave tests
         | on_enter_STATE_SHRINK_CATALOG_STARTED_begin                                 |
         | on_enter_STATE_SHRINK_CATALOG_STARTED_end                                   |
 
-    Scenario: test 1.4. shrink - check continue after the catalog is shrunk, if the cluster is not shrunk by half
+    Scenario: test 1.5. shrink - check continue after the catalog is shrunk, if the cluster is not shrunk by half
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1", with 3 segments on each
