@@ -203,12 +203,18 @@ get_bdi_from_mounts(const char *path)
 
 	FILE *fp = setmntent("/proc/self/mounts", "r");
 
+	if (fp == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_IO_ERROR),
+				 errmsg("cannot open /proc/self/mounts, details: %m")));
+
 	/* find mount point of path */
 	while ((mnt = getmntent_r(fp, &result, mntent_buffer, sizeof(mntent_buffer))) != NULL)
 	{
 		size_t dir_len = strlen(mnt->mnt_dir);
 
-		if (strstr(path, mnt->mnt_dir) != NULL && strncmp(path, mnt->mnt_dir, dir_len) == 0)
+		if (strncmp(path, mnt->mnt_dir, dir_len) == 0 &&
+			(dir_len == 1 || path[dir_len] == '\0' || path[dir_len] == '/'))
 		{
 			if (dir_len > max_match_len)
 			{
@@ -236,6 +242,11 @@ get_bdi_from_mounts(const char *path)
 		}
 	}
 	endmntent(fp);
+
+	if (match_mnt.mnt_fsname == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_IO_ERROR),
+				 errmsg("cannot find mount point of %s", path)));
 
 	if (stat(match_mnt.mnt_fsname, &sb) == -1)
 	{
