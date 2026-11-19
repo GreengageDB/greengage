@@ -89,6 +89,16 @@ class TestRebalanceUtilityCLI(GpTestCase):
         sys.argv = self.old_sys_argv
         super(TestRebalanceUtilityCLI, self).tearDown()
 
+    def test_zero_target_segment_count_is_rejected_before_connecting(self):
+        options, args = self.parser.parse_args(
+            ['--non-interactive-mode', '-x', '0', '--skip-rebalance'])
+        with self.assertRaises(SystemExit) as exit_context:
+            self.subject.main(options, args, self.parser)
+        self.assertEqual(exit_context.exception.code, 1)
+        self.subject.logger.error.assert_called_once_with(
+            'Invalid value of --target-segment-count. It must be >= 1 and <= 4096')
+        self.subject.dbconn.connect.assert_not_called()
+
     # The tests below set the options directly instead of parsing a command
     # line, because 'open' is mocked in setUp(), and optparse can't be
     # instantiated again. The attribute name is taken from the parser to check
