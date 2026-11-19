@@ -11,6 +11,7 @@ from gppylib import gparray
 from ggrebalance_modules.test.config import initGparrayFromFile
 from ggrebalance_modules.rebalance_commons import (
     SegmentSize, 
+    DatadirInfo,
     DiskSpaceChecker, 
     DiskSpaceInfo,
     Host,
@@ -1092,6 +1093,45 @@ class TestResourceEstimator(GpTestCase):
         
         # Verify warning was logged
         self.logger.warning.assert_any_call("Skipping resource estimation")
+
+    def test_planner_selects_correct_intermediate_host(self):
+        """Test Planner selects correct intermediate host """
+
+        # sdw4 has much more available memory, so it should be selected as an intermediate host
+        def check_space_side_effect(hostname, *args, **kwargs):
+            available_kb = {'sdw3': 1024, 'sdw4': 8 * 1024 * 1024, 'sdw5': 1024}
+            return (True, available_kb[hostname], '')
+        def reserve_space_size_side_effect(hostname, *args, **kwargs):
+            self.assertEqual(hostname, 'sdw4') # Space should be reserved on the correct host
+
+        mock_resource_estimator = Mock()
+        mock_resource_estimator.check_space.side_effect = check_space_side_effect
+        mock_resource_estimator.reserve_space.side_effect = reserve_space_size_side_effect
+
+        planner = Mock()
+        planner.target_hosts = []
+        for i in range(1, 6):
+            planner.target_hosts.append(Host(
+                hostname=f'sdw{i}',
+                address=f'10.0.0.{i}',
+                datadir_info=DatadirInfo(
+                    f'/data/primary/gpseg{i}',
+                    f'/data/mirror/gpseg{i}'
+                ),
+                status=HostStatus.ACTIVE
+            ))
+
+        # Swap sdw1 and sdw2 roles, which requires an intermediate host
+        size = SegmentSize(datadir_size_kb=1024)
+        primary_move = Mock()
+        primary_move.dstHost = planner.target_hosts[1] # sdw2
+
+        mirror_move = Mock()
+        mirror_move.dstHost = planner.target_hosts[0] # sdw1
+        mirror_move.segment_size = size
+
+        intermediate_host = Planner.select_intermediate_host(planner, primary_move, mirror_move, {}, mock_resource_estimator)
+        self.assertEqual(intermediate_host.hostname, 'sdw4') # Check that the returned host is correct too
 
 class TestPortAllocator(GpTestCase):
     """

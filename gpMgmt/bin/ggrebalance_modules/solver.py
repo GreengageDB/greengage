@@ -20,6 +20,13 @@ Load = NewType('Load', int)
 # {'contendid' - > (primary host, mirror host)}
 Solution = Dict[ContentId, Tuple[HostId, HostId]]
 
+class LnsTimeoutException(Exception):
+    pass
+
+def _check_deadline(deadline: float) -> None:
+    if time.monotonic() >= deadline:
+        raise LnsTimeoutException("operation timed out")
+
 def _pack_solution(p: List[int], m: List[int], n: int) -> Solution:
     return {ContentId(i): (HostId(p[i]), HostId(m[i])) for i in range(n)}
 
@@ -800,11 +807,12 @@ class LNSRepairOperators:
         self.rng = rng
 
     def repair_greedy(self, primary_mapping: List[HostId], mirror_mapping: List[HostId],
-                   destroyed: Set[ContentId]) -> Tuple[List[HostId], List[HostId]]:
+                   destroyed: Set[ContentId], deadline: float) -> Tuple[List[HostId], List[HostId]]:
         """
         Greedy: Assign each segment to cheapest valid option immediately.
         O(n * h²) complexity. Fast, reliable.
         """
+        _check_deadline(deadline)
         new_primary_mapping = primary_mapping[:]
         new_mirror_mapping = mirror_mapping[:]
 
@@ -839,12 +847,14 @@ class LNSRepairOperators:
         self.rng.shuffle(destroyed_list)
 
         for seg in destroyed_list:
+            _check_deadline(deadline)
             orig_p = self.initial_primary_mapping[seg]
             orig_m = self.initial_mirror_mapping[seg]
             best_cost = float('inf')
             best_p, best_m = -1, -1
             # Try each primary
             for p_host in range(self.n_hosts):
+                _check_deadline(deadline)
                 if primary_capacity[p_host] <= 0:
                     continue
                 
@@ -940,12 +950,13 @@ class LNSRepairOperators:
             return valid
 
     def repair_most_constrained(self, primary_mapping: List[HostId], mirror_mapping: List[HostId],
-                           destroyed: Set[ContentId]) -> Tuple[List[HostId], List[HostId]]:
+                           destroyed: Set[ContentId], deadline: float) -> Tuple[List[HostId], List[HostId]]:
         """
         Most Constrained: Assign segments with fewest valid options first.
         Useful for sread strategy.
         O(n**2 * h**2) complexity.
         """
+        _check_deadline(deadline)
         new_primary_mapping = primary_mapping[:]
         new_mirror_mapping = mirror_mapping[:]
 
@@ -980,6 +991,7 @@ class LNSRepairOperators:
             candidates = []
 
             for seg in unassigned:
+                _check_deadline(deadline)
                 orig_p = self.initial_primary_mapping[seg]
                 orig_m = self.initial_mirror_mapping[seg]
 
@@ -987,6 +999,7 @@ class LNSRepairOperators:
                 valid_options = []
 
                 for p_host in range(self.n_hosts):
+                    _check_deadline(deadline)
                     if primary_capacity[p_host] <= 0:
                         continue
                     
@@ -1007,6 +1020,7 @@ class LNSRepairOperators:
                     candidates.append((float('inf'), float('inf'), seg, None))
                 else:
                     # Sort by cost and pick best
+                    _check_deadline(deadline)
                     valid_options.sort()
                     best_cost, best_p, best_m = valid_options[0]
                     option_count = len(valid_options)
@@ -1048,11 +1062,12 @@ class LNSRepairOperators:
         return new_primary_mapping, new_mirror_mapping
 
     def repair_regret(self, primary_mapping: List[HostId], mirror_mapping: List[HostId],
-                  destroyed: Set[ContentId]) -> Tuple[List[HostId], List[HostId]]:
+                  destroyed: Set[ContentId], deadline: float) -> Tuple[List[HostId], List[HostId]]:
         """
         Regret: Assign segment with highest regret score (best - 2nd_best) first.
         O(n**2 * h**2) complexity.
         """
+        _check_deadline(deadline)
         new_primary_mapping = primary_mapping[:]
         new_mirror_mapping = mirror_mapping[:]
 
@@ -1089,6 +1104,7 @@ class LNSRepairOperators:
 
             # Calculate regret for each unassigned segment
             for seg in unassigned:
+                _check_deadline(deadline)
                 orig_p = self.initial_primary_mapping[seg]
                 orig_m = self.initial_mirror_mapping[seg]
 
@@ -1096,6 +1112,7 @@ class LNSRepairOperators:
                 options = []
 
                 for p_host in range(self.n_hosts):
+                    _check_deadline(deadline)
                     if primary_capacity[p_host] <= 0:
                         continue
                     
@@ -1112,6 +1129,7 @@ class LNSRepairOperators:
                     continue  # Skip infeasible segments
                 
                 # Sort by cost
+                _check_deadline(deadline)
                 options.sort()
 
                 # Calculate regret
@@ -1223,40 +1241,46 @@ class LNS:
         return self.solver.target_primary_load
 
     def solve(self) -> Tuple[Solution, Cost]:
-        greedy_sol, _ = self.solver.solve()
+        greedy_sol, greedy_cost = self.solver.solve()
+        if self.config.timeout <= 0:
+            return greedy_sol, Cost(greedy_cost)
+
         p, m     = [greedy_sol[i][0] for i in range(self.n_segments)], [greedy_sol[i][1] for i in range(self.n_segments)]
         cost     = self.solver._calculate_cost(p, m)
-        best_p, best_m, best_cost = p[:], m[:], cost
+        # Publish mappings and cost together so a timeout always leaves a complete snapshot.
+        best_solution = (p[:], m[:], cost)
 
-        start = time.perf_counter()
+        # Share one deadline across iterations and the work inside each repair.
+        deadline = time.monotonic() + self.config.timeout
+        try:
+            for it in range(self.config.max_iterations):
+                _check_deadline(deadline)
+                frac     = self.rng.uniform(self.config.destroy_fraction_lo,
+                                            self.config.destroy_fraction_hi)
+                d_method = self.rng.choice(self._d_methods)
+                r_method = self.rng.choice(self._r_methods)
 
-        for it in range(self.config.max_iterations):
-            if time.perf_counter() - start > self.config.timeout:
-                if self.printing:
-                    print(f"\n Time limit reached ({self.config.timeout}s) at {it} iteration")
-                break
+                destroyed = self._apply_destroy(p, m, d_method, frac)
+                _check_deadline(deadline)
+                new_p_, new_m_  = self._apply_repair(p, m, r_method, destroyed, deadline)
+                _check_deadline(deadline)
 
-            frac     = self.rng.uniform(self.config.destroy_fraction_lo,
-                                        self.config.destroy_fraction_hi)
-            d_method = self.rng.choice(self._d_methods)
-            r_method = self.rng.choice(self._r_methods)
+                # repair couldn't assign
+                if any(new_p_[i] == -1 or new_m_[i] == -1 for i in range(self.n_segments)):
+                    continue
 
-            destroyed = self._apply_destroy(p, m, d_method, frac)
-            new_p_, new_m_  = self._apply_repair(p, m, r_method, destroyed)
-
-            # repair couldn't assign
-            if any(new_p_[i] == -1 or new_m_[i] == -1 for i in range(self.n_segments)):
-                continue
-
-            new_cost = self.solver._calculate_cost(new_p_, new_m_)
-            if new_cost < cost or (new_cost == cost and self.rng.random() < 0.5):
-                p, m, cost = new_p_, new_m_, new_cost
-                if cost < best_cost:
-                    if self.printing:
-                        print(f"Iter {it} ({d_method.value}) "
-                              f"({r_method.value}): NEW BEST = {cost}")
-                    best_p, best_m, best_cost = p[:], m[:], cost
-
+                new_cost = self.solver._calculate_cost(new_p_, new_m_)
+                if new_cost < cost or (new_cost == cost and self.rng.random() < 0.5):
+                    p, m, cost = new_p_, new_m_, new_cost
+                    if cost < best_solution[2]:
+                        best_solution = (p[:], m[:], cost)
+                        if self.printing:
+                            print(f"Iter {it} ({d_method.value}) "
+                                f"({r_method.value}): NEW BEST = {cost}")
+        except LnsTimeoutException:
+            if self.printing:
+                print(f"\n Time limit reached ({self.config.timeout}s) for LNS solver, use best completed solution")
+        best_p, best_m, best_cost = best_solution
         solution = _pack_solution(best_p, best_m, self.n_segments)
         assert(self.solver._validate_solution(solution))
         return solution, Cost(best_cost)
@@ -1282,10 +1306,11 @@ class LNS:
                       primary: List[HostId],
                       mirror: List[HostId],
                       method: LNSRepairMethod,
-                      destroyed: Set[ContentId]) -> Tuple[List[HostId], List[HostId]]:
+                      destroyed: Set[ContentId],
+                      deadline: float) -> Tuple[List[HostId], List[HostId]]:
         if method == LNSRepairMethod.GREEDY_REPAIR:
-            return self._repair.repair_greedy(primary, mirror, destroyed)
+            return self._repair.repair_greedy(primary, mirror, destroyed, deadline)
         elif method == LNSRepairMethod.CONSTRAINT_REPAIR:
-            return self._repair.repair_most_constrained(primary, mirror, destroyed)
+            return self._repair.repair_most_constrained(primary, mirror, destroyed, deadline)
         elif method == LNSRepairMethod.REGRET_REPAIR:
-            return self._repair.repair_regret(primary, mirror, destroyed)
+            return self._repair.repair_regret(primary, mirror, destroyed, deadline)
