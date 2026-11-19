@@ -137,7 +137,7 @@ def validate_options(options, args, parser):
             'Invalid argument.  parallel value must be >= 1 and <= %d' % MAX_PARALLEL_WORKERS)
         parser.exit(1)
     
-    if options.target_segment_count and (
+    if options.target_segment_count is not None and (
         options.target_segment_count < 1
         or options.target_segment_count > MAX_SEGMENTS):
         logger.error(
