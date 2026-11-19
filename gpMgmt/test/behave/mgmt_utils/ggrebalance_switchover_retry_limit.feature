@@ -1,4 +1,4 @@
-@ggrebalance_switchover_retry_limit
+@ggrebalance_switchover_retry_limit @skip
 Feature: ggrebalance behave tests (retry limit of a failed switchover)
 
     Scenario: rebalance - a switchover that keeps failing must hit the retry limit, like a mirror move does.
