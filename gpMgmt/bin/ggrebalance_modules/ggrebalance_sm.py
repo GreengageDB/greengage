@@ -493,7 +493,12 @@ class RebalanceSM:
         down_segs = [seg for seg in gp_array.getSegDbList() if seg.isSegmentDown()]
         for step in error_steps:
             self.logger.info(f'Processing error status for switchover step: {str(step)}')
-            if interactive_check_yesno(self.options.interactive, None, 'Retry step?', default = 'Y'):
+
+            allow_retry = step.isRetryAllowed()
+            if not allow_retry:
+                self.logger.warning("We've run out of retry attempts")
+
+            if allow_retry and interactive_check_yesno(self.options.interactive, None, 'Retry step?', default = 'Y'):
                 if step.isRollback():
                     self.logger.info('Plan to retry rollback step')
                     step.setStatus(RebalanceStep.Status.PLANNED, True)
