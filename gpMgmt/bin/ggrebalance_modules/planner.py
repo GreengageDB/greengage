@@ -540,13 +540,20 @@ class Planner:
             check_exists: bool = False,
             check_not_exists: bool = False) -> List[str]:
             """
-            Parse comma-separated host list, resolve IPs to hostnames, and validate
+            Parse comma-separated host list, resolve IPs to hostnames, and validate.
+            A host that is already a part of the cluster is returned under the
+            name it has in the cluster configuration, no matter how the user
+            specified it (alias, FQDN or any other name of the same machine).
+            The callers compare the result with the cluster hostnames as plain
+            strings.
 
             Returns:
                 List of resolved hostnames
             """
             hosts_list = [h.strip() for h in hosts_input.split(',')]
             resolved_hosts = []
+            # resolved hostname -> host as it was specified by the user
+            specified_as = {}
 
             for host in hosts_list:
                 # Resolve IP to hostname if needed
@@ -558,20 +565,32 @@ class Planner:
                     hostname = host
                     self.resolver.resolve_hostname(hostname)
 
-                # Check existence constraints
-                if check_exists or check_not_exists:
+                if hostname in existing_hosts:
+                    matching_host = hostname
+                else:
                     matching_host = self.resolver.find_matching_hostname(hostname, existing_hostname_list)
 
-                    if check_not_exists and matching_host:
-                        raise ValidationError(
-                            f"{option_name}: Host '{host}' already exists in cluster "
-                            f"as '{matching_host}'"
-                        )
+                # Check existence constraints
+                if check_not_exists and matching_host:
+                    raise ValidationError(
+                        f"{option_name}: Host '{host}' already exists in cluster "
+                        f"as '{matching_host}'"
+                    )
 
-                    if check_exists and not matching_host:
-                        raise ValidationError(
-                            f"{option_name}: Host '{host}' does not exist in cluster"
-                        )
+                if check_exists and not matching_host:
+                    raise ValidationError(
+                        f"{option_name}: Host '{host}' does not exist in cluster"
+                    )
+
+                if matching_host:
+                    hostname = matching_host
+
+                if hostname in specified_as:
+                    raise ValidationError(
+                        f"{option_name}: Hosts '{specified_as[hostname]}' and '{host}' "
+                        f"refer to the same host '{hostname}'"
+                    )
+                specified_as[hostname] = host
 
                 resolved_hosts.append(hostname)
 
@@ -773,8 +792,9 @@ class Planner:
                                                                          self.resolver)
         id_to_host = {v: k for k, v in host_mapping.items()}
         self.logger.info("Planning rebalance moves. Can take up to 60s.")
-        if self.options.solver_seed:
-            planning_seed_value = self.options.solver_seed
+        # 0 is a valid seed, so compare with None instead of checking truthiness
+        if self.options.seed is not None:
+            planning_seed_value = self.options.seed
         else:
             planning_seed_value = int.from_bytes(os.urandom(16) , 'big')
         self.logger.info(f"Running randomized plan improvement with seed:{planning_seed_value}")
