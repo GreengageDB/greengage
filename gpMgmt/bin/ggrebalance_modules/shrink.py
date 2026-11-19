@@ -558,7 +558,11 @@ class GGShrink:
 
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_DONE(self) -> None:
-        os.remove(self.gparray_dump_file)
+        # We may repeat this step after an interrupt,
+        # so cleanup the file only if it hasn't been
+        # done yet
+        if os.path.exists(self.gparray_dump_file):
+            os.remove(self.gparray_dump_file)
         self.logger.info('Shrink is complete')
         self.trigger('move_to_STATE_END')
 
