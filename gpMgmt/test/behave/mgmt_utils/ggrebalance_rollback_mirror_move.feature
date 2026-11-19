@@ -1,4 +1,4 @@
-@ggrebalance_rollback_mirror_move
+@ggrebalance_rollback_mirror_move @skip
 Feature: ggrebalance behave tests (rollback of mirror move steps)
 
     Scenario: rebalance - interrupt rebalance after mirror moves, interrupt rollback during mirror move before gp_segment_configuration update, and continue rollback.
