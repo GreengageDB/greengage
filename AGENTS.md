@@ -58,8 +58,17 @@ debug/assertions/fault-injection/dependencies, `dist` for release builds;
 `Debug/` or `Release/`). If `config.status` already exists, keep its prefix and
 flags and run incremental `make -j"$(nproc)" && make install`.
 
-Source `greengage_path.sh` and `gpdemo-env.sh` in every `docker exec` shell
-(`$GPHOME` is empty without them):
+After bootstrap, enter a login shell as `gpadmin`:
+
+```bash
+docker exec -it -u root gpdb6_dev sudo -i -u gpadmin
+```
+
+Use a login shell so `USER=gpadmin` is set. `docker exec -u gpadmin` alone
+does not guarantee this variable, which `gpMgmt` and some regression tests
+rely on. Substitute the running container's name when reusing one.
+Source `greengage_path.sh` after login and `gpdemo-env.sh` before running
+cluster tests.
 
 ```bash
 cd /home/gpadmin/gpdb_src
