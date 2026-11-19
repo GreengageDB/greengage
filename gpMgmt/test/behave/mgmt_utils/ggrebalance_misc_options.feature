@@ -1208,3 +1208,33 @@ Feature: ggrebalance behave tests (misc options scenarios)
         When the user runs "ggrebalance -n 1 --non-interactive-mode"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+
+    # A host can be passed to ggrebalance by any of its names, not only by the one stored
+    # in gp_segment_configuration. Here "sdw3" is given by another DNS name of the same
+    # machine (the one reverse DNS returns for its address).
+    @ggrebalance_hosts_given_as_alias
+    Scenario: test 23. Check '--remove-hosts-file', when the host is given by a name other than the cluster hostname.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
+         And all files in gpAdminLogs directory are deleted
+         And there is a file "/tmp/ggrebalance_remove_hosts" with hosts "sdw3", where "sdw3" is given by its another DNS name
+        When the user runs "ggrebalance --show-plan --non-interactive-mode -x 6 --skip-resource-estimation --remove-hosts-file /tmp/ggrebalance_remove_hosts -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should not print "Cluster is already balanced" to logfile with latest timestamp
+         And ggrebalance should print "-BALANCE MOVES-" to logfile with latest timestamp
+         And ggrebalance should print "From: sdw3:" to logfile with latest timestamp
+         And ggrebalance should not print "To:   sdw3" to logfile with latest timestamp
+
+    @ggrebalance_hosts_given_as_alias
+    Scenario: test 24. Check '--target-hosts-file', when the host is given by a name other than the cluster hostname.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
+         And all files in gpAdminLogs directory are deleted
+         And there is a file "/tmp/ggrebalance_target_hosts" with hosts "sdw1, sdw2, sdw3", where "sdw3" is given by its another DNS name
+        # the target host set is equal to the current one, so there is nothing to move
+        When the user runs "ggrebalance --show-plan --non-interactive-mode -x 6 --skip-resource-estimation --target-hosts-file /tmp/ggrebalance_target_hosts -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Cluster is already balanced" to logfile with latest timestamp
+         And ggrebalance should not print "From: sdw3:" to logfile with latest timestamp
