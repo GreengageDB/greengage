@@ -27,14 +27,39 @@ docker run -d --name gpdb6_dev --privileged \
   bash -c 'ssh-keygen -A && /usr/sbin/sshd && sleep infinity'
 ```
 
-One-time bootstrap inside a fresh container (as `root` in `/home/gpadmin`):
+From the host, set up `gpadmin` once in the fresh container. For a new
+account, use the checkout user's numeric UID and GID so builds can write to
+the bind mount without changing its permissions.
 
 ```bash
-git config --global --add safe.directory '*'
-source gpdb_src/concourse/scripts/common.bash
-install_gpdb
-./gpdb_src/concourse/scripts/setup_gpadmin_user.bash
+docker exec -i -u root -e DEV_UID="$(id -u)" -e DEV_GID="$(id -g)" \
+  gpdb6_dev bash -se <<'BOOTSTRAP'
+if ! id gpadmin >/dev/null 2>&1; then
+  getent group "$DEV_GID" >/dev/null || groupadd -g "$DEV_GID" gpadmin
+  useradd -M -u "$DEV_UID" -g "$DEV_GID" -d /home/gpadmin -s /bin/bash gpadmin
+fi
+# Change only the container's home directory, not its mounted contents.
+chown gpadmin:"$(id -g gpadmin)" /home/gpadmin
+sudo -i -u gpadmin bash -se <<'GPADMIN'
+if ! test -w "$HOME/gpdb_src" || ! test -w "$HOME/gpdb_src/src/test"; then
+  echo 'gpadmin cannot write to the checkout or src/test mount' >&2
+  exit 1
+fi
+umask 077
+mkdir -p "$HOME/.ssh"
+if [ ! -f "$HOME/.ssh/id_rsa" ]; then
+  ssh-keygen -q -t rsa -N '' -f "$HOME/.ssh/id_rsa"
+fi
+cat "$HOME/.ssh/id_rsa.pub" >> "$HOME/.ssh/authorized_keys"
+printf 'localhost,0.0.0.0,%s %s\n' "$(hostname)" \
+  "$(cat /etc/ssh/ssh_host_ed25519_key.pub)" >> "$HOME/.ssh/known_hosts"
+ssh -o BatchMode=yes "$(hostname)" true
+GPADMIN
+BOOTSTRAP
 ```
+
+Do not run `concourse/scripts/setup_gpadmin_user.bash` against a bind-mounted
+checkout, it's too broad.
 
 Container traps:
 
@@ -75,11 +100,11 @@ cd /home/gpadmin/gpdb_src
 
 # Initial configure + debug build + install via gpAux:
 make -C gpAux GPROOT=/usr/local \
-  DEVPATH=/usr/local/greengage-db-devel \
+  DEVPATH="$HOME/greengage-db-devel" \
   PARALLEL_MAKE_OPTS=-j"$(nproc)" devel
 
 # Incremental rebuilds after initial configure:
-source /usr/local/greengage-db-devel/greengage_path.sh
+source "$HOME/greengage-db-devel/greengage_path.sh"
 export PGDATABASE=postgres
 make -j"$(nproc)" && make install
 
