@@ -127,7 +127,7 @@ CLogicalDynamicForeignGet::PopCopyWithRemappedColumns(
 	m_partition_mdids->AddRef();
 	m_selected_parts->AddRef();
 	CConstraint *partition_cnstrs_disj = nullptr;
-	if (m_partition_cnstrs_disj)
+	if (nullptr != m_partition_cnstrs_disj)
 	{
 		partition_cnstrs_disj =
 			m_partition_cnstrs_disj->PcnstrCopyWithRemappedColumns(
@@ -179,7 +179,7 @@ CLogicalDynamicForeignGet::PstatsDerive(CMemoryPool *mp,
 ) const
 {
 	CExpression *expr = nullptr;
-	if (m_partition_cnstrs_disj)
+	if (nullptr != m_partition_cnstrs_disj)
 	{
 		expr = m_partition_cnstrs_disj->PexprScalar(mp);
 	}
@@ -243,7 +243,7 @@ CLogicalDynamicForeignGet::PstatsDeriveFilter(CMemoryPool *mp,
 		// derive stats
 		pexprFilter->Release();
 		CConstraint *cnstrDisj = dyn_get->GetPartitionConstraintsDisj();
-		if (cnstrDisj)
+		if (nullptr != cnstrDisj)
 		{
 			pexprFilterNew = cnstrDisj->PexprScalar(mp);
 			pexprFilterNew->AddRef();
@@ -279,7 +279,7 @@ CLogicalDynamicForeignGet::PstatsDeriveFilter(CMemoryPool *mp,
 		DOUBLE unpruned_partitions_rows = 0;
 		for (ULONG ul = 0; ul < partition_mdids->Size(); ++ul)
 		{
-			if (selected_partitions && !selected_partitions->Get(ul))
+			if (nullptr != selected_partitions && !selected_partitions->Get(ul))
 			{
 				continue;
 			}
@@ -310,7 +310,7 @@ CLogicalDynamicForeignGet::PstatsDeriveFilter(CMemoryPool *mp,
 				}
 				rel_stats_mdid->Release();
 			}
-			unpruned_partitions_rows += part_rows.Get();
+			unpruned_partitions_rows += std::max(0.0, part_rows.Get());
 		}
 		selected_partitions_rows =
 			std::max(selected_partitions_rows.Get(), unpruned_partitions_rows);

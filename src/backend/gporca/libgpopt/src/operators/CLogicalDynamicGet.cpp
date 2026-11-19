@@ -317,7 +317,7 @@ CLogicalDynamicGet::PstatsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl,
 ) const
 {
 	CExpression *expr = nullptr;
-	if (m_partition_cnstrs_disj)
+	if (nullptr != m_partition_cnstrs_disj)
 	{
 		expr = m_partition_cnstrs_disj->PexprScalar(mp);
 	}
@@ -379,7 +379,7 @@ CLogicalDynamicGet::PstatsDeriveFilter(CMemoryPool *mp,
 		// derive stats
 		pexprFilter->Release();
 		CConstraint *cnstrDisj = dyn_get->GetPartitionConstraintsDisj();
-		if (cnstrDisj)
+		if (nullptr != cnstrDisj)
 		{
 			pexprFilterNew = cnstrDisj->PexprScalar(mp);
 			pexprFilterNew->AddRef();
@@ -415,7 +415,7 @@ CLogicalDynamicGet::PstatsDeriveFilter(CMemoryPool *mp,
 		DOUBLE unpruned_partitions_rows = 0;
 		for (ULONG ul = 0; ul < partition_mdids->Size(); ++ul)
 		{
-			if (selected_partitions && !selected_partitions->Get(ul))
+			if (nullptr != selected_partitions && !selected_partitions->Get(ul))
 			{
 				continue;
 			}
@@ -426,22 +426,27 @@ CLogicalDynamicGet::PstatsDeriveFilter(CMemoryPool *mp,
 
 			// Accessing Relation objects is significantly faster than
 			// accessing RelationStatistics objects.
-			// However, if the row count in the Relation object is -1,
+			// However, if the row count in the Relation object is -1 or 0,
 			// retrieve row count from RelationStatistics objects.
 			// This functions as a backup mechanism, given our
 			// expectation that all leaf Relations should have a
 			// non-negative row count, and negative row count just
 			// indicates the leaf stats are missing from the Relation
 			// objects, which could happen in old MDP's.
-			if (-1 == part_rows)
+			if (-1 == part_rows || 0.0 == part_rows)
 			{
 				partition_mdid->AddRef();
 				CMDIdRelStats *rel_stats_mdid = GPOS_NEW(mp)
 					CMDIdRelStats(CMDIdGPDB::CastMdid(partition_mdid));
-				part_rows = md_accessor->Pmdrelstats(rel_stats_mdid)->Rows();
+				const IMDRelStats *rel_stats =
+					md_accessor->Pmdrelstats(rel_stats_mdid);
+				if (!rel_stats->IsEmpty())
+				{
+					part_rows = rel_stats->Rows();
+				}
 				rel_stats_mdid->Release();
 			}
-			unpruned_partitions_rows += part_rows.Get();
+			unpruned_partitions_rows += std::max(0.0, part_rows.Get());
 		}
 		selected_partitions_rows =
 			std::max(selected_partitions_rows.Get(), unpruned_partitions_rows);
