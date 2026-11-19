@@ -515,7 +515,7 @@ WHERE tt.event_ts &gt;= tq.ets AND
     <dxl:Plan Id="1" SpaceSize="12">
       <dxl:Sequence>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="2598.003284" Rows="1.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="2598.003174" Rows="1.000000" Width="8"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="1" Alias="event_ts">
@@ -644,7 +644,7 @@ WHERE tt.event_ts &gt;= tq.ets AND
         </dxl:CTEProducer>
         <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="2167.003031" Rows="3.000000" Width="8"/>
+            <dxl:Cost StartupCost="0" TotalCost="2167.002922" Rows="1.000000" Width="4"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="1" Alias="event_ts">
@@ -655,7 +655,7 @@ WHERE tt.event_ts &gt;= tq.ets AND
           <dxl:SortingColumnList/>
           <dxl:Sequence>
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="2167.002912" Rows="3.000000" Width="8"/>
+              <dxl:Cost StartupCost="0" TotalCost="2167.002902" Rows="1.000000" Width="4"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="1" Alias="event_ts">
@@ -799,7 +799,7 @@ WHERE tt.event_ts &gt;= tq.ets AND
             </dxl:PartitionSelector>
             <dxl:Append IsTarget="false" IsZapped="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="2167.002912" Rows="3.000000" Width="8"/>
+                <dxl:Cost StartupCost="0" TotalCost="2167.002902" Rows="1.000000" Width="4"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="1" Alias="event_ts">
