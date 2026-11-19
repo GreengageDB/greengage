@@ -111,10 +111,9 @@ OPTIONS
  Hosts list file format: one host per line.
 
 -d, --target-datadirs "<target_primary_datadir>,<target_mirror_datadir>"
- Set the target segment data directories (primary and mirror) if the cluster is
- expanded or if any new hosts are included in the cluster and segment data
- directories should be created on the hosts. Both paths for primary and
- for mirror should be specified.
+ Set the target segment data directories for primary and mirror segments moved
+ during rebalance. Target segment data directories apply to moves onto both 
+ existing and new hosts. Both paths for primary and for mirror should be specified.
 
 --target-datadirs-file <filename>
  Target segment data directories passed as a file.
