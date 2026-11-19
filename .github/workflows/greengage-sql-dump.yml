@@ -24,7 +24,7 @@ env:
     ''
     ) }}
   TARGET_OS: 'ubuntu'
-  TARGET_OS_VERSION: ${{ github.event.workflow_run.head_branch == '6.x' && '24.04' || '' }}
+  TARGET_OS_VERSION: '24.04'
 
 jobs:
   create-sql-dump-regression:
