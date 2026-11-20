@@ -101,9 +101,12 @@ static const struct
 static uint64
 pd_tid(void)
 {
-	/* real thread id; the event path is not signal context, and the raw
-	 * syscall is async-safe anyway */
-	return (uint64) syscall(SYS_gettid);
+	static __thread uint64 pd_tls_tid = 0;
+
+	/* one syscall per thread; the event path then pays a load+branch */
+	if (pd_tls_tid == 0)
+		pd_tls_tid = (uint64) syscall(SYS_gettid);
+	return pd_tls_tid;
 }
 
 void		pd_install(void);	/* forward */
