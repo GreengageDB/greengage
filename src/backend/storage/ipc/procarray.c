@@ -5365,9 +5365,12 @@ ResGroupMoveSignalTarget(int sessionId, void *slot, Oid groupId,
  * command. Thus, if function returned true in 'clean', it should be treated
  * as terminal state and all new calls to ResGroupMoveCheckTargetReady()
  * before calling ResGroupMoveSignalTarget() make no sense.
+ * If waitForCompletion is true, taking slot control is not terminal until
+ * the target has published the new session slot.
  */
-void
-ResGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result)
+static void
+resGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result,
+							 bool waitForCompletion)
 {
 	ProcArrayStruct *arrayP = procArray;
 
@@ -5395,17 +5398,31 @@ ResGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result)
 		if (proc->movetoCallerPid == MyProc->pid)
 		{
 			/*
+			 * An empty movetoResSlot with a valid movetoGroupId means that
+			 * the target has published the new session slot and completed
+			 * the move.
+			 */
+			if (proc->movetoResSlot == NULL &&
+				proc->movetoGroupId != InvalidOid)
+			{
+				*result = true;
+				*clean = true;
+			}
+			/*
 			 * InvalidOid of movetoGroupId means target process tried to
 			 * handle our command
 			 */
-			if (proc->movetoGroupId == InvalidOid)
+			else if (proc->movetoGroupId == InvalidOid)
 			{
 				/*
 				 * empty movetoResSlot means target process got all the
 				 * control over slot
 				 */
 				*result = (proc->movetoResSlot == NULL);
-				*clean = true;
+				if (*result && waitForCompletion)
+					*clean = false;
+				else
+					*clean = true;
 			}
 
 			/*
@@ -5426,11 +5443,23 @@ ResGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result)
 	LWLockRelease(ProcArrayLock);
 }
 
+void
+ResGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result)
+{
+	resGroupMoveCheckTargetReady(sessionId, clean, result, false);
+}
+
+void
+ResGroupMoveCheckTargetCompletion(int sessionId, bool *clean, bool *result)
+{
+	resGroupMoveCheckTargetReady(sessionId, clean, result, true);
+}
+
 /*
- * Notify initiator process that target process is ready to move to a new
- * group. This is an optional feature to speed up initiator's awakening.
- * Inititator will get the actual command result by changed movetoResSlot
- * and movetoGroupId values.
+ * Notify initiator process that target process has handled a move request.
+ * This is an optional feature to speed up initiator's awakening.
+ * Initiator will get the actual command result by changed movetoResSlot and
+ * movetoGroupId values.
  */
 void
 ResGroupMoveNotifyInitiator(pid_t callerPid)

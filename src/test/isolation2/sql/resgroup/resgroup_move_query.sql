@@ -159,7 +159,7 @@ SELECT is_session_in_group(pid, 'default_group') FROM pg_stat_activity WHERE wai
 2: SELECT gp_inject_fault('resource_group_give_away_after_latch', 'reset', dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
 2: SELECT gp_inject_fault('resource_group_give_away_after_latch', 'suspend', dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
 2: SET gp_resource_group_move_timeout = 1000;
-2&: SELECT pg_resgroup_move_query(pid, 'rg_move_query') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND rsgname='rg_move_query_small';
+2&: SELECT pg_resgroup_move_query(pid, 'rg_move_query') FROM (SELECT pid FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND rsgname='rg_move_query_small' ORDER BY pid) AS target;
 3: SELECT gp_wait_until_triggered_fault('resource_group_give_away_after_latch', 1, dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
 3: SELECT gp_inject_fault('resource_group_move_handler_before_qd_control', 'resume', dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
 3: SELECT gp_wait_until_triggered_fault('resource_group_move_handler_after_qd_control', 1, dbid) FROM gp_segment_configuration where role = 'p' and content = -1;

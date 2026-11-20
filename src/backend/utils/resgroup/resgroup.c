@@ -3526,8 +3526,6 @@ HandleMoveResourceGroup(void)
 		Assert(groupId != InvalidOid);
 		SIMPLE_FAULT_INJECTOR("resource_group_move_handler_after_qd_control");
 
-		ResGroupMoveNotifyInitiator(callerPid);
-
 		/* unassign the old resource group and release the old slot */
 		UnassignResGroup();
 
@@ -3539,6 +3537,12 @@ HandleMoveResourceGroup(void)
 
 		/* Init self */
 		self->caps = slot->caps;
+
+		SpinLockAcquire(&MyProc->movetoMutex);
+		MyProc->movetoGroupId = groupId;
+		SpinLockRelease(&MyProc->movetoMutex);
+
+		ResGroupMoveNotifyInitiator(callerPid);
 
 		/*
 		 * You may say it's ugly to notify entrydb process here, but not in
@@ -3681,14 +3685,16 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 	for (;;)
 	{
 		/*
-		 * In an infinite loop, call ResGroupMoveCheckTargetReady() to check whether
-		 * all target processes have received signal of RG move.
+		 * In an infinite loop, call ResGroupMoveCheckTargetCompletion() to check
+		 * whether the target process has completed the RG move.
 		 * If we have hit gp_resource_group_move_timeout, try to cancel the move
 		 * operation (no matter was target handled signal) and clean remained stuffs.
+		 * Once the target has taken slot control, wait for it to publish the new
+		 * session slot before reporting success.
 		 */
 		curTime = GetCurrentTimestamp();
 		timeout = gp_resource_group_move_timeout - (curTime - waitStart) / 1000;
-		if (timeout > 0)
+		if (timeout > 0 || (res && !clean))
 		{
 			PG_TRY();
 			{
@@ -3701,7 +3707,8 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 				CHECK_FOR_INTERRUPTS();
 
 				latchRes = WaitLatch(&MyProc->procLatch,
-				   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+				   WL_LATCH_SET | (timeout > 0 ? WL_TIMEOUT : 0) |
+				   WL_POSTMASTER_DEATH,
 				   timeout,
 				   PG_WAIT_RESOURCE_GROUP);
 
@@ -3733,12 +3740,11 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 
 		SIMPLE_FAULT_INJECTOR("resource_group_give_away_after_latch");
 
+		ResetLatch(&MyProc->procLatch);
 		clean = (latchRes & WL_TIMEOUT);
-		ResGroupMoveCheckTargetReady(sessionId, &clean, &res);
+		ResGroupMoveCheckTargetCompletion(sessionId, &clean, &res);
 		if (clean)
 			break;
-
-		ResetLatch(&MyProc->procLatch);
 	}
 
 	if (!res)
