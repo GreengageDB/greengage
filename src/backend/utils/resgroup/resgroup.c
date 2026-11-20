@@ -3539,7 +3539,7 @@ HandleMoveResourceGroup(void)
 		self->caps = slot->caps;
 
 		SpinLockAcquire(&MyProc->movetoMutex);
-		MyProc->movetoCompleted = true;
+		MyProc->movetoGroupId = groupId;
 		SpinLockRelease(&MyProc->movetoMutex);
 
 		ResGroupMoveNotifyInitiator(callerPid);
@@ -3685,8 +3685,8 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 	for (;;)
 	{
 		/*
-		 * In an infinite loop, call ResGroupMoveCheckTargetReady() to check whether
-		 * the target process has completed the RG move.
+		 * In an infinite loop, call ResGroupMoveCheckTargetCompletion() to check
+		 * whether the target process has completed the RG move.
 		 * If we have hit gp_resource_group_move_timeout, try to cancel the move
 		 * operation (no matter was target handled signal) and clean remained stuffs.
 		 * Once the target has taken slot control, wait for it to publish the new
@@ -3719,7 +3719,7 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 			PG_CATCH();
 			{
 				clean = true;
-				ResGroupMoveCheckTargetReady(sessionId, &clean, &res, false);
+				ResGroupMoveCheckTargetReady(sessionId, &clean, &res);
 				if (res)
 				{
 					/*
@@ -3742,7 +3742,7 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 
 		ResetLatch(&MyProc->procLatch);
 		clean = (latchRes & WL_TIMEOUT);
-		ResGroupMoveCheckTargetReady(sessionId, &clean, &res, true);
+		ResGroupMoveCheckTargetCompletion(sessionId, &clean, &res);
 		if (clean)
 			break;
 	}

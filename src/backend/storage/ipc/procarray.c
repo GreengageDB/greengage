@@ -5310,7 +5310,6 @@ ResGroupMoveSignalTarget(int sessionId, void *slot, Oid groupId,
 
 			proc->movetoResSlot = slot;
 			proc->movetoCallerPid = MyProc->pid;
-			proc->movetoCompleted = false;
 		}
 		proc->movetoGroupId = groupId;
 		SpinLockRelease(&proc->movetoMutex);
@@ -5322,7 +5321,6 @@ ResGroupMoveSignalTarget(int sessionId, void *slot, Oid groupId,
 			{
 				proc->movetoResSlot = NULL;
 				proc->movetoCallerPid = InvalidPid;
-				proc->movetoCompleted = false;
 			}
 			proc->movetoGroupId = InvalidOid;
 			SpinLockRelease(&proc->movetoMutex);
@@ -5370,8 +5368,8 @@ ResGroupMoveSignalTarget(int sessionId, void *slot, Oid groupId,
  * If waitForCompletion is true, taking slot control is not terminal until
  * the target has published the new session slot.
  */
-void
-ResGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result,
+static void
+resGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result,
 							 bool waitForCompletion)
 {
 	ProcArrayStruct *arrayP = procArray;
@@ -5400,10 +5398,21 @@ ResGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result,
 		if (proc->movetoCallerPid == MyProc->pid)
 		{
 			/*
+			 * An empty movetoResSlot with a valid movetoGroupId means that
+			 * the target has published the new session slot and completed
+			 * the move.
+			 */
+			if (proc->movetoResSlot == NULL &&
+				proc->movetoGroupId != InvalidOid)
+			{
+				*result = true;
+				*clean = true;
+			}
+			/*
 			 * InvalidOid of movetoGroupId means target process tried to
 			 * handle our command
 			 */
-			if (proc->movetoGroupId == InvalidOid)
+			else if (proc->movetoGroupId == InvalidOid)
 			{
 				/*
 				 * empty movetoResSlot means target process got all the
@@ -5411,7 +5420,7 @@ ResGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result,
 				 */
 				*result = (proc->movetoResSlot == NULL);
 				if (*result && waitForCompletion)
-					*clean = proc->movetoCompleted;
+					*clean = false;
 				else
 					*clean = true;
 			}
@@ -5426,7 +5435,6 @@ ResGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result,
 				proc->movetoResSlot = NULL;
 				proc->movetoGroupId = InvalidOid;
 				proc->movetoCallerPid = InvalidPid;
-				proc->movetoCompleted = false;
 			}
 		}
 		SpinLockRelease(&proc->movetoMutex);
@@ -5435,11 +5443,23 @@ ResGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result,
 	LWLockRelease(ProcArrayLock);
 }
 
+void
+ResGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result)
+{
+	resGroupMoveCheckTargetReady(sessionId, clean, result, false);
+}
+
+void
+ResGroupMoveCheckTargetCompletion(int sessionId, bool *clean, bool *result)
+{
+	resGroupMoveCheckTargetReady(sessionId, clean, result, true);
+}
+
 /*
  * Notify initiator process that target process has handled a move request.
  * This is an optional feature to speed up initiator's awakening.
- * Initiator will get the actual command result by changed movetoResSlot,
- * movetoGroupId and movetoCompleted values.
+ * Initiator will get the actual command result by changed movetoResSlot and
+ * movetoGroupId values.
  */
 void
 ResGroupMoveNotifyInitiator(pid_t callerPid)

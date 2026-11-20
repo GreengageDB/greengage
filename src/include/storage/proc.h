@@ -228,15 +228,12 @@ struct PGPROC
 								 * on QD; when slot become NULL, it means
 								 * target process got the control over it */
 	Oid 		movetoGroupId;  /* the resource group id move to; valid on
-								 * both QE and QD; when id become InvalidOid
-								 * on QD, it means target process attempted to
-								 * move process to this group and the result
-								 * is in movetoResSlot and movetoCompleted */
+								 * both QE and QD; on QD, InvalidOid means
+								 * target attempted the move; a valid id with
+								 * a NULL movetoResSlot means it completed */
 	pid_t		movetoCallerPid; /* pid of moving initiator; valid only on QD;
 								  * guards current moving command from another
 								  * commands */
-	bool		movetoCompleted; /* target published the new session slot;
-								  * valid only on QD */
 
 	/* Support for group XID clearing. */
 	/* true, if member of ProcArray group waiting for XID clear */
