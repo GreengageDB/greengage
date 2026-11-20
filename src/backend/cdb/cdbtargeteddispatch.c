@@ -18,12 +18,15 @@
 #include "cdb/cdbtargeteddispatch.h"
 #include "optimizer/clauses.h"
 #include "parser/parsetree.h"	/* for rt_fetch() */
+#include "nodes/extensible.h"
 #include "nodes/makefuncs.h"	/* for makeVar() */
 #include "utils/relcache.h"		/* RelationGetPartitioningKey() */
 #include "optimizer/optimizer.h"
 #include "optimizer/predtest_valueset.h"
+#include "optimizer/restrictinfo.h"
 
 #include "catalog/gp_distribution_policy.h"
+#include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
 
 #include "catalog/pg_proc.h"
@@ -34,6 +37,7 @@
 #include "cdb/cdbhash.h"
 #include "cdb/cdbllize.h"
 #include "cdb/cdbmutate.h"
+#include "cdb/cdbpathlocus.h"
 #include "cdb/cdbplan.h"
 #include "cdb/cdbvars.h"
 #include "cdb/cdbutil.h"
@@ -115,11 +119,12 @@ GetContentIdsFromPlanForSingleRelation(PlannerInfo *root, Plan *plan, int rangeT
 		 * since we will recurse to the child scan.
 		 */
 	}
-	else
+	else if (!IsA(plan, CustomScan))
 	{
+		/* A custom scan may keep children in its trees too. */
 		Assert(plan->lefttree == NULL);
 	}
-	Assert(plan->righttree == NULL);
+	Assert(plan->righttree == NULL || IsA(plan, CustomScan));
 
 	/* open and get relation info */
 	rte = planner_rt_fetch(rangeTableIndex, root);
@@ -529,6 +534,14 @@ DirectDispatchUpdateContentIdsFromPlan(PlannerInfo *root, Plan *plan)
 													 * foreign tables ...
 													 * so disable */
 			break;
+		case T_CustomScan:
+
+			/*
+			 * Only the custom path tells what the scan reads: see
+			 * DirectDispatchUpdateContentIdsFromCustomPath.
+			 */
+			DisableTargetedDispatch(&dispatchInfo);
+			break;
 		case T_SplitUpdate:
 			break;
 		default:
@@ -545,6 +558,71 @@ DirectDispatchUpdateContentIdsFromPlan(PlannerInfo *root, Plan *plan)
 		/* learned new info: merge it in */
 		MergeDirectDispatchCalculationInfo(&root->curSlice->directDispatch, &dispatchInfo);
 	}
+}
+
+/*
+ * Targeted dispatch for a custom scan, from its path: the plan alone does
+ * not tell where the provider's rows lie.
+ */
+void
+DirectDispatchUpdateContentIdsFromCustomPath(PlannerInfo *root,
+											 CustomPath *path, Plan *plan)
+{
+	DirectDispatchInfo dispatchInfo;
+	CustomScan *cscan = castNode(CustomScan, plan);
+	RelOptInfo *rel = path->path.parent;
+	Index		scanrelid = cscan->scan.scanrelid;
+	RangeTblEntry *rte = scanrelid > 0 ? planner_rt_fetch(scanrelid, root) : NULL;
+
+	InitDirectDispatchCalculationInfo(&dispatchInfo);
+
+	if (rte != NULL && rel->relid == scanrelid &&
+		rte->rtekind == RTE_RELATION && !rte->inh &&
+		(rte->relkind == RELKIND_RELATION ||
+		 rte->relkind == RELKIND_MATVIEW))
+	{
+		/*
+		 * A scan of a table returns only rows that pass the table's
+		 * restrictions, wherever the provider tests them, so its segments
+		 * follow from them as for a Seq Scan, where its rows lie as the
+		 * table's do. A provider that reads them from elsewhere, laid out
+		 * otherwise, says so in the path's locus. A Strewn locus, as of a
+		 * randomly distributed table, cannot tell, so the scan of such a
+		 * table goes to every segment. Nor can a HashedOJ one, which may put
+		 * a NULL key on any segment: the locus must be of the table's type,
+		 * which cdbpathlocus_equal does not check.
+		 */
+		CdbPathLocus table_locus = cdbpathlocus_from_baserel(root, rel);
+
+		if (path->path.locus.locustype == table_locus.locustype &&
+			cdbpathlocus_equal(path->path.locus, table_locus))
+			dispatchInfo = GetContentIdsFromPlanForSingleRelation(root, plan, scanrelid,
+																  extract_actual_clauses(rel->baserestrictinfo,
+																						 false));
+		else
+			DisableTargetedDispatch(&dispatchInfo);
+	}
+	else if (scanrelid == 0 && (cscan->flags & CUSTOMPATH_GP_CHILD_ROWS_ONLY))
+	{
+		/*
+		 * The rows come from the children only, as an Agg's do: the scans
+		 * under the custom scan set the segments.
+		 */
+	}
+	else
+	{
+		/*
+		 * The provider reads rows itself, from segments the core cannot
+		 * tell, as a foreign scan does: dispatch to every segment. So for
+		 * the parent of an inheritance tree or a partitioned table, whose
+		 * members may be distributed otherwise, and for a scan of a join or
+		 * an upper rel that reads a table itself (scanrelid).
+		 */
+		DisableTargetedDispatch(&dispatchInfo);
+	}
+
+	if (dispatchInfo.haveProcessedAnyCalculations)
+		MergeDirectDispatchCalculationInfo(&root->curSlice->directDispatch, &dispatchInfo);
 }
 
 void

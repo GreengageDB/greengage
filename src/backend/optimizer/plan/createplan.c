@@ -815,7 +815,14 @@ create_scan_plan(PlannerInfo *root, Path *best_path, int flags)
 	}
 
 	if (Gp_role == GP_ROLE_DISPATCH && root->config->gp_enable_direct_dispatch)
-		DirectDispatchUpdateContentIdsFromPlan(root, plan);
+	{
+		if (IsA(best_path, CustomPath))
+			DirectDispatchUpdateContentIdsFromCustomPath(root,
+														 (CustomPath *) best_path,
+														 plan);
+		else
+			DirectDispatchUpdateContentIdsFromPlan(root, plan);
+	}
 
 	/*
 	 * If there are any pseudoconstant clauses attached to this node, insert a
@@ -8102,6 +8109,10 @@ is_projection_capable_path(Path *path)
 			 * get relaxed later.
 			 */
 			return false;
+		case T_CustomScan:
+			/* As in PostgreSQL 15: only when the provider says so. */
+			return (castNode(CustomPath, path)->flags &
+					CUSTOMPATH_SUPPORT_PROJECTION) != 0;
 		default:
 			break;
 	}
@@ -8143,6 +8154,10 @@ is_projection_capable_plan(Plan *plan)
 			 * get relaxed later.
 			 */
 			return false;
+		case T_CustomScan:
+			/* As in PostgreSQL 15: only when the provider says so. */
+			return (((CustomScan *) plan)->flags &
+					CUSTOMPATH_SUPPORT_PROJECTION) != 0;
 		default:
 			break;
 	}
