@@ -65,13 +65,6 @@
 #include "utils/snapmgr.h"
 
 
-typedef enum AoExecutorBlockKind
-{
-	AoExecutorBlockKind_None = 0,
-	AoExecutorBlockKind_VarBlock,
-	AoExecutorBlockKind_SingleRow,
-	MaxAoExecutorBlockKind		/* must always be last */
-}			AoExecutorBlockKind;
 
 static void AppendOnlyExecutionReadBlock_SetSegmentFileNum(
 											   AppendOnlyExecutorReadBlock *executorReadBlock,
@@ -720,12 +713,6 @@ AppendOnlyExecutionReadBlock_SetPositionInfo(AppendOnlyExecutorReadBlock *execut
 	executorReadBlock->blockFirstRowNum = blockFirstRowNum;
 }
 
-static void
-AppendOnlyExecutionReadBlock_FinishedScanBlock(AppendOnlyExecutorReadBlock *executorReadBlock)
-{
-	executorReadBlock->blockFirstRowNum += executorReadBlock->rowCount;
-}
-
 /*
  * Initialize the ExecutorReadBlock once.  Assumed to be zeroed out before the call.
  */
@@ -820,30 +807,13 @@ AppendOnlyExecutorReadBlock_ResetCounts(AppendOnlyExecutorReadBlock *executorRea
  *       0, ...(all zeroes)...
  *     ]
  */
-static void
-AppendOnlyExecutorReadBlock_BindingInit(AppendOnlyExecutorReadBlock *executorReadBlock,
-									   TupleTableSlot *slot,
-									   int64 rowNum)
+void
+AppendOnlyExecutorReadBlock_BindingRebuild(AppendOnlyExecutorReadBlock *executorReadBlock,
+										   TupleDesc tupdesc,
+										   int largestAttnum)
 {
-	int segno = executorReadBlock->segmentFileNum;
-	int largestAttnum = executorReadBlock->curLargestAttnum;
 	MemoryContext oldContext;
 
-	Assert(executorReadBlock->attnum_to_rownum != NULL);
-
-	/* Find the number of attributes that are not missing in the row. */
-	while (largestAttnum < slot->tts_tupleDescriptor->natts && 
-			!AO_ATTR_VAL_IS_MISSING(rowNum, largestAttnum, segno, executorReadBlock->attnum_to_rownum))
-		largestAttnum++;
-
-	/*
-	 * If we already created the bindings and also the largest attnum have not changed, 
-	 * we do not need to recreate the bindings again.
-	 */
-	if (executorReadBlock->mt_bind && largestAttnum == executorReadBlock->curLargestAttnum)
-		return;
-
-	/* Otherwise, we have to create/recreate bindings */
 	oldContext = MemoryContextSwitchTo(executorReadBlock->memoryContext);
 
 	/* destroy the previous bindings */
@@ -856,7 +826,7 @@ AppendOnlyExecutorReadBlock_BindingInit(AppendOnlyExecutorReadBlock *executorRea
 	 * not using the tuple descriptor in the relation which could be different
 	 * in case like alter table rewrite.
 	 */
-	executorReadBlock->mt_bind = create_memtuple_binding(slot->tts_tupleDescriptor, largestAttnum);
+	executorReadBlock->mt_bind = create_memtuple_binding(tupdesc, largestAttnum);
 	MemoryContextSwitchTo(oldContext);
 
 	executorReadBlock->curLargestAttnum = largestAttnum;
@@ -889,7 +859,7 @@ AppendOnlyExecutorReadBlock_ProcessTuple(AppendOnlyExecutorReadBlock *executorRe
 	 */
 	Assert (slot);
 
-	AppendOnlyExecutorReadBlock_BindingInit(executorReadBlock, slot, rowNum);
+	AppendOnlyExecutorReadBlock_BindingInit(executorReadBlock, slot->tts_tupleDescriptor, rowNum);
 
 	{
 		Assert(executorReadBlock->mt_bind);
@@ -924,113 +894,26 @@ AppendOnlyExecutorReadBlock_ScanNextTuple(AppendOnlyExecutorReadBlock *executorR
 										  TupleTableSlot *slot)
 {
 	MemTuple	tuple;
+	int64		rowNum;
+	int32		tupleLen;
 
 	Assert(slot);
 
-	switch (executorReadBlock->executorBlockKind)
+	while (AppendOnlyExecutorReadBlock_NextTuple(executorReadBlock, &tuple,
+												 &rowNum, &tupleLen))
 	{
-		case AoExecutorBlockKind_VarBlock:
-
-			/*
-			 * get the next item (tuple) from the varblock
-			 */
-			while (true)
-			{
-				int			itemLen = 0;
-				uint8	   *itemPtr;
-				int64		rowNum;
-
-				itemPtr = VarBlockReaderGetNextItemPtr(
-													   &executorReadBlock->varBlockReader,
-													   &itemLen);
-
-				if (itemPtr == NULL)
-				{
-					/* no more items in the varblock, get new buffer */
-					AppendOnlyExecutionReadBlock_FinishedScanBlock(
-																   executorReadBlock);
-					return false;
-				}
-
-				executorReadBlock->currentItemCount++;
-
-				executorReadBlock->totalRowsScanned++;
-
-				if (itemLen > 0)
-				{
-					tuple = (MemTuple) itemPtr;
-
-					rowNum = executorReadBlock->blockFirstRowNum +
-						executorReadBlock->currentItemCount - INT64CONST(1);
-
-					if (AppendOnlyExecutorReadBlock_ProcessTuple(
-																 executorReadBlock,
-																 rowNum,
-																 tuple,
-																 itemLen,
-																 nkeys,
-																 key,
-																 slot))
-						return true;
-				}
-
-			}
-
-			/* varblock sanity check */
-			if (executorReadBlock->readerItemCount !=
-				executorReadBlock->currentItemCount)
-				elog(NOTICE, "Varblock mismatch: Reader count %d, found %d items\n",
-					 executorReadBlock->readerItemCount,
-					 executorReadBlock->currentItemCount);
-			break;
-
-		case AoExecutorBlockKind_SingleRow:
-			{
-				int32		singleRowLen;
-
-				if (executorReadBlock->singleRow == NULL)
-				{
-					AppendOnlyExecutionReadBlock_FinishedScanBlock(
-																   executorReadBlock);
-					return false;
-					/* Force fetching new block. */
-				}
-
-				Assert(executorReadBlock->singleRowLen != 0);
-
-				tuple = (MemTuple) executorReadBlock->singleRow;
-				singleRowLen = executorReadBlock->singleRowLen;
-
-				/*
-				 * Indicated used up for scan.
-				 */
-				executorReadBlock->singleRow = NULL;
-				executorReadBlock->singleRowLen = 0;
-
-				executorReadBlock->totalRowsScanned++;
-
-				if (AppendOnlyExecutorReadBlock_ProcessTuple(
-															 executorReadBlock,
-															 executorReadBlock->blockFirstRowNum,
-															 tuple,
-															 singleRowLen,
-															 nkeys,
-															 key,
-															 slot))
-					return true;
-			}
-			break;
-
-		default:
-			elog(ERROR, "Unrecognized append-only executor block kind: %d",
-				 executorReadBlock->executorBlockKind);
-			break;
+		if (AppendOnlyExecutorReadBlock_ProcessTuple(executorReadBlock,
+													 rowNum,
+													 tuple,
+													 tupleLen,
+													 nkeys,
+													 key,
+													 slot))
+			return true;
 	}
 
-	AppendOnlyExecutionReadBlock_FinishedScanBlock(
-												   executorReadBlock);
-	return false;
 	/* No match. */
+	return false;
 }
 
 static bool
@@ -1159,6 +1042,24 @@ getNextBlock(AppendOnlyScanDesc scan)
 	pgstat_count_buffer_read_ao(scan->aos_rd,
 								RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead));
 
+	return true;
+}
+
+/*
+ * Read the scan's next block, for a caller that walks its tuples itself with
+ * AppendOnlyExecutorReadBlock_NextTuple. False when all the segment files are
+ * done.
+ */
+bool
+appendonly_scan_next_block(AppendOnlyScanDesc scan)
+{
+	while (!getNextBlock(scan))
+	{
+		/* have we read all this relation's data. done! */
+		if (scan->aos_done_all_segfiles)
+			return false;
+	}
+	scan->needNextBuffer = false;
 	return true;
 }
 
@@ -1516,18 +1417,11 @@ appendonlygettup(AppendOnlyScanDesc scan,
 		if (scan->needNextBuffer)
 		{
 			/*
-			 * Get the next block. We call this function until we successfully
-			 * get a block to process, or finished reading all the data (all
+			 * Get the next block, or finish reading all the data (all
 			 * 'segment' files) for this relation.
 			 */
-			while (!getNextBlock(scan))
-			{
-				/* have we read all this relation's data. done! */
-				if (scan->aos_done_all_segfiles)
-					return false;
-			}
-
-			scan->needNextBuffer = false;
+			if (!appendonly_scan_next_block(scan))
+				return false;
 		}
 
 		found = AppendOnlyExecutorReadBlock_ScanNextTuple(&scan->executorReadBlock,

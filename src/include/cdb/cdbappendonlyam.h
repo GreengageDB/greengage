@@ -58,7 +58,7 @@
  * Check if an attribute value is missing in an AO/CO row according to the row number
  * and the mapping from attnum to "lastrownum" for the corresponding table/segment.
  *
- * See comment for AppendOnlyExecutorReadBlock_BindingInit() for an explanation 
+ * See comment for AppendOnlyExecutorReadBlock_BindingRebuild() for an explanation
  * on AO tables, which applies to CO tables as well.
  */
 #define AO_ATTR_VAL_IS_MISSING(rowNum, colno, segmentFileNum, attnum_to_rownum) \
@@ -125,6 +125,14 @@ typedef struct AppendOnlyInsertDescData
 
 typedef AppendOnlyInsertDescData *AppendOnlyInsertDesc;
 
+typedef enum AoExecutorBlockKind
+{
+	AoExecutorBlockKind_None = 0,
+	AoExecutorBlockKind_VarBlock,
+	AoExecutorBlockKind_SingleRow,
+	MaxAoExecutorBlockKind		/* must always be last */
+} AoExecutorBlockKind;
+
 typedef struct AppendOnlyExecutorReadBlock
 {
 	MemoryContext	memoryContext;
@@ -170,6 +178,108 @@ typedef struct AppendOnlyExecutorReadBlock
 	uint8			*singleRow;
 	int32			singleRowLen;
 } AppendOnlyExecutorReadBlock;
+
+/* All the rows of the current block are read: the next block's come after them. */
+static inline void
+AppendOnlyExecutionReadBlock_FinishedScanBlock(AppendOnlyExecutorReadBlock *executorReadBlock)
+{
+	executorReadBlock->blockFirstRowNum += executorReadBlock->rowCount;
+}
+
+/*
+ * The next tuple of the current block with its row number and length, or
+ * false at the block's end. A scan calls this for every row, also from an
+ * extension, where only an inline function can be inlined.
+ */
+static pg_attribute_always_inline bool
+AppendOnlyExecutorReadBlock_NextTuple(AppendOnlyExecutorReadBlock *executorReadBlock,
+									  MemTuple *tuple, int64 *rowNum, int32 *tupleLen)
+{
+	switch (executorReadBlock->executorBlockKind)
+	{
+		case AoExecutorBlockKind_VarBlock:
+			for (;;)
+			{
+				VarBlockByteLen itemLen = 0;
+				uint8	   *itemPtr;
+
+				itemPtr = VarBlockReaderGetNextItemPtrInline(&executorReadBlock->varBlockReader,
+															 &itemLen);
+				if (itemPtr == NULL)
+				{
+					/* no more items in the varblock, get new buffer */
+					AppendOnlyExecutionReadBlock_FinishedScanBlock(executorReadBlock);
+					return false;
+				}
+				executorReadBlock->currentItemCount++;
+				executorReadBlock->totalRowsScanned++;
+				if (itemLen > 0)
+				{
+					*tuple = (MemTuple) itemPtr;
+					*tupleLen = itemLen;
+					*rowNum = executorReadBlock->blockFirstRowNum +
+						executorReadBlock->currentItemCount - INT64CONST(1);
+					return true;
+				}
+			}
+
+		case AoExecutorBlockKind_SingleRow:
+			if (executorReadBlock->singleRow == NULL)
+			{
+				/* Force fetching new block. */
+				AppendOnlyExecutionReadBlock_FinishedScanBlock(executorReadBlock);
+				return false;
+			}
+			Assert(executorReadBlock->singleRowLen != 0);
+			*tuple = (MemTuple) executorReadBlock->singleRow;
+			*tupleLen = executorReadBlock->singleRowLen;
+			*rowNum = executorReadBlock->blockFirstRowNum;
+			/* Indicated used up for scan. */
+			executorReadBlock->singleRow = NULL;
+			executorReadBlock->singleRowLen = 0;
+			executorReadBlock->totalRowsScanned++;
+			return true;
+
+		default:
+			elog(ERROR, "Unrecognized append-only executor block kind: %d",
+				 executorReadBlock->executorBlockKind);
+			return false;
+	}
+}
+
+extern void AppendOnlyExecutorReadBlock_BindingRebuild(AppendOnlyExecutorReadBlock *executorReadBlock,
+													   TupleDesc tupdesc,
+													   int largestAttnum);
+
+/*
+ * Make the memtuple attribute bindings fit a row. Only the check that they fit
+ * is here, as a scan calls this for every row: see
+ * AppendOnlyExecutorReadBlock_BindingRebuild() for an explanation.
+ */
+static pg_attribute_always_inline void
+AppendOnlyExecutorReadBlock_BindingInit(AppendOnlyExecutorReadBlock *executorReadBlock,
+										TupleDesc tupdesc,
+										int64 rowNum)
+{
+	int			segno = executorReadBlock->segmentFileNum;
+	int			largestAttnum = executorReadBlock->curLargestAttnum;
+
+	Assert(executorReadBlock->attnum_to_rownum != NULL);
+
+	/* Find the number of attributes that are not missing in the row. */
+	while (largestAttnum < tupdesc->natts &&
+		   !AO_ATTR_VAL_IS_MISSING(rowNum, largestAttnum, segno, executorReadBlock->attnum_to_rownum))
+		largestAttnum++;
+
+	/*
+	 * If we already created the bindings and also the largest attnum have not
+	 * changed, we do not need to recreate the bindings again.
+	 */
+	if (likely(executorReadBlock->mt_bind && largestAttnum == executorReadBlock->curLargestAttnum))
+		return;
+
+	AppendOnlyExecutorReadBlock_BindingRebuild(executorReadBlock, tupdesc, largestAttnum);
+}
 
 /*
  * Descriptor for append-only table scans.
@@ -483,6 +593,7 @@ extern void appendonly_rescan(TableScanDesc scan, ScanKey key,
 								bool set_params, bool allow_strat,
 								bool allow_sync, bool allow_pagemode);
 extern void appendonly_endscan(TableScanDesc scan);
+extern bool appendonly_scan_next_block(AppendOnlyScanDesc scan);
 extern bool appendonly_getnextslot(TableScanDesc scan,
 								   ScanDirection direction,
 								   TupleTableSlot *slot);

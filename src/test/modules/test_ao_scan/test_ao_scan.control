@@ -1,0 +1,4 @@
+comment = 'Read append-only tables by blocks from an extension'
+default_version = '1.0'
+module_pathname = '$libdir/test_ao_scan'
+relocatable = true

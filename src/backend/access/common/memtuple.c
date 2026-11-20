@@ -137,32 +137,6 @@ add_null_save_aligned(MemTupleAttrBinding *bind, short *null_save_aligned, int i
 	return (bind->len == bind->len_aligned);
 }
 
-/* Compute how much bytes are saved by one byte in the null bit map */
-static inline short compute_null_save_b(short *null_saves, unsigned char b)
-{
-	unsigned int blow = (b & 0xF);
-	unsigned int bhigh = (b >> 4);
-
-	return null_saves[blow] + null_saves[16+bhigh];
-}
-
-/* compute the null saved bytes by the whole null bit map, by the attribute
- * physically precedes the one.
- */
-static inline int compute_null_save(short *null_saves, unsigned char *nullbitmaps, int nbyte, unsigned char nbit)
-{
-	int ret = 0;
-	int curr_byte = 0;
-	while(curr_byte < nbyte) 
-	{
-		ret += compute_null_save_b(null_saves, nullbitmaps[curr_byte]);
-		null_saves += 32;
-		++curr_byte;
-	}
-
-	ret += compute_null_save_b(null_saves, (nullbitmaps[nbyte] & (nbit-1)));
-	return ret;
-}
 		
 #undef MEMTUPLE_INLINE_CHARTYPE
 /* Determine if an attr should be treated as offset_len in memtuple */
@@ -547,32 +521,6 @@ compute_memtuple_size(MemTupleBinding *pbind, Datum *values, bool *isnull,
 }
 
 
-static inline char* memtuple_get_attr_ptr(char *start, MemTupleAttrBinding *bind, short *null_saves, unsigned char *nullp)
-{
-	int ns = 0;
-
-	if(nullp)
-		ns = compute_null_save(null_saves, nullp, bind->null_byte, bind->null_mask);
-	return start + bind->offset - ns;
-}
-
-static inline char* memtuple_get_attr_data_ptr(char *start, MemTupleAttrBinding *bind, short *null_saves, unsigned char* nullp)
-{
-	if(bind->flag == MTB_ByVal_Native || bind->flag == MTB_ByVal_Ptr)
-		return memtuple_get_attr_ptr(start, bind, null_saves, nullp);
-
-	if(bind->len == 2)
-		return start + (*(uint16 *) memtuple_get_attr_ptr(start, bind, null_saves, nullp));
-
-	Assert(bind->len == 4);
-	return start + (*(uint32 *) memtuple_get_attr_ptr(start, bind, null_saves, nullp));
-}
-
-static inline unsigned char *memtuple_get_nullp(MemTuple mtup)
-{
-	return mtup->PRIVATE_mt_bits;
-}
-
 /*
  * Form a memtuple from values and isnull. Returns a palloc'd tuple.
  *
@@ -817,45 +765,9 @@ memtuple_form_to(MemTupleBinding *pbind,
 	return mtup;
 }
 
-static Datum memtuple_getattr_by_alignment(MemTuple mtup, MemTupleBinding *pbind, int attnum, bool *isnull)
-{
-	bool hasnull = memtuple_get_hasnull(mtup);
-	unsigned char *nullp = hasnull ? memtuple_get_nullp(mtup) : NULL; 
-	char *start = (char *) mtup + (hasnull ? pbind->null_bitmap_extra_size : 0);
-
-	Datum ret;
-	MemTupleBindingCols *colbind = memtuple_get_islarge(mtup) ? &pbind->large_bind : &pbind->bind;
-	MemTupleAttrBinding *attrbind;
-
-	Assert(mtup && pbind && pbind->tupdesc);
-	Assert(attnum > 0 && attnum <= pbind->tupdesc->natts);
-
-	if(isnull)
-		*isnull = false;
-
-	/* input attnum is 1 based.  Make it 0 based */
-	--attnum;
-	attrbind = &(colbind->bindings[attnum]);
-	
-	/* null check */
-	if(hasnull && (nullp[attrbind->null_byte] & attrbind->null_mask))
-	{
-		if(isnull)
-			*isnull = true;
-		return 0;
-	}
-
-	short *null_saves = colbind->null_saves;
-	Assert(null_saves);
-
-	ret = fetchatt(TupleDescAttr(pbind->tupdesc, attnum), memtuple_get_attr_data_ptr(start, attrbind, null_saves, nullp));
-
-	return ret;
-}
-
 Datum memtuple_getattr(MemTuple mtup, MemTupleBinding *pbind, int attnum, bool *isnull)
 {
-	return memtuple_getattr_by_alignment(mtup, pbind, attnum, isnull);
+	return memtuple_getattr_inline(mtup, pbind, attnum, isnull);
 }
 
 /*
@@ -866,7 +778,7 @@ static void memtuple_get_values(MemTuple mtup, MemTupleBinding *pbind, Datum *da
 {
 	int i;
 	for(i=0; i<pbind->natts; ++i)
-		datum[i] = memtuple_getattr_by_alignment(mtup, pbind, i+1, &isnull[i]);
+		datum[i] = memtuple_getattr_inline(mtup, pbind, i + 1, &isnull[i]);
 	/* read the missing ones, if any */
 	for (; i<pbind->tupdesc->natts; ++i)
 		datum[i] = getmissingattr(pbind->tupdesc, i+1, &isnull[i]);
