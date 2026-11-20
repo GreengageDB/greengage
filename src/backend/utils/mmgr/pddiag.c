@@ -109,7 +109,7 @@ pd_tid(void)
 	return pd_tls_tid;
 }
 
-void		pd_install(void);	/* forward */
+static void pd_install(void); /* forward */
 static void pd_recheck(void);
 
 /* hook pointer: NULL in shipped builds -> the per-op cost is a single
@@ -136,7 +136,7 @@ pd_event(int is_alloc, void *ptr, void *ctx, uint64 size, uint64 n)
 }
 
 /* ownership micro-logs: fixed arrays, overwrite-oldest, no allocation */
-void
+static void
 pd_mlog(PdMLogEnt * log, uint64 * idx, void *a, void *b, uint64 tag)
 {
 	uint64		n = __sync_fetch_and_add(idx, 1) % PD_MLOG_ENTRIES;
@@ -534,7 +534,7 @@ pd_boot(void)
  * atomically, and pd_recheck() relies on this to take the SIGSEGV slot
  * back after GPDB's pqsignal() overwrites us at process start.
  */
-void
+static void
 pd_install(void)
 {
 	struct sigaction sa,
