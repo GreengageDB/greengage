@@ -1,4 +1,7 @@
-@ggrebalance_misc_options @skip
+# Keep this suite's CI runtime within the 100-120 minute budget.
+# If it exceeds 120 minutes, move some scenarios or example cases into a new feature file.
+
+@ggrebalance_misc_options
 Feature: ggrebalance behave tests (misc options scenarios)
 
     Scenario: test 1. Check if cluster has no mirroring.
