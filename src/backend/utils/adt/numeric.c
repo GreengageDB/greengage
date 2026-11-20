@@ -8976,7 +8976,7 @@ power_var_int(const NumericVar *base, int exp, NumericVar *result, int rscale)
 	 * Apply crude overflow/underflow tests so we can exit early if the result
 	 * certainly will overflow/underflow.
 	 */
-	if (f > 3 * NUMERIC_WEIGHT_MAX * DEC_DIGITS)
+	if (f > (NUMERIC_WEIGHT_MAX + 1) * DEC_DIGITS)
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("value overflows numeric format")));
