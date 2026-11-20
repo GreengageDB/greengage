@@ -384,7 +384,7 @@ def main():
     else:
         sys.exit(efmt % ' '.join(sys.argv[1:]))
     
-    print fn()
+    print(fn())
        
 if __name__ == '__main__':
     main()

@@ -4111,7 +4111,7 @@ def check_locales(database_locales, locale_names, expected):
             raise Exception("Expected %s to be %s, but it was %s" % (name, expected, locale))
 
 def get_en_utf_locale():
-    cmd = Command(name='Get installed US UTF locale', cmdStr='locale -a | grep -i "en[_-]..\.utf.*8" | head -1')
+    cmd = Command(name='Get installed US UTF locale', cmdStr=r'locale -a | grep -i "en[_-]..\.utf.*8" | head -1')
     cmd.run(validateAfter=True)
     locale = cmd.get_stdout()
     if locale == "":
@@ -4464,7 +4464,7 @@ def impl(context, command, hostname):
        'rsync')
 def impl(context):
 
-    rsync_script = """
+    rsync_script = r"""
 cat >/usr/local/bin/rsync <<EOL
 #!/usr/bin/env bash
 
