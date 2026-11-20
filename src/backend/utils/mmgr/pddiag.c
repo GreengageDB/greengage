@@ -101,12 +101,15 @@ static const struct
 #define PD_FREE_MASK	127	/* record 1 of 128 frees */
 #endif
 
+static __thread uint64 pd_tls_tid = 0;
+
 static uint64
 pd_tid(void)
 {
-	static __thread uint64 pd_tls_tid = 0;
-
-	/* one syscall per thread; the event path then pays a load+branch */
+	/* one syscall per thread; the event path then pays a load+branch.
+	 * File-scope TLS (not function-static) so pd_boot() can reset it: a
+	 * tid cached before fork() would otherwise pin every child process to
+	 * the postmaster's thread id for the rest of its life */
 	if (pd_tls_tid == 0)
 		pd_tls_tid = (uint64) syscall(SYS_gettid);
 	return pd_tls_tid;
@@ -152,16 +155,24 @@ pd_event(int is_alloc, void *ptr, void *ctx, uint64 size, uint64 n)
 }
 
 /* generic tagged trace: one line at any site of interest, no per-site
- * arrays or functions.  MemoryContextReset/Delete call this on every
- * query, which makes it the second (per-query) chance to take the signal
- * slots back after GPDB's pqsignal() overwrote us at process start. */
+ * arrays or functions.  MemoryContextReset/Delete call this per scanned
+ * tuple in the executor, so the call itself must stay cheap: a racy plain
+ * counter, a locked RMW only on the sampled 1:2^k event (see
+ * PD_TRACE_MASK).  The trace path is also the second chance (after the
+ * backend-start rechecks) to take the signal slots back after a pqsignal()
+ * displaced us; that recheck stays on its own cheap cadence, independent
+ * of the sampling decision */
 void
 pd_trace(uint32 tag, void *a, void *b)
 {
-	uint64		n = __sync_fetch_and_add(&pd_trace_idx, 1);
+	static uint64 pd_trace_ctr = 0;
+	uint64		n = ++pd_trace_ctr;
 
-	if ((n & 0x3F) == 0)
+	if ((n & 0x3FF) == 0)
 		pd_recheck();
+	if ((n & PD_TRACE_MASK) != 0)
+		return;
+	n = __sync_fetch_and_add(&pd_trace_idx, 1);
 	n %= PD_MLOG_ENTRIES;
 	/* store the seq of the last event, not the next one, so that trace
 	 * lines sort consistently with the ev# numbers in the ring dump;
@@ -314,6 +325,9 @@ pd_dump_ring_for(int fd, void *ptr)
 			memcpy(buf + n, " ret=", 5);
 			n += 5;
 			n += pd_hex(buf + n, (uint64) (uintptr_t) e->ret);
+			memcpy(buf + n, " tid=", 5);
+			n += 5;
+			n += pd_u64(buf + n, e->tid);
 			buf[n++] = '\n';
 			pd_emit(fd, buf, n);
 		}
@@ -353,6 +367,9 @@ pd_dump_ring_for(int fd, void *ptr)
 		memcpy(buf + n, " size=", 6);
 		n += 6;
 		n += pd_u64(buf + n, e->size);
+		memcpy(buf + n, " tid=", 5);
+		n += 5;
+		n += pd_u64(buf + n, e->tid);
 		buf[n++] = '\n';
 		pd_emit(fd, buf, n);
 		found++;
@@ -618,8 +635,11 @@ pd_boot(void)
 	pd_ev_hook = pd_event;
 	/* a child forked after a postmaster-side dump would inherit the cached
 	 * fd and append its own report to the postmaster's file: force every
-	 * process to open its pid-keyed file at its first dump */
+	 * process to open its pid-keyed file at its first dump.  Same for the
+	 * cached tid, which would otherwise keep naming the postmaster's
+	 * thread in every forked backend */
 	pd_log_fd = -1;
+	pd_tls_tid = 0;
 	pd_resolve_logdir();
 }
 

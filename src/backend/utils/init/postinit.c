@@ -637,10 +637,11 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	bool		bootstrap = IsBootstrapProcessingMode();
 
 	/*
-	 * Allocator diagnostics: forked backends/QEs never run main(), so this
-	 * is where the ring hook, the signal handler and the report fd get
-	 * (re)established for them -- postmaster start already did it for
-	 * itself, and the call is idempotent (see pddiag.c).
+	 * Allocator diagnostics: forked backends/QEs never run PostmasterMain,
+	 * so this is where the ring hook, the signal handler and the report fd
+	 * get (re)established for them -- the call is idempotent and cheap when
+	 * everything is already installed (see pddiag.c).  The postmaster
+	 * itself booted in PostmasterMain.
 	 */
 	pd_boot();
 	bool		am_superuser;

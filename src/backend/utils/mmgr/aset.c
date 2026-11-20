@@ -92,7 +92,6 @@
 #include "utils/faultinjector.h"
 #include "utils/memdebug.h"
 #include "utils/memutils.h"
-
 #include "utils/pddiag.h"
 #include "utils/memaccounting.h"
 #include "utils/gp_alloc.h"
@@ -1563,6 +1562,11 @@ AllocSetFreeImpl(MemoryContext context, void *pointer, bool isHeader)
 			(chunk->size + ALLOC_BLOCKHDRSZ + ALLOC_CHUNKHDRSZ))
 			elog(ERROR, "could not find block containing chunk %p", chunk);
 
+		/* record before the block is wiped/unlinked: CLOBBER_FREED_MEMORY
+		 * builds overwrite the whole block, size field included */
+		if (!isHeader)
+			PD_EV_FREE(pointer, set, chunk->size);
+
 		/* OK, remove block from aset's list and free it */
 		if (block->prev)
 			block->prev->next = block->next;
@@ -1576,7 +1580,6 @@ AllocSetFreeImpl(MemoryContext context, void *pointer, bool isHeader)
 		wipe_mem(block, block->freeptr - ((char *) block));
 #endif
 		MemoryContextNoteFree(&set->header, freesz);
-		PD_EV_FREE(pointer, set, chunk->size);
 		gp_free(block);
 	}
 	else
@@ -1596,7 +1599,8 @@ AllocSetFreeImpl(MemoryContext context, void *pointer, bool isHeader)
 #endif
 		set->freelist[fidx] = chunk;
 		Assert(chunk->size > 0);
-		PD_EV_FREE(pointer, set, chunk->size);
+		if (!isHeader)
+			PD_EV_FREE(pointer, set, chunk->size);
 	}
 }
 

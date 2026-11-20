@@ -14,10 +14,20 @@
  *
  * Always on; there is no configuration.  Overhead: ~1% CPU on alloc-dense
  * workloads (compile-time sampling: 1 of 2^k alloc/free operations, see
- * PD_ALLOC_MASK / PD_FREE_MASK below).  Memory: the event ring is ~39MB of
- * BSS per process, committed lazily page-by-page as events are recorded --
- * a long-lived backend that has run enough allocations ends up with up to
- * ~38MB of private RSS.  The trace ring adds another 128KB.
+ * PD_ALLOC_MASK / PD_FREE_MASK below; trace entries are sampled too, see
+ * PD_TRACE_MASK, because MemoryContextReset runs per scanned tuple in the
+ * executor).  Memory: the event ring is ~39MB of BSS per process,
+ * committed lazily page-by-page as events are recorded -- a long-lived
+ * backend that has run enough allocations ends up with up to ~38MB of
+ * private RSS.  The trace ring adds another 128KB.
+ *
+ * Coverage: the postmaster boots the diagnostics in PostmasterMain;
+ * user backends (plus fts, startup, walreceiver, walsender) re-boot in
+ * their own init paths.  Aux processes that run neither init path
+ * (checkpointer, bgwriter, syslogger, stats collector, ...) inherit the
+ * handler and the event hook through fork(), so they still record events
+ * and dump their own pid-keyed report on a crash; they just never re-take
+ * the signal slots if someone displaces the inherited handler.
  *
  * Coverage gaps (documented, not accidental): AllocSetRealloc of a large
  * (single-chunk block) allocation moves the block via gp_realloc() without
@@ -76,6 +86,9 @@ extern void *volatile pd_last_ret;
 #endif
 #ifndef PD_FREE_MASK
 #define PD_FREE_MASK 127
+#endif
+#ifndef PD_TRACE_MASK
+#define PD_TRACE_MASK 63		/* record 1 of 64 trace events */
 #endif
 
 extern uint64 pd_diag_seq;
