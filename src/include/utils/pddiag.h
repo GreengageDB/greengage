@@ -26,8 +26,9 @@
  * their own init paths.  Aux processes that run neither init path
  * (checkpointer, bgwriter, syslogger, stats collector, ...) inherit the
  * handler and the event hook through fork(), so they still record events
- * and dump their own pid-keyed report on a crash; they just never re-take
- * the signal slots if someone displaces the inherited handler.
+ * and dump their own pid-keyed report on a crash; the recheck cadence in
+ * pd_event()/pd_trace() re-takes the signal slots there too, as soon as
+ * any recorded event or trace fires.
  *
  * Coverage gaps (documented, not accidental): AllocSetRealloc of a large
  * (single-chunk block) allocation moves the block via gp_realloc() without
@@ -42,6 +43,10 @@
  *		pd_trace(PD_TAG_<something>, ptr, owner);
  *
  * Part of the standard build: always compiled in, always on.
+ *
+ * Portability: Linux-only for now (tid via SYS_gettid, handlers via
+ * sigaction); other platforms would need a tid fallback and equivalents
+ * for the signal-slot bookkeeping.
  *
  *-------------------------------------------------------------------------
  */

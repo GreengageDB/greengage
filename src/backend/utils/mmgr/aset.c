@@ -1565,7 +1565,7 @@ AllocSetFreeImpl(MemoryContext context, void *pointer, bool isHeader)
 		/* record before the block is wiped/unlinked: CLOBBER_FREED_MEMORY
 		 * builds overwrite the whole block, size field included */
 		if (!isHeader)
-			PD_EV_FREE(pointer, set, chunk->size);
+			PD_EV_FREE(pointer, context, chunk->size);
 
 		/* OK, remove block from aset's list and free it */
 		if (block->prev)
@@ -1600,7 +1600,7 @@ AllocSetFreeImpl(MemoryContext context, void *pointer, bool isHeader)
 		set->freelist[fidx] = chunk;
 		Assert(chunk->size > 0);
 		if (!isHeader)
-			PD_EV_FREE(pointer, set, chunk->size);
+			PD_EV_FREE(pointer, context, chunk->size);
 	}
 }
 

@@ -11,7 +11,8 @@
  * PD_FREE_MASK in pddiag.h: one event per 2^k alloc/free operations).
  *
  * Event ring entry: seq, ptr, ctx, size, caller return address, tid,
- * flags.  The crash handler (async-signal-safe: open/write + custom u64
+ * flags.  The crash handler (async-signal-safe apart from open/access,
+ * custom u64
  * formatting, one write() per fully formatted line) appends
  * <logdir>/pddiag-<pid>.log with: fault address, chunk-header probe, the
  * ring history for the fault pointer (or the newest events), and the
@@ -60,15 +61,17 @@ typedef struct PdEvent
 typedef struct PdMLogEnt
 {
 	uint64		seq;
-	void	   *a;
-	void	   *b;
-	uint64		tag;
+	uint64		tag;			/* PD_TAG_* */
+	void	   *a1;
+	void	   *a2;
 } PdMLogEnt;
 
 static PdEvent pd_ring_buf[PD_RING_ENTRIES];
 /* Starts at 1: 0 means "slot never written" in the crash-time scans, and
- * the first recorded event would otherwise carry seq 0 and be skipped */
-uint64 pd_diag_seq = 1;		/* exported for the caller-side pre-check */
+ * the first recorded event would otherwise carry seq 0 and be skipped.
+ * Also read by pd_trace() to timestamp trace entries with the number of
+ * the most recent recorded ring event, so the two dumps sort consistently */
+uint64 pd_diag_seq = 1;
 /* real caller of the current alloc/free, stored by the palloc/pfree
  * funnels (see pddiag.h); sampled events copy it into the ring */
 void *volatile pd_last_ret = NULL;
@@ -147,9 +150,11 @@ pd_event(int is_alloc, void *ptr, void *ctx, uint64 size, uint64 n)
 #ifndef USE_VALGRIND
 	/* stamp on recorded frees -- but not where freed memory is wiped or
 	 * valgrind-tracked: the stamp would clobber the wipe pattern and trip
-	 * MEMCHECK on freelist chunks */
+	 * MEMCHECK on freelist chunks.  Byte order chosen so the bytes in
+	 * memory spell "pdfree" on little-endian (a hexdump of the freed chunk
+	 * shows the marker; the u64 constant itself reads reversed) */
 	if (!is_alloc && ptr)
-		*(volatile uint64 *) ptr = 0x706466726565ULL;	/* stamp on recorded frees */
+		*(volatile uint64 *) ptr = 0x656572666470ULL;	/* "pdfree" in memory (LE) */
 #endif
 #endif
 }
@@ -179,9 +184,9 @@ pd_trace(uint32 tag, void *a, void *b)
 	 * entries made before the first recorded event carry 0 and are skipped
 	 * by the dump as "never written" (same as pre-fix behavior) */
 	pd_trace_ring[n].seq = pd_diag_seq - 1;
-	pd_trace_ring[n].a = (void *) (uintptr_t) tag;
-	pd_trace_ring[n].b = a;
-	pd_trace_ring[n].tag = (uint64) (uintptr_t) b;
+	pd_trace_ring[n].tag = tag;
+	pd_trace_ring[n].a1 = a;
+	pd_trace_ring[n].a2 = b;
 }
 
 /* ---------- crash-time mini-report (async-signal-safe) ---------- */
@@ -367,6 +372,9 @@ pd_dump_ring_for(int fd, void *ptr)
 		memcpy(buf + n, " size=", 6);
 		n += 6;
 		n += pd_u64(buf + n, e->size);
+		memcpy(buf + n, " ret=", 5);
+		n += 5;
+		n += pd_hex(buf + n, (uint64) (uintptr_t) e->ret);
 		memcpy(buf + n, " tid=", 5);
 		n += 5;
 		n += pd_u64(buf + n, e->tid);
@@ -407,7 +415,7 @@ pd_dump_trace(int fd)
 
 		if (e->seq == 0)
 			continue;
-		tn = pd_tag_name((uint64) (uintptr_t) e->a);
+		tn = pd_tag_name(e->tag);
 		n = 0;
 		memcpy(buf, "  #", 3);
 		n = 3 + pd_u64(buf + 3, e->seq);
@@ -416,10 +424,10 @@ pd_dump_trace(int fd)
 			buf[n++] = *tn++;
 		memcpy(buf + n, " a1=", 4);
 		n += 4;
-		n += pd_hex(buf + n, (uint64) (uintptr_t) e->b);
+		n += pd_hex(buf + n, (uint64) (uintptr_t) e->a1);
 		memcpy(buf + n, " a2=", 4);
 		n += 4;
-		n += pd_hex(buf + n, e->tag);
+		n += pd_hex(buf + n, (uint64) (uintptr_t) e->a2);
 		buf[n++] = '\n';
 		pd_emit(fd, buf, n);
 	}
@@ -483,9 +491,10 @@ pd_open_log(int pid)
 	if (dir[0] == '\0')
 	{
 		/* never booted (or booted before DataDir existed): last-resort
-		 * resolution; open() itself is the only not-quite-async-signal-safe
-		 * call in the whole dump -- unavoidable if the report file does not
-		 * exist yet */
+		 * resolution; open() -- and access() during this last-resort
+		 * resolution -- are the only not-quite-async-signal-safe calls in
+		 * the whole dump: unavoidable if the report file does not exist yet
+		 * and the directory was never cached at boot */
 		pd_resolve_logdir();
 		dir = pd_log_dir;
 		if (dir[0] == '\0')
