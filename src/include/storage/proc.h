@@ -231,10 +231,12 @@ struct PGPROC
 								 * both QE and QD; when id become InvalidOid
 								 * on QD, it means target process attempted to
 								 * move process to this group and the result
-								 * of attemption is in movetoResSlot */
+								 * is in movetoResSlot and movetoCompleted */
 	pid_t		movetoCallerPid; /* pid of moving initiator; valid only on QD;
 								  * guards current moving command from another
 								  * commands */
+	bool		movetoCompleted; /* target published the new session slot;
+								  * valid only on QD */
 
 	/* Support for group XID clearing. */
 	/* true, if member of ProcArray group waiting for XID clear */

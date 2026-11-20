@@ -477,6 +477,7 @@ InitProcess(void)
 	MyProc->movetoResSlot = NULL;
 	MyProc->movetoGroupId = InvalidOid;
 	MyProc->movetoCallerPid = InvalidPid;
+	MyProc->movetoCompleted = false;
 
     /* 
      * mppLocalProcessSerial uniquely identifies this backend process among
