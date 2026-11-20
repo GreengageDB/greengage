@@ -149,7 +149,11 @@ pd_trace(uint32 tag, void *a, void *b)
 	if ((n & 0x3F) == 0)
 		pd_recheck();
 	n %= PD_MLOG_ENTRIES;
-	pd_trace_ring[n].seq = pd_diag_seq;
+	/* store the seq of the last event, not the next one, so that trace
+	 * lines sort consistently with the ev# numbers in the ring dump;
+	 * entries made before the first recorded event carry 0 and are skipped
+	 * by the dump as "never written" (same as pre-fix behavior) */
+	pd_trace_ring[n].seq = pd_diag_seq - 1;
 	pd_trace_ring[n].a = (void *) (uintptr_t) tag;
 	pd_trace_ring[n].b = a;
 	pd_trace_ring[n].tag = (uint64) (uintptr_t) b;
@@ -436,13 +440,14 @@ pd_dump_crash_impl(int signo, uint64 fault)
 		return;
 	pd_emit_str(fd, "", "pddiag crash report");
 	pd_emit_u64(fd, "signo=", (uint64) signo);
-	pd_emit_hex(fd, "fault=", fault);
 	pd_emit_u64(fd, "seq=", pd_diag_seq);
 	/* the SA_SIGINFO handler may already know the fault address even when
-	 * our caller passed NULL (GPDB's 1-arg handler path): use it for the
-	 * probe and the ring history, not just for the header line */
+	 * our caller passed NULL (GPDB's 1-arg handler path): resolve it before
+	 * printing "fault=" so the header, the probe, and the ring history all
+	 * refer to the same address */
 	if (fault == 0 && pd_fault_addr != 0)
 		fault = pd_fault_addr;
+	pd_emit_hex(fd, "fault=", fault);
 	/* chunk-header probe: 16 bytes before payload; sanity-bounded, may
 	 * itself fault (we are dying anyway) */
 	if (fault > 64)
@@ -498,9 +503,10 @@ pd_handler(int signo, siginfo_t *si, void *uc)
 	/* si_addr is only meaningful for a synchronous hardware fault
 	 * (SEGV_MAPERR/ACCERR/...: 0 < si_code < 0x80).  For SI_USER/SI_QUEUE
 	 * (kill, raise, timer) the same union slot holds pid/uid or timer data,
-	 * and SI_KERNEL (0x80) has no address either. */
-	if (si && si->si_addr &&
-		si->si_code > 0 && si->si_code < 0x80)
+	 * and SI_KERNEL (0x80) has no address either.  NB: a NULL-dereference
+	 * fault has si_addr == NULL but is still a perfectly valid fault address
+	 * -- the si_code check alone decides, never test si_addr itself. */
+	if (si && si->si_code > 0 && si->si_code < 0x80)
 		pd_fault_addr = (uint64) (uintptr_t) si->si_addr;
 	pd_dump_crash_impl(signo, pd_fault_addr);
 	/* chain to the previous handler (GPDB prints its stack) */
