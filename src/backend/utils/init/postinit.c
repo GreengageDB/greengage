@@ -68,6 +68,7 @@
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/pg_locale.h"
+#include "utils/pddiag.h"
 #include "utils/portal.h"
 #include "utils/ps_status.h"
 #include "utils/relcache.h"
@@ -634,6 +635,14 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 			 char *out_dbname)
 {
 	bool		bootstrap = IsBootstrapProcessingMode();
+
+	/*
+	 * Allocator diagnostics: forked backends/QEs never run main(), so this
+	 * is where the ring hook, the signal handler and the report fd get
+	 * (re)established for them -- postmaster start already did it for
+	 * itself, and the call is idempotent (see pddiag.c).
+	 */
+	pd_boot();
 	bool		am_superuser;
 	char	   *fullpath;
 	char		dbname[NAMEDATALEN];

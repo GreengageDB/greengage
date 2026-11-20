@@ -1253,6 +1253,8 @@ AllocSetAllocImpl(MemoryContext context, Size size, bool isHeader)
 		VALGRIND_MAKE_MEM_NOACCESS((char *) chunk + ALLOC_CHUNK_PUBLIC,
 						 chunk_size + ALLOC_CHUNKHDRSZ - ALLOC_CHUNK_PUBLIC);
 
+		if (!isHeader)
+			PD_EV_ALLOC(AllocChunkGetPointer(chunk), context, chunk->size);
 		return AllocChunkGetPointer(chunk);
 	}
 
@@ -1293,6 +1295,8 @@ AllocSetAllocImpl(MemoryContext context, Size size, bool isHeader)
 #endif
 
 		AllocAllocInfo(set, chunk, isHeader);
+		if (!isHeader)
+			PD_EV_ALLOC(AllocChunkGetPointer(chunk), context, chunk->size);
 		return AllocChunkGetPointer(chunk);
 	}
 
@@ -1466,6 +1470,8 @@ AllocSetAllocImpl(MemoryContext context, Size size, bool isHeader)
 
 	AllocAllocInfo(set, chunk, isHeader);
 
+	if (!isHeader)
+		PD_EV_ALLOC(AllocChunkGetPointer(chunk), context, chunk->size);
 	return AllocChunkGetPointer(chunk);
 }
 
@@ -1478,10 +1484,7 @@ AllocSetAllocImpl(MemoryContext context, Size size, bool isHeader)
 static void *
 AllocSetAlloc(MemoryContext context, Size size)
 {
-	void	   *ret = AllocSetAllocImpl(context, size, false);
-
-	PD_EV_ALLOC(ret, context, size);
-	return ret;
+	return AllocSetAllocImpl(context, size, false);
 }
 
 /*

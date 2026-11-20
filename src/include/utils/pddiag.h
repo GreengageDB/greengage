@@ -3,8 +3,10 @@
  * pddiag.h -- production allocator/crash diagnostics, near-zero cost.
  *
  * Philosophy: observe, never interfere.  The event ring records sampled
- * alloc/free events with the caller return address (captured only on
- * recorded events, so the common case pays nothing); the trace ring
+ * alloc/free events with the real caller's return address (stored on entry
+ * to the palloc/pfree funnels below, so the hot path pays one plain store,
+ * and sampled events read it back) and the chunk's capacity (so a fault
+ * anywhere inside a chunk range-matches its ALLOC event); the trace ring
  * records tagged events from any site (context lifecycle, ownership
  * handoffs, dispatcher teardowns); everything is analysed post-mortem by
  * the crash dump in pddiag.c, which runs inside GPDB's standard signal
@@ -21,7 +23,10 @@
  * (single-chunk block) allocation moves the block via gp_realloc() without
  * recording free+alloc events, so the ring history for the old address
  * ends at the last event before the move; AllocSetAllocHeader (shared
- * headers) is not instrumented either.
+ * headers) is not instrumented either.  "ret" names the caller of the
+ * palloc/pfree/MemoryContextAlloc funnel; code that invokes the context
+ * methods pointer directly bypasses the funnels and attributes the event
+ * to an earlier caller.
  *
  * Usage at a site of interest (one line, no new arrays/functions):
  *		pd_trace(PD_TAG_<something>, ptr, owner);
@@ -42,6 +47,7 @@
 #define PD_TAG_CTX_DELETE		2	/* a=context */
 
 extern void pd_boot(void);
+extern void pd_recheck(void);	/* retake displaced signal slots; idempotent */
 extern void pd_event(int is_alloc, void *ptr, void *ctx, uint64 size, uint64 n);
 extern void pd_trace(uint32 tag, void *a, void *b);
 extern void pd_dump_crash(int signo, void *faultptr);
@@ -49,6 +55,21 @@ extern void pd_dump_crash(int signo, void *faultptr);
 /* set by pd_boot; NULL only before boot or outside backend processes --
  * the common case costs a single load+branch on a hot static */
 extern void (*pd_ev_hook) (int is_alloc, void *ptr, void *ctx, uint64 size, uint64 n);
+
+/*
+ * Real-caller capture.  palloc/pfree/MemoryContextAlloc* are the universal
+ * funnels, so the return address stored at their entry is the code that
+ * asked for the allocation -- exactly what the post-mortem report wants.
+ * One plain store per funnel call; racy across threads, benign for
+ * diagnostics (palloc from a non-main thread is a developer error anyway,
+ * see aset.c).  pd_event reads it back only on recorded (1:2^k) events.
+ */
+extern void *volatile pd_last_ret;
+#if defined(__GNUC__) || defined(__clang__)
+#define PD_EV_ENTER() (pd_last_ret = __builtin_return_address(0))
+#else
+#define PD_EV_ENTER() ((void) 0)
+#endif
 
 #ifndef PD_ALLOC_MASK
 #define PD_ALLOC_MASK 2047

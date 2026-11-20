@@ -84,6 +84,7 @@
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
+#include "utils/pddiag.h"
 #include "utils/memutils.h"
 #include "utils/pg_lsn.h"
 #include "utils/ps_status.h"
@@ -2934,6 +2935,9 @@ WalSndSignals(void)
 #ifdef SIGBUS
 	pqsignal(SIGBUS, WalSndCrashHandler);
 #endif
+	/* the pqsignal calls above displaced pddiag's handler that
+	 * InitStandardHandler installed: take the signal slots back now */
+	pd_recheck();
 
 }
 

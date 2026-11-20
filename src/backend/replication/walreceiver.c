@@ -61,6 +61,7 @@
 #include "storage/procarray.h"
 #include "storage/proc.h"
 #include "utils/guc.h"
+#include "utils/pddiag.h"
 #include "utils/ps_status.h"
 #include "utils/resowner.h"
 #include "utils/timestamp.h"
@@ -294,6 +295,9 @@ WalReceiverMain(void)
 #ifdef SIGBUS
 	pqsignal(SIGBUS, WalRcvCrashHandler);
 #endif
+	/* the pqsignal calls above displaced pddiag's handler that
+	 * InitStandardHandler installed: take the signal slots back now */
+	pd_recheck();
 
 	/* We allow SIGQUIT (quickdie) at all times */
 	sigdelset(&BlockSig, SIGQUIT);

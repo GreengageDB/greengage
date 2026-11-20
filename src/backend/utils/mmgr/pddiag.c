@@ -69,7 +69,12 @@ static PdEvent pd_ring_buf[PD_RING_ENTRIES];
 /* Starts at 1: 0 means "slot never written" in the crash-time scans, and
  * the first recorded event would otherwise carry seq 0 and be skipped */
 uint64 pd_diag_seq = 1;		/* exported for the caller-side pre-check */
+/* real caller of the current alloc/free, stored by the palloc/pfree
+ * funnels (see pddiag.h); sampled events copy it into the ring */
+void *volatile pd_last_ret = NULL;
 static struct sigaction pd_old_segv, pd_old_abrt, pd_old_bus;
+
+static int	pd_log_fd = -1; /* this process's report fd, cached after first dump */
 
 static PdMLogEnt pd_trace_ring[PD_MLOG_ENTRIES];
 static uint64 pd_trace_idx = 0;
@@ -108,7 +113,7 @@ pd_tid(void)
 }
 
 static void pd_install(void); /* forward */
-static void pd_recheck(void);
+void		pd_recheck(void);
 
 /* hook pointer: NULL in shipped builds -> the per-op cost is a single
  * load+branch on a hot static; pd_boot points it at pd_event. */
@@ -130,11 +135,20 @@ pd_event(int is_alloc, void *ptr, void *ctx, uint64 size, uint64 n)
 	e->ptr = ptr;
 	e->ctx = ctx;
 	e->size = size;
-	e->ret = __builtin_return_address(0);
+	/* pd_last_ret was stored on entry to the palloc/pfree funnel, so this
+	 * is the real user call site rather than the allocator internals */
+	e->ret = (void *) pd_last_ret;
 	e->tid = pd_tid();
 	e->flags = is_alloc ? 1 : 2;
+#ifndef CLOBBER_FREED_MEMORY
+#ifndef USE_VALGRIND
+	/* stamp on recorded frees -- but not where freed memory is wiped or
+	 * valgrind-tracked: the stamp would clobber the wipe pattern and trip
+	 * MEMCHECK on freelist chunks */
 	if (!is_alloc && ptr)
 		*(volatile uint64 *) ptr = 0x706466726565ULL;	/* stamp on recorded frees */
+#endif
+#endif
 }
 
 /* generic tagged trace: one line at any site of interest, no per-site
@@ -398,23 +412,75 @@ static volatile int pd_dumping = 0;
 
 /* async-safe replacement for snprintf("%s%s%d.log"): only strlen-width
  * string copies and the custom u64 formatter */
-static int
-pd_open_log(const char *suffix, int pid)
+static char pd_log_dir[640];	/* resolved at pd_boot: "<datadir>/log" etc. */
+
+/*
+ * Pick the report directory once per process: the usual log directories,
+ * falling back to the data directory.  Not called from signal context.
+ * Resolving the directory here (rather than probing three candidates in
+ * the crash handler) keeps the dump to a single open(); creating the file
+ * is deliberately left to the dump so that short-lived backends do not
+ * litter the log directory with empty pddiag-<pid>.log files.
+ */
+static void
+pd_resolve_logdir(void)
 {
-	char		path[640];
-	const char *dir = DataDir;
+	static const char *candidates[] = {"/log", "/pg_log", ""};
+	int			i;
+
+	pd_log_dir[0] = '\0';
+	if (DataDir == NULL)
+		return;			/* crash before DataDir is set must not fault again */
+	for (i = 0; i < 3; i++)
+	{
+		const char *dir = DataDir;
+		const char *suff = candidates[i];
+		char		path[640];
+		int			n = 0;
+
+		while (dir[n] && n < (int) sizeof(path) - 48)
+		{
+			path[n] = dir[n];
+			n++;
+		}
+		while (*suff && n < (int) sizeof(path) - 2)
+			path[n++] = *suff++;
+		path[n] = '\0';
+		if (access(path, W_OK) == 0 && n < (int) sizeof(pd_log_dir) - 32)
+		{
+			memcpy(pd_log_dir, path, n + 1);
+			return;
+		}
+	}
+}
+
+/* open (or create) this process's report file in the resolved directory;
+ * the fd is cached for subsequent dumps in this process */
+static int
+pd_open_log(int pid)
+{
+	char		path[700];
+	const char *dir = pd_log_dir;
 	int			n = 0;
 
-	/* signal context: a crash before DataDir is set must not fault again */
-	if (dir == NULL)
-		return -1;
-	while (dir[n] && n < (int) sizeof(path) - 48)
+	if (dir[0] == '\0')
+	{
+		/* never booted (or booted before DataDir existed): last-resort
+		 * resolution; open() itself is the only not-quite-async-signal-safe
+		 * call in the whole dump -- unavoidable if the report file does not
+		 * exist yet */
+		pd_resolve_logdir();
+		dir = pd_log_dir;
+		if (dir[0] == '\0')
+			return -1;
+	}
+	while (dir[n] && n < (int) sizeof(path) - 32)
 	{
 		path[n] = dir[n];
 		n++;
 	}
-	while (*suffix && n < (int) sizeof(path) - 32)
-		path[n++] = *suffix++;
+	memcpy(path + n, "/pddiag-", 8);
+	n += 8;
 	n += pd_u64(path + n, (uint64) pid);
 	memcpy(path + n, ".log", 5);
 	n += 5;
@@ -424,18 +490,14 @@ pd_open_log(const char *suffix, int pid)
 static void
 pd_dump_crash_impl(int signo, uint64 fault)
 {
-	int			fd = -1;
+	int			fd;
 
 	if (pd_dumping)
 		return;
 	pd_dumping = 1;
-	/* next to the server logs: try the usual log directories, fall back to
-	 * the data directory; O_APPEND keeps concurrent crashes separated */
-	fd = pd_open_log("/log/pddiag-", (int) getpid());
+	fd = pd_log_fd;
 	if (fd < 0)
-		fd = pd_open_log("/pg_log/pddiag-", (int) getpid());
-	if (fd < 0)
-		fd = pd_open_log("/pddiag-", (int) getpid());
+		fd = pd_log_fd = pd_open_log((int) getpid());
 	if (fd < 0)
 		return;
 	pd_emit_str(fd, "", "pddiag crash report");
@@ -443,13 +505,18 @@ pd_dump_crash_impl(int signo, uint64 fault)
 	pd_emit_u64(fd, "seq=", pd_diag_seq);
 	/* the SA_SIGINFO handler may already know the fault address even when
 	 * our caller passed NULL (GPDB's 1-arg handler path): resolve it before
-	 * printing "fault=" so the header, the probe, and the ring history all
-	 * refer to the same address */
+	 * printing "fault=" so the header and the ring history all refer to
+	 * the same address */
 	if (fault == 0 && pd_fault_addr != 0)
 		fault = pd_fault_addr;
 	pd_emit_hex(fd, "fault=", fault);
-	/* chunk-header probe: 16 bytes before payload; sanity-bounded, may
-	 * itself fault (we are dying anyway) */
+	pd_dump_ring_for(fd, (void *) (uintptr_t) fault);
+	pd_dump_trace(fd);
+	pd_emit_str(fd, "", "end.");
+	/* chunk-header probe LAST: it deliberately dereferences memory near a
+	 * possibly wild fault address and may itself fault (we are dying
+	 * anyway) -- everything above, "end." marker included, must already be
+	 * on disk before we take that risk */
 	if (fault > 64)
 	{
 		uint64		hdr0 = *(volatile uint64 *) (uintptr_t) (fault - 16);
@@ -460,10 +527,7 @@ pd_dump_crash_impl(int signo, uint64 fault)
 		if (hdr1 > 0 && hdr1 < (1ULL << 40))
 			pd_emit_u64(fd, "chunk_size_guess=", hdr1);
 	}
-	pd_dump_ring_for(fd, (void *) (uintptr_t) fault);
-	pd_dump_trace(fd);
-	pd_emit_str(fd, "", "end.");
-	close(fd);
+	/* no close(): the fd stays for a possible next dump in this process */
 }
 
 /* public entry: called from our SA_SIGINFO handler (fault known) and from
@@ -516,15 +580,31 @@ pd_handler(int signo, siginfo_t *si, void *uc)
 		pd_chain(signo, si, uc, &pd_old_abrt);
 	else
 		pd_chain(signo, si, uc, &pd_old_bus);
+	/* only reached when the chained handler returned, i.e. the process
+	 * somehow survived (e.g. SIGABRT previously SIG_IGN): re-arm the dump
+	 * guard for the next crash and drop the stale fault address */
+	pd_dumping = 0;
+	pd_fault_addr = 0;
 }
 
-static void
-pd_recheck(void)
+/* cheap slot check; pd_install() is only worth its sigaction() syscalls
+ * when something actually displaced us */
+static bool
+pd_slot_ours(int signo)
 {
 	struct sigaction cur;
 
-	sigaction(SIGSEGV, NULL, &cur);
-	if (cur.sa_sigaction != pd_handler)
+	sigaction(signo, NULL, &cur);
+	return cur.sa_sigaction == pd_handler;
+}
+
+void
+pd_recheck(void)
+{
+	/* check ALL THREE slots: a component may replace only SIGABRT or
+	 * SIGBUS and never touch SIGSEGV */
+	if (!pd_slot_ours(SIGSEGV) || !pd_slot_ours(SIGABRT) ||
+		!pd_slot_ours(SIGBUS))
 		pd_install();
 }
 
@@ -536,6 +616,7 @@ pd_boot(void)
 {
 	pd_install();
 	pd_ev_hook = pd_event;
+	pd_resolve_logdir();
 }
 
 /*
