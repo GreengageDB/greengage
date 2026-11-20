@@ -713,7 +713,7 @@ def quote_unident(val):
 
 def match_notice_obj(notice):
     # match the formatting errors in notice
-    r = re.compile("^NOTICE:  found (\d+) data formatting errors.*")
+    r = re.compile(r"^NOTICE:  found (\d+) data formatting errors.*")
     m = r.match(notice)
     if m:
         return int(m.group(1))
@@ -2563,7 +2563,7 @@ class gpload:
         # should not explicitly specify the DISTRIBUTED BY clause.
         # Only the DISTRIBUTED BY clause can take effect if all selected fields 
         # exist in the CREATE TABLE statement.
-        dist_column_list = re.match(".*\((.*)\).*", distcols).group(1).split(",")
+        dist_column_list = re.match(r".*\((.*)\).*", distcols).group(1).split(",")
         target_column_set = set(element[0] for element in target_columns)
         if set(dist_column_list) <= target_column_set:
             quoted_dist_column = convertListToDelimited(dist_column_list)

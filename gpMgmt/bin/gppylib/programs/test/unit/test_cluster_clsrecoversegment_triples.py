@@ -680,7 +680,7 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
                                 5|3|p|p|s|u|sdw2|sdw2|20001|/primary/gpseg3""",
                  "new_hosts": ['new_1'],
                  "unreachable_hosts": ['new_1'],
-                 "expected": "Cannot recover. The following recovery target hosts are unreachable: \['new_1'\]"
+                 "expected": r"Cannot recover. The following recovery target hosts are unreachable: \['new_1'\]"
             },
         ]
         self.run_fail_tests(tests, self.run_single_GpArray_test)
