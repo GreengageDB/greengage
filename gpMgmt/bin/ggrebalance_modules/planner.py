@@ -204,13 +204,12 @@ class ConfigurationEncoder:
         sorted_hosts = sorted(target_hosts, key=lambda h: h.status)
         for i, h in enumerate(sorted_hosts):
             host_mapping[h] = i
+        host_ids_by_name = {host.hostname: host_id for host, host_id in host_mapping.items()}
         primary_plcmnt = [0] * gparray.get_primary_count()
         mirror_plcmnt = [0] * gparray.get_primary_count()
         for pair in gparray.segmentPairs:
-            primary_plcmnt[pair.primaryDB.content] = host_mapping[Host(hostname=pair.primaryDB.hostname,
-                                                                       address=resolver.get_address(pair.primaryDB.hostname))]
-            mirror_plcmnt[pair.mirrorDB.content] = host_mapping[Host(hostname=pair.mirrorDB.hostname,
-                                                                     address=resolver.get_address(pair.mirrorDB.hostname))]
+            primary_plcmnt[pair.primaryDB.content] = host_ids_by_name[pair.primaryDB.hostname]
+            mirror_plcmnt[pair.mirrorDB.content] = host_ids_by_name[pair.mirrorDB.hostname]
         n_initial = len(target_hosts)
         n_target = sum([1 for h in target_hosts if h.status != HostStatus.DECOMMISSIONED])
         conf = SolverConfig(gparray.get_primary_count(),
@@ -664,23 +663,28 @@ class Planner:
         Form set of hosts where we need to rebalance segments on
         Returns:
         - List of Host objects with:
+          * Existing destinations use their unique catalog address.
+            Multiple catalog addresses are rejected before planning moves.
           * For existing hosts: templates + existing datadirs filled
           * For new hosts: only templates, existing datadirs empty
         - Boolean indicating if host set changed
         """        
         hosts = {}
+        catalog_addresses = defaultdict(set)
         for seg in array.segmentPairs:
             if seg.primaryDB.content >= 0:
                 primary_host = seg.primaryDB.hostname
                 mirror_host = seg.mirrorDB.hostname
+                catalog_addresses[primary_host].add(seg.primaryDB.getSegmentAddress())
+                catalog_addresses[mirror_host].add(seg.mirrorDB.getSegmentAddress())
                 if primary_host not in hosts:
                     hosts[primary_host] = Host(hostname=primary_host,
-                                               address=resolver.get_address(seg.primaryDB.hostname),
+                                               address=None,
                                                datadir_info=DatadirInfo(primary_template, mirror_template),
                                                status = HostStatus.ACTIVE)
                 if mirror_host not in hosts:
                     hosts[mirror_host] = Host(hostname=mirror_host,
-                                               address=resolver.get_address(seg.mirrorDB.hostname),
+                                               address=None,
                                                datadir_info=DatadirInfo(primary_template, mirror_template),
                                                status = HostStatus.ACTIVE)
         for pair in array.segmentPairs:
@@ -720,6 +724,14 @@ class Planner:
                 if host in remove_hostname_list:
                     hosts[host].status = HostStatus.DECOMMISSIONED
                     host_set_changed = True
+
+        for hostname, addresses in catalog_addresses.items():
+            if len(addresses) == 1:
+                hosts[hostname].address = next(iter(addresses))
+            elif hosts[hostname].status != HostStatus.DECOMMISSIONED:
+                raise ValidationError(
+                    "Cannot select a destination address for host '%s': multiple catalog addresses: %s"
+                    % (hostname, ', '.join(sorted(addresses))))
 
         return list(hosts.values()), host_set_changed
     
@@ -801,6 +813,11 @@ class Planner:
             if hostId != final_hostId:
                 #segment is moved
                 source_host = id_to_host[hostId]
+                if source_host.address is None:
+                    # A removed host may have several catalog addresses. Use
+                    # this segment's address for source resource checks.
+                    source_host = copy.copy(source_host)
+                    source_host.address = seg.getSegmentAddress()
                 target_host = id_to_host[final_hostId]
                 target_datadir = self._get_datadir_for_segment(target_host, seg.content, is_mirror)
 

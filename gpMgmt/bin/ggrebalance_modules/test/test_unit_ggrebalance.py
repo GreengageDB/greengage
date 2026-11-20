@@ -16,7 +16,7 @@ from gppylib.system.configurationInterface import GpConfigurationProvider
 from gppylib.system.environment import GpCoordinatorEnvironment
 
 from ggrebalance_modules.test.config import initGparrayFromFile
-from ggrebalance_modules.planner import LogicalMove, Planner
+from ggrebalance_modules.planner import ConfigurationEncoder, LogicalMove, Planner
 from ggrebalance_modules.ggrebalance_sm import RebalanceSM
 from ggrebalance_modules.rebalance_step import RebalanceStepMoveMirror
 from ggrebalance_modules.rebalance_commons import Host, HostStatus, ValidationError
@@ -286,7 +286,7 @@ class TestHostsOptions(GpTestCase):
                           dburl=Mock(),
                           gpArray=gparray,
                           options=self.options)
-        self.assertTrue(planner.target_hosts == [Host('sdw1', '192.168.1.10'), Host('sdw2', '192.168.1.11')])
+        self.assertTrue(planner.target_hosts == [Host('sdw1', 'sdw1'), Host('sdw2', 'sdw2')])
     
     @patch('socket.getaddrinfo')
     def test_target_hosts_positive_ip(self, mock_getaddrinfo):
@@ -318,6 +318,52 @@ class TestHostsOptions(GpTestCase):
         self.assertEqual(len(planner.target_hosts), 4)
         self.assertTrue(planner.target_hosts[3].status == HostStatus.NEW)
         self.assertTrue(planner.target_hosts[0].status == HostStatus.DECOMMISSIONED)
+
+
+class TestDestinationAddresses(GpTestCase):
+    def setUp(self):
+        self.array = initGparrayFromFile('balanced_grouped_6')
+        self.resolver = Mock()
+        self.resolver.get_address.return_value = '192.168.1.30'
+        for segment in self.array.getDbList():
+            if segment.getSegmentHostName() == 'sdw1':
+                segment.setSegmentAddress('10.20.0.30')
+
+    def test_existing_host_uses_catalog_address_and_encodes(self):
+        hosts, changed = Planner.get_target_hosts(self.array, resolver=self.resolver)
+        self.assertFalse(changed)
+        self.assertEqual('10.20.0.30', next(h.address for h in hosts if h.hostname == 'sdw1'))
+        self.resolver.get_address.assert_not_called()
+        config, mapping = ConfigurationEncoder.encode_configuration(
+            self.array, hosts, 'grouped', self.resolver)
+        self.assertEqual(len(hosts), len(mapping))
+        host_ids = {host.hostname: host_id for host, host_id in mapping.items()}
+        self.assertEqual([host_ids['sdw1']] * 3 + [host_ids['sdw2']] * 3,
+                         config.initial_primary_mapping)
+        self.assertEqual([host_ids['sdw2']] * 3 + [host_ids['sdw1']] * 3,
+                         config.initial_mirror_mapping)
+        self.resolver.get_address.assert_not_called()
+
+    def test_multiple_destination_addresses_are_rejected(self):
+        self.array.segmentPairs[0].primaryDB.setSegmentAddress('10.21.0.30')
+        with self.assertRaisesRegex(ValidationError, 'sdw1.*10.20.0.30, 10.21.0.30'):
+            Planner.get_target_hosts(self.array, resolver=self.resolver)
+
+    def test_multiple_addresses_on_removed_host_are_allowed(self):
+        self.array.segmentPairs[0].primaryDB.setSegmentAddress('10.21.0.30')
+        hosts, changed = Planner.get_target_hosts(
+            self.array, remove_hostname_list=['sdw1'], resolver=self.resolver)
+        self.assertTrue(changed)
+        self.assertEqual(HostStatus.DECOMMISSIONED,
+                         next(h.status for h in hosts if h.hostname == 'sdw1'))
+        ConfigurationEncoder.encode_configuration(self.array, hosts, 'grouped', self.resolver)
+
+    def test_new_host_uses_dns(self):
+        hosts, changed = Planner.get_target_hosts(
+            self.array, add_hostname_list=['sdw3'], resolver=self.resolver)
+        self.assertTrue(changed)
+        self.assertEqual('192.168.1.30', next(h.address for h in hosts if h.hostname == 'sdw3'))
+        self.resolver.get_address.assert_called_once_with('sdw3')
 
 
 class TestMirrorMoveConfig(GpTestCase):
@@ -368,6 +414,21 @@ class TestMirrorMoveConfig(GpTestCase):
             with self.assertRaisesRegex(ValidationError, 'Unexpected catalog location for dbid 7'):
                 self.subject.create_config_file([self.step])
         output().write.assert_not_called()
+
+    def test_partial_config_removed_on_validation_failure(self):
+        unexpected = self.segment.copy()
+        unexpected.setSegmentDbId(8)
+        second_move = LogicalMove(seg=unexpected, srcHost=self.move.srcHost,
+                                  dstHost=self.move.dstHost, target_port=self.move.target_port,
+                                  target_datadir=self.move.target_datadir)
+        changed = unexpected.copy()
+        changed.setSegmentDataDirectory('/unexpected')
+        self.catalog.getDbList.return_value = [self.segment, changed]
+        filename = f'/tmp/ggrebalance_move_config_pid{os.getpid()}'
+        with patch('ggrebalance_modules.ggrebalance_sm.GpArray.initFromCatalog', return_value=self.catalog):
+            with self.assertRaisesRegex(ValidationError, 'Unexpected catalog location for dbid 8'):
+                self.subject.create_config_file([self.step, RebalanceStepMoveMirror(second_move)])
+        self.assertFalse(os.path.exists(filename))
 
     def test_retry_after_catalog_update_uses_destination_address(self):
         self.update_catalog()

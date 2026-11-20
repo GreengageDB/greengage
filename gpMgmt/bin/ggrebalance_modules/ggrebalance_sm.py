@@ -336,6 +336,13 @@ class RebalanceSM:
                 original_location = (original.hostname, original.port, original.datadir)
                 planned_location = (move.dstHost.hostname, move.target_port, move.target_datadir)
                 if source_location not in (original_location, planned_location):
+                    try:
+                        fp.close()
+                        os.remove(filename)
+                    except FileNotFoundError:
+                        pass
+                    except OSError as error:
+                        self.logger.warning(f'Could not clean up incomplete move config {filename}: {error}')
                     raise ValidationError(f"Unexpected catalog location for dbid {original.dbid}: {source_location}")
 
                 if step.isRollback():
