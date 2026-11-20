@@ -87,6 +87,7 @@
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
+#include "utils/pddiag.h"
 #include "utils/ps_status.h"
 
 #include "cdb/cdbvars.h"  /* GpIdentity.segindex */
@@ -5531,6 +5532,9 @@ SegvBusIllName(int signal)
 void
 InitStandardHandlerForSigillSigsegvSigbus_OnMainThread(void)
 {
+	/* allocator diagnostics: ring + signal handler must exist before any
+	 * query work allocates (see pddiag.c) */
+	pd_boot();
 	void *singleFrame[1];
 
 	/* Make gp_backtrace() async-safe */
@@ -5546,6 +5550,8 @@ InitStandardHandlerForSigillSigsegvSigbus_OnMainThread(void)
 void
 StandardHandlerForSigillSigsegvSigbus_OnMainThread(char *processName, SIGNAL_ARGS)
 {
+	/* allocator diagnostics: post-mortem ring/trace dump (pddiag.c) */
+	pd_dump_crash((int) postgres_signal_arg, NULL);
 	PG_SETMASK(&BlockSig);
 
 	/* Unblock SEGV/BUS/ILL signals, and set them to their default settings. */

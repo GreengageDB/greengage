@@ -92,6 +92,8 @@
 #include "utils/faultinjector.h"
 #include "utils/memdebug.h"
 #include "utils/memutils.h"
+
+#include "utils/pddiag.h"
 #include "utils/memaccounting.h"
 #include "utils/gp_alloc.h"
 
@@ -1476,7 +1478,10 @@ AllocSetAllocImpl(MemoryContext context, Size size, bool isHeader)
 static void *
 AllocSetAlloc(MemoryContext context, Size size)
 {
-	return AllocSetAllocImpl(context, size, false);
+	void	   *ret = AllocSetAllocImpl(context, size, false);
+
+	PD_EV_ALLOC(ret, context);
+	return ret;
 }
 
 /*
@@ -1568,6 +1573,7 @@ AllocSetFreeImpl(MemoryContext context, void *pointer, bool isHeader)
 		wipe_mem(block, block->freeptr - ((char *) block));
 #endif
 		MemoryContextNoteFree(&set->header, freesz);
+		PD_EV_FREE(pointer, set, chunk->size);
 		gp_free(block);
 	}
 	else
@@ -1586,6 +1592,7 @@ AllocSetFreeImpl(MemoryContext context, void *pointer, bool isHeader)
 		chunk->requested_size = 0xFFFFFFFF;
 #endif
 		set->freelist[fidx] = chunk;
+		PD_EV_FREE(pointer, set, chunk->size);
                 Assert(chunk->size > 0);
 	}
 }

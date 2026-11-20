@@ -29,6 +29,7 @@
 #include "miscadmin.h"
 #include "utils/memdebug.h"
 #include "utils/memutils.h"
+#include "utils/pddiag.h"
 #include "utils/memaccounting.h"
 
 #include "cdb/cdbvars.h"                    /* gp_process_memory_cutoff_bytes */
@@ -193,6 +194,7 @@ MemoryContextInit(void)
 void
 MemoryContextReset(MemoryContext context)
 {
+	pd_trace(PD_TAG_CTX_RESET, context, NULL);
 	AssertArg(MemoryContextIsValid(context));
 
 	/* save a function call in common case where there are no children */
@@ -240,6 +242,7 @@ MemoryContextResetChildren(MemoryContext context)
 void
 MemoryContextDeleteImpl(MemoryContext context, const char* sfile, const char *func, int sline)
 {
+	pd_trace(PD_TAG_CTX_DELETE, context, NULL);
 	AssertArg(MemoryContextIsValid(context));
 	/* We had better not be deleting TopMemoryContext ... */
 	Assert(context != TopMemoryContext);
