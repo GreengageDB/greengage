@@ -7,6 +7,13 @@
 -- The PANIC text reaching the client is masked away: it carries no
 -- information for this test and its emission is not fully deterministic.
 --
+-- NOTE: pddiag always writes its report under the data directory
+-- (<datadir>/log, then <datadir>/pg_log, then <datadir> itself), while the
+-- test reads it via log_directory.  It therefore requires log_directory to
+-- name the per-datadir log directory (as in gpdemo); with an absolute
+-- log_directory the report lands next to the server log but this test
+-- would not find it.
+--
 -- start_matchsubs
 -- m/PANIC:  fault triggered, fault name:'exec_simple_query_start' fault type:'panic'\n/
 -- s//

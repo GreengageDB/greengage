@@ -1592,8 +1592,8 @@ AllocSetFreeImpl(MemoryContext context, void *pointer, bool isHeader)
 		chunk->requested_size = 0xFFFFFFFF;
 #endif
 		set->freelist[fidx] = chunk;
+		Assert(chunk->size > 0);
 		PD_EV_FREE(pointer, set, chunk->size);
-                Assert(chunk->size > 0);
 	}
 }
 

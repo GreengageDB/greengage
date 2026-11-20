@@ -10,9 +10,18 @@
  * the crash dump in pddiag.c, which runs inside GPDB's standard signal
  * handler.
  *
- * Always on; there is no configuration.  Overhead: ~1% on alloc-dense
+ * Always on; there is no configuration.  Overhead: ~1% CPU on alloc-dense
  * workloads (compile-time sampling: 1 of 2^k alloc/free operations, see
- * PD_ALLOC_MASK / PD_FREE_MASK below).
+ * PD_ALLOC_MASK / PD_FREE_MASK below).  Memory: the event ring is ~39MB of
+ * BSS per process, committed lazily page-by-page as events are recorded --
+ * a long-lived backend that has run enough allocations ends up with up to
+ * ~38MB of private RSS.  The trace ring adds another 128KB.
+ *
+ * Coverage gaps (documented, not accidental): AllocSetRealloc of a large
+ * (single-chunk block) allocation moves the block via gp_realloc() without
+ * recording free+alloc events, so the ring history for the old address
+ * ends at the last event before the move; AllocSetAllocHeader (shared
+ * headers) is not instrumented either.
  *
  * Usage at a site of interest (one line, no new arrays/functions):
  *		pd_trace(PD_TAG_<something>, ptr, owner);

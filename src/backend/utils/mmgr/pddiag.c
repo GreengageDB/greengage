@@ -66,7 +66,9 @@ typedef struct PdMLogEnt
 } PdMLogEnt;
 
 static PdEvent pd_ring_buf[PD_RING_ENTRIES];
-uint64 pd_diag_seq = 0;		/* exported for the caller-side pre-check */
+/* Starts at 1: 0 means "slot never written" in the crash-time scans, and
+ * the first recorded event would otherwise carry seq 0 and be skipped */
+uint64 pd_diag_seq = 1;		/* exported for the caller-side pre-check */
 static struct sigaction pd_old_segv, pd_old_abrt, pd_old_bus;
 
 static PdMLogEnt pd_trace_ring[PD_MLOG_ENTRIES];
@@ -117,7 +119,11 @@ pd_event(int is_alloc, void *ptr, void *ctx, uint64 size, uint64 n)
 {
 	PdEvent    *e;
 
-	if ((n & 0xFFF) == 0)
+	/* Taking the signal slots back after someone overwrote us costs a
+	 * sigaction() syscall; do it every 64 recorded events (~131K allocs)
+	 * so that a crash early in a backend's life still gets the full
+	 * SA_SIGINFO report, not the degraded tail-only one. */
+	if ((n & 0x3F) == 0)
 		pd_recheck();
 	e = &pd_ring_buf[n % PD_RING_ENTRIES];
 	e->seq = n;
@@ -131,24 +137,22 @@ pd_event(int is_alloc, void *ptr, void *ctx, uint64 size, uint64 n)
 		*(volatile uint64 *) ptr = 0x706466726565ULL;	/* stamp on recorded frees */
 }
 
-/* ownership micro-logs: fixed arrays, overwrite-oldest, no allocation */
-static void
-pd_mlog(PdMLogEnt * log, uint64 * idx, void *a, void *b, uint64 tag)
-{
-	uint64		n = __sync_fetch_and_add(idx, 1) % PD_MLOG_ENTRIES;
-
-	log[n].seq = pd_diag_seq;
-	log[n].a = a;
-	log[n].b = b;
-	log[n].tag = tag;
-}
-
 /* generic tagged trace: one line at any site of interest, no per-site
- * arrays or functions */
+ * arrays or functions.  MemoryContextReset/Delete call this on every
+ * query, which makes it the second (per-query) chance to take the signal
+ * slots back after GPDB's pqsignal() overwrote us at process start. */
 void
 pd_trace(uint32 tag, void *a, void *b)
 {
-	pd_mlog(pd_trace_ring, &pd_trace_idx, (void *) (uintptr_t) tag, a, (uint64) (uintptr_t) b);
+	uint64		n = __sync_fetch_and_add(&pd_trace_idx, 1);
+
+	if ((n & 0x3F) == 0)
+		pd_recheck();
+	n %= PD_MLOG_ENTRIES;
+	pd_trace_ring[n].seq = pd_diag_seq;
+	pd_trace_ring[n].a = (void *) (uintptr_t) tag;
+	pd_trace_ring[n].b = a;
+	pd_trace_ring[n].tag = (uint64) (uintptr_t) b;
 }
 
 /* ---------- crash-time mini-report (async-signal-safe) ---------- */
@@ -263,8 +267,6 @@ pd_dump_ring_for(int fd, void *ptr)
 		for (i = 0; i < PD_RING_ENTRIES && i < seq && (int) i < 64; i++)
 		{
 			PdEvent    *e = &pd_ring_buf[(seq - 1 - i) % PD_RING_ENTRIES];
-			char		buf[160];
-			int			n = 0;
 
 			if (e->seq == 0 || e->seq > seq || e->seq + PD_RING_ENTRIES < seq)
 				continue;		/* never written or stale (wrapped) slot */
@@ -388,7 +390,6 @@ pd_dump_trace(int fd)
 	}
 }
 
-static void pd_dump_trace(int fd);
 static volatile int pd_dumping = 0;
 
 /* async-safe replacement for snprintf("%s%s%d.log"): only strlen-width
@@ -400,6 +401,9 @@ pd_open_log(const char *suffix, int pid)
 	const char *dir = DataDir;
 	int			n = 0;
 
+	/* signal context: a crash before DataDir is set must not fault again */
+	if (dir == NULL)
+		return -1;
 	while (dir[n] && n < (int) sizeof(path) - 48)
 	{
 		path[n] = dir[n];
@@ -434,6 +438,11 @@ pd_dump_crash_impl(int signo, uint64 fault)
 	pd_emit_u64(fd, "signo=", (uint64) signo);
 	pd_emit_hex(fd, "fault=", fault);
 	pd_emit_u64(fd, "seq=", pd_diag_seq);
+	/* the SA_SIGINFO handler may already know the fault address even when
+	 * our caller passed NULL (GPDB's 1-arg handler path): use it for the
+	 * probe and the ring history, not just for the header line */
+	if (fault == 0 && pd_fault_addr != 0)
+		fault = pd_fault_addr;
 	/* chunk-header probe: 16 bytes before payload; sanity-bounded, may
 	 * itself fault (we are dying anyway) */
 	if (fault > 64)
@@ -446,8 +455,6 @@ pd_dump_crash_impl(int signo, uint64 fault)
 		if (hdr1 > 0 && hdr1 < (1ULL << 40))
 			pd_emit_u64(fd, "chunk_size_guess=", hdr1);
 	}
-	if (fault == 0 && pd_fault_addr != 0)
-		fault = pd_fault_addr;
 	pd_dump_ring_for(fd, (void *) (uintptr_t) fault);
 	pd_dump_trace(fd);
 	pd_emit_str(fd, "", "end.");
