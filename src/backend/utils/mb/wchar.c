@@ -13,6 +13,12 @@
 
 #include "mb/pg_wchar.h"
 
+/*
+ * Stop the conversion if the remaining bytes cannot hold the current
+ * character (backport of upstream b0e3f5cf940, CVE-2026-2006).
+ */
+#define MB2CHAR_NEED_AT_LEAST(len, need) if ((len) < (need)) break
+
 
 /*
  * Operations on multi-byte encodings are driven by a table of helper
@@ -85,22 +91,25 @@ pg_euc2wchar_with_len(const unsigned char *from, pg_wchar *to, int len)
 
 	while (len > 0 && *from)
 	{
-		if (*from == SS2 && len >= 2)	/* JIS X 0201 (so called "1 byte
+		if (*from == SS2)	/* JIS X 0201 (so called "1 byte
 										 * KANA") */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 2);
 			from++;
 			*to = (SS2 << 8) | *from++;
 			len -= 2;
 		}
-		else if (*from == SS3 && len >= 3)	/* JIS X 0212 KANJI */
+		else if (*from == SS3)	/* JIS X 0212 KANJI */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 3);
 			from++;
 			*to = (SS3 << 16) | (*from++ << 8);
 			*to |= *from++;
 			len -= 3;
 		}
-		else if (IS_HIGHBIT_SET(*from) && len >= 2) /* JIS X 0208 KANJI */
+		else if (IS_HIGHBIT_SET(*from)) /* JIS X 0208 KANJI */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 2);
 			*to = *from++ << 8;
 			*to |= *from++;
 			len -= 2;
@@ -212,22 +221,25 @@ pg_euccn2wchar_with_len(const unsigned char *from, pg_wchar *to, int len)
 
 	while (len > 0 && *from)
 	{
-		if (*from == SS2 && len >= 3)	/* code set 2 (unused?) */
+		if (*from == SS2)	/* code set 2 (unused?) */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 3);
 			from++;
 			*to = (SS2 << 16) | (*from++ << 8);
 			*to |= *from++;
 			len -= 3;
 		}
-		else if (*from == SS3 && len >= 3)	/* code set 3 (unused ?) */
+		else if (*from == SS3)	/* code set 3 (unused ?) */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 3);
 			from++;
 			*to = (SS3 << 16) | (*from++ << 8);
 			*to |= *from++;
 			len -= 3;
 		}
-		else if (IS_HIGHBIT_SET(*from) && len >= 2) /* code set 1 */
+		else if (IS_HIGHBIT_SET(*from)) /* code set 1 */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 2);
 			*to = *from++ << 8;
 			*to |= *from++;
 			len -= 2;
@@ -249,7 +261,11 @@ pg_euccn_mblen(const unsigned char *s)
 {
 	int			len;
 
-	if (IS_HIGHBIT_SET(*s))
+	if (*s == SS2)
+		len = 3;
+	else if (*s == SS3)
+		len = 3;
+	else if (IS_HIGHBIT_SET(*s))
 		len = 2;
 	else
 		len = 1;
@@ -279,23 +295,26 @@ pg_euctw2wchar_with_len(const unsigned char *from, pg_wchar *to, int len)
 
 	while (len > 0 && *from)
 	{
-		if (*from == SS2 && len >= 4)	/* code set 2 */
+		if (*from == SS2)	/* code set 2 */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 4);
 			from++;
 			*to = (((uint32) SS2) << 24) | (*from++ << 16);
 			*to |= *from++ << 8;
 			*to |= *from++;
 			len -= 4;
 		}
-		else if (*from == SS3 && len >= 3)	/* code set 3 (unused?) */
+		else if (*from == SS3)	/* code set 3 (unused?) */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 3);
 			from++;
 			*to = (SS3 << 16) | (*from++ << 8);
 			*to |= *from++;
 			len -= 3;
 		}
-		else if (IS_HIGHBIT_SET(*from) && len >= 2) /* code set 2 */
+		else if (IS_HIGHBIT_SET(*from)) /* code set 2 */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 2);
 			*to = *from++ << 8;
 			*to |= *from++;
 			len -= 2;
@@ -788,28 +807,32 @@ pg_mule2wchar_with_len(const unsigned char *from, pg_wchar *to, int len)
 
 	while (len > 0 && *from)
 	{
-		if (IS_LC1(*from) && len >= 2)
+		if (IS_LC1(*from))
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 2);
 			*to = *from++ << 16;
 			*to |= *from++;
 			len -= 2;
 		}
-		else if (IS_LCPRV1(*from) && len >= 3)
+		else if (IS_LCPRV1(*from))
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 3);
 			from++;
 			*to = *from++ << 16;
 			*to |= *from++;
 			len -= 3;
 		}
-		else if (IS_LC2(*from) && len >= 3)
+		else if (IS_LC2(*from))
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 3);
 			*to = *from++ << 16;
 			*to |= *from++ << 8;
 			*to |= *from++;
 			len -= 3;
 		}
-		else if (IS_LCPRV2(*from) && len >= 4)
+		else if (IS_LCPRV2(*from))
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 4);
 			from++;
 			*to = *from++ << 16;
 			*to |= *from++ << 8;
@@ -1777,7 +1800,7 @@ pg_eucjp_increment(unsigned char *charptr, int length)
 const pg_wchar_tbl pg_wchar_table[] = {
 	{pg_ascii2wchar_with_len, pg_wchar2single_with_len, pg_ascii_mblen, pg_ascii_dsplen, pg_ascii_verifier, 1}, /* PG_SQL_ASCII */
 	{pg_eucjp2wchar_with_len, pg_wchar2euc_with_len, pg_eucjp_mblen, pg_eucjp_dsplen, pg_eucjp_verifier, 3},	/* PG_EUC_JP */
-	{pg_euccn2wchar_with_len, pg_wchar2euc_with_len, pg_euccn_mblen, pg_euccn_dsplen, pg_euccn_verifier, 2},	/* PG_EUC_CN */
+	{pg_euccn2wchar_with_len, pg_wchar2euc_with_len, pg_euccn_mblen, pg_euccn_dsplen, pg_euccn_verifier, 3},	/* PG_EUC_CN */
 	{pg_euckr2wchar_with_len, pg_wchar2euc_with_len, pg_euckr_mblen, pg_euckr_dsplen, pg_euckr_verifier, 3},	/* PG_EUC_KR */
 	{pg_euctw2wchar_with_len, pg_wchar2euc_with_len, pg_euctw_mblen, pg_euctw_dsplen, pg_euctw_verifier, 4},	/* PG_EUC_TW */
 	{pg_eucjp2wchar_with_len, pg_wchar2euc_with_len, pg_eucjp_mblen, pg_eucjp_dsplen, pg_eucjp_verifier, 3},	/* PG_EUC_JIS_2004 */
