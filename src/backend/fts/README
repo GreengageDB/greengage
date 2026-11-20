@@ -5,22 +5,21 @@ Fault Tolerance Service (FTS)
 This document illustrates the mechanism of a GPDB component called
 Fault Tolerance Service (FTS):
 
- - This sections explains how FTS probe process is started. The FTS
+1. This section explains how FTS probe process is started. The FTS
    probe process is running on the Gp_entry_postmaster (master node)
    only. It starts as a background worker process managed by the
    BackgroundWorker structure. (see
    src/include/postmaster/bgworker.h).  Greengage sets up a group of
-   GP background processes through an array structure PMAuxProcList. A
-   entry in that struct represents a GP background process.
+   GP background processes through an array structure PMAuxProcList.
+   An entry in that struct represents a GP background process.
 
    Two functions pointers are important members of the
    BackgroundWorker structure. One points to main entry function of
    the GP background process. The other points to the function
-   that determine if the process should be started or not. For FTS,
+   that determines if the process should be started or not. For FTS,
    these two functions are FtsProbeMain() and FtsProbeStartRule(),
    respectively.  This is hard-coded in postmaster.c.
 
-      #define MaxPMAuxProc 6
       static BackgroundWorker PMAuxProcList[MaxPMAuxProc]
 
    In Postmaster, we will check the following condition:
@@ -38,19 +37,19 @@ Fault Tolerance Service (FTS):
 
    Later, the postmaster tries to start the processes that have been
    registered in the BackgroundWorkerList, which includes the FTS
-   probe process. If first attempt to start a particular process
+   probe process. If the first attempt to start a particular process
    fails, or a process goes down for some reason and needs to be
    brought up again, postmaster restarts it in its main loop. Every
    iteration, it checks the status of these processes and acts
    accordingly.
 
-2. This sections explains how FTS probes are or can be
-   initiated. Either the probes are trigged at regular defined
-   interval (which can be tuned via GUC) or triggerd on the fly when
+2. This section explains how FTS probes are or can be
+   initiated. Either the probes are triggered at regular defined
+   interval (which can be tuned via GUC) or triggered on the fly when
    required by certain internal components or tests or user via FTS
    probe triggering function.
 
-   The FTS probe process always runs in a infinite loop, does a round
+   The FTS probe process always runs in an infinite loop, does a round
    of polling at each iteration to get the health status of all
    segments. At each iteration, it waits on a latch with timeout to
    block itself for a while. Thus, two types of events might trigger
@@ -66,9 +65,9 @@ Fault Tolerance Service (FTS):
 3. On the master node, the FTS probe process gets the configuration
    from catalog table gp_segment_configuration, which describes the
    status of each segment and also reflects if any of them has a
-   mirror. For each unique content(or segindex) value, will see a
+   mirror. For each unique content (or segindex) value, will see a
    primary segment and may see a mirror segment. The two make a pair
-   and they have the same content(or segindex) value but different
+   and they have the same content (or segindex) value but different
    dbid.
 
    FTS probes only the primary segments. Primary segments provide
@@ -85,7 +84,7 @@ Fault Tolerance Service (FTS):
    So FTS both read and write the catalog table.
 
 4. On the master node: each round of the polling is done in a chain of
-   calls :
+   calls:
 
 	ftsConnect()
 	ftsPoll()
@@ -102,11 +101,11 @@ Fault Tolerance Service (FTS):
    accordingly.
 
 5. On the segment node: in the main loop of PostgresMain(), the
-   requests from the master FTS probe process
+   requests from the master FTS probe process are
    received. ProcessStartupPacket() is called first to make sure this
    dialog is for FTS requests and thus the Postgres process spawn for
-   it would be a FTS handler(am_ftshandler = true).  Then it accepts
-   the request and process the ‘Q’ type message using
+   it would be an FTS handler(am_ftshandler = true).  Then it accepts
+   the request and processes the ‘Q’ type message using
    HandleFtsMessage(). This function deals with three kinds of
    requests:
 
@@ -114,8 +113,8 @@ Fault Tolerance Service (FTS):
         - Sync
         - Promote
 
-6. SIGUSR2 is ignored by FTS now, like other background, postmaster
-   use SIGTERM to stop the FTS.
+6. SIGUSR2 is ignored by FTS now, like with other background processes,
+   the postmaster uses SIGTERM to stop the FTS.
 
 FTS Probe Request
 =================
@@ -128,7 +127,7 @@ external:
 The following diagram illustrates the fts loop process. The upper portion of the
 loop represents a current probe in progress, and the lower portion represents a
 completed probe awaiting a trigger including the gp_fts_probe_interval timeout.
-This loop can be probed at anytime for results due to any of the above three
+This loop can be probed at any time for results due to any of the above three
 mechanisms.
 
 
