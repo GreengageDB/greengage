@@ -37,7 +37,8 @@ extern void pd_event(int is_alloc, void *ptr, void *ctx, uint64 size, uint64 n);
 extern void pd_trace(uint32 tag, void *a, void *b);
 extern void pd_dump_crash(int signo, void *faultptr);
 
-/* set by pd_boot when PD_DIAG is on; NULL in a disabled process */
+/* set by pd_boot; NULL only before boot or outside backend processes --
+ * the common case costs a single load+branch on a hot static */
 extern void (*pd_ev_hook) (int is_alloc, void *ptr, void *ctx, uint64 size, uint64 n);
 
 #ifndef PD_ALLOC_MASK
@@ -50,10 +51,10 @@ extern void (*pd_ev_hook) (int is_alloc, void *ptr, void *ctx, uint64 size, uint
 extern uint64 pd_diag_seq;
 
 /* racy plain per-site counters: the sampling decision only, races benign */
-#define PD_EV_ALLOC(p,c) do { \
+#define PD_EV_ALLOC(p,c,z) do { \
 		static uint64 pd_ctr_ = 0; \
 		if (pd_ev_hook && ((++pd_ctr_ & PD_ALLOC_MASK) == 0)) \
-			pd_ev_hook(1, p, c, 0, __sync_fetch_and_add(&pd_diag_seq, 1)); \
+			pd_ev_hook(1, p, c, z, __sync_fetch_and_add(&pd_diag_seq, 1)); \
 	} while (0)
 #define PD_EV_FREE(p,c,z) do { \
 		static uint64 pd_ctr_ = 0; \

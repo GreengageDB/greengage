@@ -1480,7 +1480,7 @@ AllocSetAlloc(MemoryContext context, Size size)
 {
 	void	   *ret = AllocSetAllocImpl(context, size, false);
 
-	PD_EV_ALLOC(ret, context);
+	PD_EV_ALLOC(ret, context, size);
 	return ret;
 }
 

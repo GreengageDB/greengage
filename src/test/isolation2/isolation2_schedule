@@ -20,6 +20,7 @@ test: uao_crash_compaction_row
 test: crash_recovery
 test: crash_recovery_redundant_dtx
 test: crash_recovery_dtm
+test: pddiag_crash_report
 test: unlogged_heap_tables
 test: unlogged_appendonly_tables
 test: udf_exception_blocks_panic_scenarios

@@ -31,6 +31,7 @@
 #include <signal.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -55,9 +56,9 @@ typedef struct PdEvent
  * no failure mode, and the symbol is directly visible in core dumps.
  */
 #ifndef PD_RING_ENTRIES
-#define PD_RING_ENTRIES ((uint64)700000)	/* ~34MB of PdEvent */
+#define PD_RING_ENTRIES ((uint64)700000)	/* ~39MB of PdEvent (56 bytes each) */
 #endif
-#define PD_MLOG_ENTRIES 1024
+#define PD_MLOG_ENTRIES 4096
 
 typedef struct PdMLogEnt
 {
@@ -70,10 +71,9 @@ typedef struct PdMLogEnt
 static PdEvent pd_ring_buf[PD_RING_ENTRIES];
 static PdEvent *pd_ring = pd_ring_buf;	/* kept as a pointer for the code below */
 uint64 pd_diag_seq = 0;		/* exported for the caller-side pre-check */
-static int	pd_installed = 0;
 static struct sigaction pd_old_segv, pd_old_abrt, pd_old_bus;
 
-static PdMLogEnt pd_trace_ring[PD_MLOG_ENTRIES * 4];
+static PdMLogEnt pd_trace_ring[PD_MLOG_ENTRIES];
 static uint64 pd_trace_idx = 0;
 static uint64 pd_fault_addr = 0;	/* captured by the SA_SIGINFO handler */
 
@@ -101,8 +101,9 @@ static const struct
 static uint64
 pd_tid(void)
 {
-	/* avoid pthread_getspecific/pthread_self malloc-ish paths */
-	return (uint64) (uintptr_t) __builtin_frame_address(0) >> 4;
+	/* real thread id; the event path is not signal context, and the raw
+	 * syscall is async-safe anyway */
+	return (uint64) syscall(SYS_gettid);
 }
 
 void		pd_install(void);	/* forward */
@@ -129,14 +130,6 @@ pd_event(int is_alloc, void *ptr, void *ctx, uint64 size, uint64 n)
 	e->flags = is_alloc ? 1 : 2;
 	if (!is_alloc && ptr)
 		*(volatile uint64 *) ptr = 0x706466726565ULL;	/* stamp on recorded frees */
-}
-
-/* write-only stamp: 1 store on free; verified post-mortem against the ring */
-void
-pd_stamp(void *ptr)
-{
-	if (ptr)
-		*(volatile uint64 *) ptr = 0x706466726565ULL;	/* "pdfree" */
 }
 
 /* ownership micro-logs: fixed arrays, overwrite-oldest, no allocation */
@@ -279,8 +272,19 @@ pd_dump_ring_for(int fd, void *ptr)
 
 			memcpy(buf, "  ev#", 5);
 			n = 5 + pd_u64(buf + 5, e->seq);
-			memcpy(buf + n, e->flags & 1 ? " ALLOC ptr=" : " FREE  ptr=", 12);
-			n += 12;
+			/* NB: both labels are 11 bytes (" FREE  ptr=" carries one extra
+			 * space to align with " ALLOC ptr="); copying a fixed 12 would
+			 * emit the literal's NUL terminator */
+			if (e->flags & 1)
+			{
+				memcpy(buf + n, " ALLOC ptr=", 11);
+				n += 11;
+			}
+			else
+			{
+				memcpy(buf + n, " FREE  ptr=", 11);
+				n += 11;
+			}
 			n += pd_hex(buf + n, (uint64) (uintptr_t) e->ptr);
 			memcpy(buf + n, " ctx=", 5);
 			n += 5;
@@ -300,14 +304,29 @@ pd_dump_ring_for(int fd, void *ptr)
 	for (i = 0; i < PD_RING_ENTRIES && i < seq && found < 40; i++)
 	{
 		PdEvent    *e = &pd_ring[(seq - 1 - i) % PD_RING_ENTRIES];
+		uint64		addr = (uint64) (uintptr_t) ptr;
+		uint64		eptr = (uint64) (uintptr_t) e->ptr;
 
-		if (e->ptr != ptr)
+		/* exact ptr match, or an ALLOC event whose recorded chunk covers
+		 * the fault address (fault landed inside a chunk, not at its base) */
+		if (e->ptr != ptr &&
+			!((e->flags & 1) && e->size > 0 &&
+			  addr >= eptr && addr < eptr + e->size))
 			continue;
 		n = 0;
 		memcpy(buf, "  ev#", 5);
 		n = 5 + pd_u64(buf + 5, e->seq);
-		memcpy(buf + n, e->flags & 1 ? " ALLOC ptr=" : " FREE  ptr=", 12);
-		n += 12;
+		/* NB: both labels are 11 bytes, see the tail dump above */
+		if (e->flags & 1)
+		{
+			memcpy(buf + n, " ALLOC ptr=", 11);
+			n += 11;
+		}
+		else
+		{
+			memcpy(buf + n, " FREE  ptr=", 11);
+			n += 11;
+		}
 		n += pd_hex(buf + n, (uint64) (uintptr_t) e->ptr);
 		memcpy(buf + n, " ctx=", 5);
 		n += 5;
@@ -344,10 +363,10 @@ pd_dump_trace(int fd)
 	int			n;
 
 	pd_emit_str(fd, "", "== trace log (newest 32) ==");
-	cnt = idx < PD_MLOG_ENTRIES * 4 ? idx : PD_MLOG_ENTRIES * 4;
+	cnt = idx < PD_MLOG_ENTRIES ? idx : PD_MLOG_ENTRIES;
 	for (i = 0; i < cnt && i < 32; i++)
 	{
-		PdMLogEnt  *e = &pd_trace_ring[(idx - 1 - i) % (PD_MLOG_ENTRIES * 4)];
+		PdMLogEnt  *e = &pd_trace_ring[(idx - 1 - i) % PD_MLOG_ENTRIES];
 		const char *tn;
 
 		if (e->seq == 0)
@@ -373,11 +392,31 @@ pd_dump_trace(int fd)
 static void pd_dump_trace(int fd);
 static volatile int pd_dumping = 0;
 
+/* async-safe replacement for snprintf("%s%s%d.log"): only strlen-width
+ * string copies and the custom u64 formatter */
+static int
+pd_open_log(const char *suffix, int pid)
+{
+	char		path[640];
+	const char *dir = DataDir;
+	int			n = 0;
+
+	while (dir[n] && n < (int) sizeof(path) - 48)
+	{
+		path[n] = dir[n];
+		n++;
+	}
+	while (*suffix && n < (int) sizeof(path) - 32)
+		path[n++] = *suffix++;
+	n += pd_u64(path + n, (uint64) pid);
+	memcpy(path + n, ".log", 5);
+	n += 5;
+	return open(path, O_WRONLY | O_CREAT | O_APPEND, 0600);
+}
 
 static void
 pd_dump_crash_impl(int signo, uint64 fault)
 {
-	char		path[640];
 	int			fd = -1;
 
 	if (pd_dumping)
@@ -385,18 +424,11 @@ pd_dump_crash_impl(int signo, uint64 fault)
 	pd_dumping = 1;
 	/* next to the server logs: try the usual log directories, fall back to
 	 * the data directory; O_APPEND keeps concurrent crashes separated */
-	snprintf(path, sizeof(path), "%s/log/pddiag-%d.log", DataDir, (int) getpid());
-	fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0600);
+	fd = pd_open_log("/log/pddiag-", (int) getpid());
 	if (fd < 0)
-	{
-		snprintf(path, sizeof(path), "%s/pg_log/pddiag-%d.log", DataDir, (int) getpid());
-		fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0600);
-	}
+		fd = pd_open_log("/pg_log/pddiag-", (int) getpid());
 	if (fd < 0)
-	{
-		snprintf(path, sizeof(path), "%s/pddiag-%d.log", DataDir, (int) getpid());
-		fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0600);
-	}
+		fd = pd_open_log("/pddiag-", (int) getpid());
 	if (fd < 0)
 		return;
 	pd_emit_str(fd, "", "pddiag crash report");
@@ -432,24 +464,43 @@ pd_dump_crash(int signo, void *faultptr)
 	pd_dump_crash_impl(signo, (uint64) (uintptr_t) faultptr);
 }
 
+/* chain to the previous handler.  GPDB installs its crash handlers via
+ * pqsignal(), i.e. through sa_handler WITHOUT SA_SIGINFO, so the union
+ * member used for the call must match how the old action was registered:
+ * calling a 1-arg handler through sa_sigaction only works by ABI accident.
+ * SIG_DFL: re-raise for a core; SIG_IGN: swallow. */
 static void
-pd_handler(int signo, siginfo_t *si, void *uc)
+pd_chain(int signo, siginfo_t *si, void *uc, const struct sigaction *old)
 {
-	if (si && si->si_addr)
-		pd_fault_addr = (uint64) (uintptr_t) si->si_addr;
-	pd_dump_crash_impl(signo, pd_fault_addr);
-	/* chain to the previous handler (GPDB prints its stack) */
-	if (signo == SIGSEGV && pd_old_segv.sa_sigaction)
-		pd_old_segv.sa_sigaction(signo, si, uc);
-	else if (signo == SIGABRT && pd_old_abrt.sa_sigaction)
-		pd_old_abrt.sa_sigaction(signo, si, uc);
-	else if (signo == SIGBUS && pd_old_bus.sa_sigaction)
-		pd_old_bus.sa_sigaction(signo, si, uc);
-	else
+	if (old->sa_flags & SA_SIGINFO)
+		old->sa_sigaction(signo, si, uc);
+	else if (old->sa_handler == SIG_DFL)
 	{
 		signal(signo, SIG_DFL);
 		raise(signo);
 	}
+	else if (old->sa_handler != SIG_IGN)
+		old->sa_handler(signo);
+}
+
+static void
+pd_handler(int signo, siginfo_t *si, void *uc)
+{
+	/* si_addr is only meaningful for a synchronous hardware fault
+	 * (SEGV_MAPERR/ACCERR/...: 0 < si_code < 0x80).  For SI_USER/SI_QUEUE
+	 * (kill, raise, timer) the same union slot holds pid/uid or timer data,
+	 * and SI_KERNEL (0x80) has no address either. */
+	if (si && si->si_addr &&
+		si->si_code > 0 && si->si_code < 0x80)
+		pd_fault_addr = (uint64) (uintptr_t) si->si_addr;
+	pd_dump_crash_impl(signo, pd_fault_addr);
+	/* chain to the previous handler (GPDB prints its stack) */
+	if (signo == SIGSEGV)
+		pd_chain(signo, si, uc, &pd_old_segv);
+	else if (signo == SIGABRT)
+		pd_chain(signo, si, uc, &pd_old_abrt);
+	else
+		pd_chain(signo, si, uc, &pd_old_bus);
 }
 
 static void
@@ -468,24 +519,36 @@ pd_recheck(void)
 void
 pd_boot(void)
 {
-	if (!pd_installed)
-		pd_install();
+	pd_install();
 	pd_ev_hook = pd_event;
 }
 
+/*
+ * (Re)install our handler on top of the current one, snapshotting the
+ * current action as the chain target -- but never snapshot our own handler
+ * (that would chain to ourselves forever).  Idempotent and safe to call
+ * concurrently: sigaction installs and returns the displaced action
+ * atomically, and pd_recheck() relies on this to take the SIGSEGV slot
+ * back after GPDB's pqsignal() overwrites us at process start.
+ */
 void
 pd_install(void)
 {
-	struct sigaction sa;
+	struct sigaction sa,
+				cur;
 
-	if (pd_installed)
-		return;
-	pd_installed = 1;
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_sigaction = pd_handler;
 	sa.sa_flags = SA_SIGINFO | SA_NODEFER;
 	sigemptyset(&sa.sa_mask);
-	sigaction(SIGSEGV, &sa, &pd_old_segv);
-	sigaction(SIGABRT, &sa, &pd_old_abrt);
-	sigaction(SIGBUS, &sa, &pd_old_bus);
+
+	if (sigaction(SIGSEGV, &sa, &cur) == 0 &&
+		cur.sa_sigaction != pd_handler)
+		pd_old_segv = cur;
+	if (sigaction(SIGABRT, &sa, &cur) == 0 &&
+		cur.sa_sigaction != pd_handler)
+		pd_old_abrt = cur;
+	if (sigaction(SIGBUS, &sa, &cur) == 0 &&
+		cur.sa_sigaction != pd_handler)
+		pd_old_bus = cur;
 }

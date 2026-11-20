@@ -5532,10 +5532,11 @@ SegvBusIllName(int signal)
 void
 InitStandardHandlerForSigillSigsegvSigbus_OnMainThread(void)
 {
+	void *singleFrame[1];
+
 	/* allocator diagnostics: ring + signal handler must exist before any
 	 * query work allocates (see pddiag.c) */
 	pd_boot();
-	void *singleFrame[1];
 
 	/* Make gp_backtrace() async-safe */
 	gp_backtrace(singleFrame, 1);
