@@ -319,6 +319,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When initialize a cluster using "/tmp/rebalance_s6"
         Then the temporary file "/tmp/rebalance_s6" is removed
         Given the environment variable "COORDINATOR_DATA_DIRECTORY" is set to "/data/gpdata/ggrebalance/gpseg-1"
+         And the environment variable "PGPORT" is set to "7000"
          And coordinator data directory is updated
          And database "test_db_1" exists
          And schema "test_schema_1" exists in "test_db_1"
@@ -344,6 +345,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         Given the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /data/gpdata/ggrebalance/primary'"
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /data/gpdata/ggrebalance/mirror'"
         Then <restore_env>
+         And "PGPORT" environment variable should be restored
          And coordinator data directory is updated 
 
         Examples: inplace swap and using 3rd host
@@ -384,6 +386,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When initialize a cluster using "/tmp/rebalance_s6"
         Then the temporary file "/tmp/rebalance_s6" is removed
         Given the environment variable "COORDINATOR_DATA_DIRECTORY" is set to "/data/gpdata/ggrebalance/gpseg-1"
+         And the environment variable "PGPORT" is set to "7000"
          And coordinator data directory is updated
          And database "test_db_1" exists
          And schema "test_schema_1" exists in "test_db_1"
@@ -411,6 +414,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         Given the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /data/gpdata/ggrebalance/primary'"
         And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /data/gpdata/ggrebalance/mirror'"
         Then "COORDINATOR_DATA_DIRECTORY" environment variable should be restored
+         And "PGPORT" environment variable should be restored
          And coordinator data directory is updated
 
     Scenario Outline: 8.1.1 rebalance - interrupt during mirror move before gp_segment_configuration update, continue and retry failed step.
@@ -1728,6 +1732,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When initialize a cluster using "/tmp/rebalance_s6"
         Then the temporary file "/tmp/rebalance_s6" is removed
         Given the environment variable "COORDINATOR_DATA_DIRECTORY" is set to "/data/gpdata/ggrebalance/gpseg-1"
+         And the environment variable "PGPORT" is set to "7000"
          And coordinator data directory is updated
          And all files in gpAdminLogs directory are deleted
         When set fault inject "on_enter_STATE_REBALANCE_PREPARE_MOVES_DONE_end"
@@ -1758,4 +1763,5 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         Given the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /data/gpdata/ggrebalance/primary'"
         And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /data/gpdata/ggrebalance/mirror'"
         Then "COORDINATOR_DATA_DIRECTORY" environment variable should be restored
+         And "PGPORT" environment variable should be restored
          And coordinator data directory is updated
