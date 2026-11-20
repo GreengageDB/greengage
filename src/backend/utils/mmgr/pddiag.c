@@ -616,6 +616,10 @@ pd_boot(void)
 {
 	pd_install();
 	pd_ev_hook = pd_event;
+	/* a child forked after a postmaster-side dump would inherit the cached
+	 * fd and append its own report to the postmaster's file: force every
+	 * process to open its pid-keyed file at its first dump */
+	pd_log_fd = -1;
 	pd_resolve_logdir();
 }
 
