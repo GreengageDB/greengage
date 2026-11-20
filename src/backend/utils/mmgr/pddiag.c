@@ -26,11 +26,8 @@
 #include "utils/pddiag.h"
 #include "miscadmin.h"
 
-#include <dlfcn.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -69,7 +66,6 @@ typedef struct PdMLogEnt
 } PdMLogEnt;
 
 static PdEvent pd_ring_buf[PD_RING_ENTRIES];
-static PdEvent *pd_ring = pd_ring_buf;	/* kept as a pointer for the code below */
 uint64 pd_diag_seq = 0;		/* exported for the caller-side pre-check */
 static struct sigaction pd_old_segv, pd_old_abrt, pd_old_bus;
 
@@ -123,7 +119,7 @@ pd_event(int is_alloc, void *ptr, void *ctx, uint64 size, uint64 n)
 
 	if ((n & 0xFFF) == 0)
 		pd_recheck();
-	e = &pd_ring[n % PD_RING_ENTRIES];
+	e = &pd_ring_buf[n % PD_RING_ENTRIES];
 	e->seq = n;
 	e->ptr = ptr;
 	e->ctx = ctx;
@@ -266,7 +262,7 @@ pd_dump_ring_for(int fd, void *ptr)
 		pd_emit_str(fd, "", "== ring tail (newest 64, unfiltered) ==");
 		for (i = 0; i < PD_RING_ENTRIES && i < seq && (int) i < 64; i++)
 		{
-			PdEvent    *e = &pd_ring[(seq - 1 - i) % PD_RING_ENTRIES];
+			PdEvent    *e = &pd_ring_buf[(seq - 1 - i) % PD_RING_ENTRIES];
 			char		buf[160];
 			int			n = 0;
 
@@ -306,7 +302,7 @@ pd_dump_ring_for(int fd, void *ptr)
 	pd_emit_str(fd, "", "== ring history for fault ptr (newest first, max 40) ==");
 	for (i = 0; i < PD_RING_ENTRIES && i < seq && found < 40; i++)
 	{
-		PdEvent    *e = &pd_ring[(seq - 1 - i) % PD_RING_ENTRIES];
+		PdEvent    *e = &pd_ring_buf[(seq - 1 - i) % PD_RING_ENTRIES];
 		uint64		addr = (uint64) (uintptr_t) ptr;
 		uint64		eptr = (uint64) (uintptr_t) e->ptr;
 
@@ -452,8 +448,7 @@ pd_dump_crash_impl(int signo, uint64 fault)
 	}
 	if (fault == 0 && pd_fault_addr != 0)
 		fault = pd_fault_addr;
-	if (pd_ring)
-		pd_dump_ring_for(fd, (void *) (uintptr_t) fault);
+	pd_dump_ring_for(fd, (void *) (uintptr_t) fault);
 	pd_dump_trace(fd);
 	pd_emit_str(fd, "", "end.");
 	close(fd);
@@ -477,12 +472,16 @@ pd_chain(int signo, siginfo_t *si, void *uc, const struct sigaction *old)
 {
 	if (old->sa_flags & SA_SIGINFO)
 		old->sa_sigaction(signo, si, uc);
-	else if (old->sa_handler == SIG_DFL)
+	else if (old->sa_handler == SIG_IGN && signo != SIGSEGV && signo != SIGBUS)
+		return;			/* honor SIG_IGN (only meaningful for SIGABRT) */
+	else if (old->sa_handler == SIG_IGN || old->sa_handler == SIG_DFL)
 	{
+		/* no previous handler, or a synchronous fault that cannot be
+		 * meaningfully ignored: die by the default action, with a core */
 		signal(signo, SIG_DFL);
 		raise(signo);
 	}
-	else if (old->sa_handler != SIG_IGN)
+	else
 		old->sa_handler(signo);
 }
 
