@@ -24,31 +24,14 @@ CREATE
 
 -- Let FTS detect/declare failure sooner
 !\retcode gpconfig -c gp_fts_probe_interval -v 10 --masteronly;
--- start_ignore
-20261112:16:19:07:3936415 gpconfig:a:a.voloshin-[INFO]:-completed successfully with parameters '-c gp_fts_probe_interval -v 10 --masteronly'
-
--- end_ignore
 (exited with code 0)
 -- Because after RESET, it still takes a little while for the primary
 -- to restart, and potentially makes FTS think it's in "recovery not
 -- in progress" stage and promote the mirror, we would need the FTS
 -- to make that decision a bit less frequently.
 !\retcode gpconfig -c gp_fts_probe_retries -v 15;
--- start_ignore
-20261112:16:19:07:3936570 gpconfig:a:a.voloshin-[INFO]:-completed successfully with parameters '-c gp_fts_probe_retries -v 15'
-
--- end_ignore
 (exited with code 0)
 !\retcode gpstop -u;
--- start_ignore
-20261112:16:19:08:3936993 gpstop:a:a.voloshin-[INFO]:-Starting gpstop with args: -u
-20261112:16:19:08:3936993 gpstop:a:a.voloshin-[INFO]:-Gathering information and validating the environment...
-20261112:16:19:08:3936993 gpstop:a:a.voloshin-[INFO]:-Obtaining Greengage Master catalog information
-20261112:16:19:08:3936993 gpstop:a:a.voloshin-[INFO]:-Obtaining Segment details from master...
-20261112:16:19:08:3936993 gpstop:a:a.voloshin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.0.0-beta.1 build dev'
-20261112:16:19:08:3936993 gpstop:a:a.voloshin-[INFO]:-Signalling all postmaster processes to reload
-
--- end_ignore
 (exited with code 0)
 
 -- Let the background writer sleep 17 seconds to delay the resetting.
@@ -102,10 +85,6 @@ select fts_cpu_check('start');
 -- backends (previous panic fault injection)
 -- no error, because we managed to overrun reaper and sendeed results
 -- of wait_until_triggered back
--- start_ignore
-select gp_wait_until_triggered_fault('backend_abort_handling', 1, dbid) from gp_segment_configuration where role = 'p' and content = 0;
-ERROR:  connection to dbid 2 a:6002 failed (gp_inject_fault.c:107)
--- end_ignore
 
 -- This should fail due to the seg0 in reset mode
 2&:create table fts_reset_t2(a int);  <waiting ...>
@@ -127,7 +106,7 @@ SET
 CREATE
 
 1<:  <... completed>
-ERROR:  fault triggered, fault name:'start_prepare' fault type:'panic'  (seg0 127.0.1.1:6002 pid=3937023)
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'panic'
 2<:  <... completed>
 ERROR:  failed to acquire resources on one or more segments
 DETAIL:  Segments are in reset/recovery mode.
@@ -171,31 +150,8 @@ ERROR:  Error on receive from seg0 127.0.1.1:6002 pid=3936408: server closed the
 !\retcode gprecoverseg -aF !\retcode gprecoverseg -ar 
 -- restore parameters
 !\retcode gpconfig -r gp_fts_probe_interval --masteronly;
--- start_ignore
-20261112:16:19:29:3937239 gprecoverseg:a:a.voloshin-[INFO]:-Starting gprecoverseg with args: -aF
-20261112:16:19:29:3937239 gprecoverseg:a:a.voloshin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 6.0.0-beta.1 build dev'
-20261112:16:19:29:3937239 gprecoverseg:a:a.voloshin-[INFO]:-master Greengage Version: 'PostgreSQL 9.4.26 (Greengage Database 6.0.0-beta.1 build dev) on x86_64-unknown-linux-gnu, compiled by gcc-12 (Ubuntu 12.5.0-9ubuntu1) 12.5.0, 64-bit compiled on Nov 12 2026 16:02:09 (with assert checking)'
-20261112:16:19:29:3937239 gprecoverseg:a:a.voloshin-[INFO]:-Obtaining Segment details from master...
-20261112:16:19:29:3937239 gprecoverseg:a:a.voloshin-[INFO]:-No segments to recover
-/bin/sh: 2: !retcode: not found
-/bin/sh: 3: !retcode: not found
-
--- end_ignore
 (exited with code 127)
 !\retcode gpconfig -r gp_fts_probe_retries --masteronly;
--- start_ignore
-20261112:16:19:30:3937327 gpconfig:a:a.voloshin-[INFO]:-completed successfully with parameters '-r gp_fts_probe_retries --masteronly'
-
--- end_ignore
 (exited with code 0)
 !\retcode gpstop -u;
--- start_ignore
-20261112:16:19:30:3937482 gpstop:a:a.voloshin-[INFO]:-Starting gpstop with args: -u
-20261112:16:19:30:3937482 gpstop:a:a.voloshin-[INFO]:-Gathering information and validating the environment...
-20261112:16:19:30:3937482 gpstop:a:a.voloshin-[INFO]:-Obtaining Greengage Master catalog information
-20261112:16:19:30:3937482 gpstop:a:a.voloshin-[INFO]:-Obtaining Segment details from master...
-20261112:16:19:30:3937482 gpstop:a:a.voloshin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.0.0-beta.1 build dev'
-20261112:16:19:30:3937482 gpstop:a:a.voloshin-[INFO]:-Signalling all postmaster processes to reload
-
--- end_ignore
 (exited with code 0)
