@@ -31,6 +31,7 @@
 #include "storage/pmsignal.h"
 #include "storage/standby.h"
 #include "utils/guc.h"
+#include "utils/pddiag.h"
 #include "utils/timeout.h"
 
 bool am_startup = false;
@@ -216,6 +217,9 @@ StartupProcessMain(void)
 #ifdef SIGSEGV
 	pqsignal(SIGSEGV, HandleCrash);
 #endif
+	/* the pqsignal calls above displaced pddiag's handler that
+	 * InitStandardHandler installed: take the signal slots back now */
+	pd_recheck();
 
 	/*
 	 * Reset some signals that are accepted by postmaster but not here

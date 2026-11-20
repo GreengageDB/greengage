@@ -79,6 +79,7 @@
 #include "utils/faultinjector.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/pddiag.h"
 #include "utils/ps_status.h"
 #include "utils/snapmgr.h"
 #include "utils/timeout.h"
@@ -4905,6 +4906,10 @@ PostgresMain(int argc, char *argv[],
 		pqsignal(SIGBUS, CdbProgramErrorHandler);
 #endif
 #endif
+		/* the pqsignal calls above just displaced pddiag's handler that
+		 * InitStandardHandler installed: take the signal slots back now,
+		 * not after the first allocator event */
+		pd_recheck();
 	}
 
 	pqinitmask();
