@@ -7,7 +7,7 @@ class LeakedSchemaDropper:
     # Additionally, we should take into account orphaned schemas, whose session_id may
     # conflict with coordinator bgworkers, which shouldn't create orphaned schemas.
     # Also try to avoid connection id collision with truly orphaned schema id.
-    leaked_schema_query = """
+    leaked_schema_query = r"""
         WITH temp_schemas AS (
           SELECT nspname, 
                  regexp_replace(nspname, '\D', '', 'g')::int as sess_id

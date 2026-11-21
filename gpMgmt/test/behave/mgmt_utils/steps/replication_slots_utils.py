@@ -87,7 +87,7 @@ def step_impl(context):
 
     # NOTE that these commands are manually escaped; beware when adding dollar
     # signs or double-quotes!
-    cmd = "ps aux | grep '[p]ostgres .* %s' | awk '{print \$2}' | xargs kill -9" % datadir
+    cmd = "ps aux | grep '[p]ostgres .* %s' | awk '{print \\$2}' | xargs kill -9" % datadir
     cmd = 'ssh %s "%s"' % (host, cmd)
     run_command(context, cmd)
 
