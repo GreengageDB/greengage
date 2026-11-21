@@ -1,0 +1,146 @@
+# syntax=docker/dockerfile:1.7
+#
+# Native Linux ARM64 developer build for Apple Silicon hosts.
+#
+# The gpAux packaging path used by ci/Dockerfile.ubuntu currently selects
+# x86_64 build-architecture settings. This image builds Greengage directly
+# through configure and make instead.
+
+FROM ubuntu:22.04 AS deps
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG WITH_ARROW_FLIGHT_DEPS=false
+ARG ARROW_FLIGHT_PACKAGE_VERSION=
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      bison \
+      build-essential \
+      ca-certificates \
+      ccache \
+      clang \
+      cmake \
+      curl \
+      flex \
+      g++ \
+      gcc \
+      git \
+      inetutils-ping \
+      iproute2 \
+      krb5-admin-server \
+      krb5-kdc \
+      libapr1-dev \
+      libbz2-dev \
+      libcurl4-gnutls-dev \
+      libevent-dev \
+      libipc-run-perl \
+      libkrb5-dev \
+      less \
+      libldap-common \
+      libldap-dev \
+      libpam-dev \
+      libperl-dev \
+      libreadline-dev \
+      libssl-dev \
+      libuv1-dev \
+      libxerces-c-dev \
+      libxml2-dev \
+      libyaml-dev \
+      libzstd-dev \
+      llvm \
+      locales \
+      lsof \
+      net-tools \
+      ninja-build \
+      openssh-client \
+      openssh-server \
+      openssl \
+      pkg-config \
+      protobuf-compiler \
+      python3.11 \
+      python3.11-dev \
+      python3-dev \
+      python3-pip \
+      python3-psutil \
+      python3-psycopg2 \
+      python3-yaml \
+      rsync \
+      sudo \
+      zlib1g-dev; \
+    locale-gen en_US.UTF-8; \
+    mkdir -p /run/sshd; \
+    useradd -m -s /bin/bash gpadmin; \
+    echo "gpadmin ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/gpadmin; \
+    chmod 0440 /etc/sudoers.d/gpadmin; \
+    ssh-keygen -A; \
+    rm -rf /var/lib/apt/lists/*
+
+COPY ci/scripts/install_arrow_flight_deps.bash /tmp/install_arrow_flight_deps.bash
+RUN if [[ "${WITH_ARROW_FLIGHT_DEPS}" == "true" || \
+          "${WITH_ARROW_FLIGHT_DEPS}" == "yes" || \
+          "${WITH_ARROW_FLIGHT_DEPS}" == "1" ]]; then \
+      bash /tmp/install_arrow_flight_deps.bash; \
+    fi; \
+    rm -f /tmp/install_arrow_flight_deps.bash
+
+USER gpadmin
+WORKDIR /home/gpadmin
+
+RUN set -eux; \
+    mkdir -p /home/gpadmin/.ssh; \
+    ssh-keygen -q -N "" -f /home/gpadmin/.ssh/id_rsa; \
+    cat /home/gpadmin/.ssh/id_rsa.pub >> /home/gpadmin/.ssh/authorized_keys; \
+    chmod 700 /home/gpadmin/.ssh; \
+    chmod 600 /home/gpadmin/.ssh/authorized_keys; \
+    printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile=/dev/null\n' \
+      > /home/gpadmin/.ssh/config
+
+ENV LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8
+
+FROM deps AS build
+
+USER gpadmin
+WORKDIR /home/gpadmin/gpdb_src
+
+COPY --chown=gpadmin:gpadmin . .
+
+RUN set -eux; \
+    if [[ -f GNUmakefile ]]; then \
+      make distclean; \
+    fi; \
+    rm -f src/backend/parser/gram.c src/backend/parser/gram.h; \
+    ./configure \
+      --prefix=/home/gpadmin/greengage-db-devel \
+      --with-gssapi \
+      --with-libxml \
+      --with-openssl \
+      --with-perl \
+      --with-python \
+      --enable-cassert \
+      --enable-debug \
+      --enable-depend \
+      PYTHON=python3.11; \
+    make -C src/backend generated-headers; \
+    make -j"$(nproc)"; \
+    make install
+
+FROM deps AS dev
+
+USER gpadmin
+WORKDIR /home/gpadmin
+
+COPY --from=build --chown=gpadmin:gpadmin \
+  /home/gpadmin/gpdb_src /home/gpadmin/gpdb_src
+COPY --from=build --chown=gpadmin:gpadmin \
+  /home/gpadmin/greengage-db-devel /home/gpadmin/greengage-db-devel
+
+RUN set -eux; \
+    echo 'source /home/gpadmin/greengage-db-devel/greengage_path.sh' \
+      >> /home/gpadmin/.bashrc; \
+    echo 'cd /home/gpadmin/gpdb_src' >> /home/gpadmin/.bashrc
+
+CMD ["bash", "-lc", "sudo /usr/sbin/sshd && exec bash"]

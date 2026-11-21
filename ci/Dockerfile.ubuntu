@@ -2,6 +2,10 @@ ARG OS_VERSION=22.04
 
 FROM ubuntu:${OS_VERSION} AS base
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG WITH_ARROW_FLIGHT_DEPS=false
+ARG ARROW_FLIGHT_PACKAGE_VERSION=
+
 WORKDIR /home/gpadmin
 
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
@@ -27,6 +31,12 @@ RUN set -eux; \
       'mock<=5.0.0' \
       protobuf==3.20.0 \
       pytest
+
+COPY ci/scripts/install_arrow_flight_deps.bash /tmp/install_arrow_flight_deps.bash
+RUN if [[ "${WITH_ARROW_FLIGHT_DEPS}" == "true" || "${WITH_ARROW_FLIGHT_DEPS}" == "yes" || "${WITH_ARROW_FLIGHT_DEPS}" == "1" ]]; then \
+      bash /tmp/install_arrow_flight_deps.bash; \
+    fi; \
+    rm -f /tmp/install_arrow_flight_deps.bash
 
 ARG CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend"
 
