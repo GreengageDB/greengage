@@ -87,6 +87,70 @@
 2:set default_table_access_method = ao_column;
 2:show default_table_access_method;
 2:DROP TABLE IF EXISTS crash_coordinator_before_cleanup_phase CASCADE;
+-- Function that:
+--
+-- 1. Computes a conservative threshold: the maximum, across segments, of
+--    each segment's oldest xid still leaving segfiles in
+--    AOSEG_STATE_AWAITING_DROP. (Segments have independent xid counters;
+--    pg_stat_activity does not expose gp_segment_id, so an exact
+--    per-segment comparison is not expressible without a per-segment loop.)
+--
+-- 2. Waits until no backend on any segment has a horizon (backend_xmin or
+--    backend_xid) at or below that threshold, excluding the waiting session.
+--    This happens after the crashed transaction is reaped during recovery.
+--
+2:CREATE OR REPLACE FUNCTION wait_for_new_oldest_xid(tbl regclass, timeout_secs int DEFAULT 10)
+RETURNS text AS $$
+DECLARE
+    segrel text; /*in func*/
+    own_sess bigint; /*in func*/
+    bx_max bigint; /*in func*/
+    n int; /*in func*/
+    msg text; /*in func*/
+BEGIN
+    -- Resolve the per-table aux catalog.
+    SELECT segrelid::regclass::text INTO segrel FROM pg_appendonly WHERE relid = tbl; /*in func*/
+    IF segrel IS NULL THEN RETURN 'OK'; /*in func*/
+    END IF; /*in func*/
+
+    -- Capture our own session id so the wait does not observe itself.
+    SELECT sess_id::bigint INTO own_sess FROM pg_stat_activity WHERE pid = pg_backend_pid(); /*in func*/
+
+    FOR i IN 1..timeout_secs*10 LOOP
+        -- Per-segment oldest AWAITING_DROP xmin, then its maximum.
+        EXECUTE format(
+            'SELECT max(bx) FROM ('
+            '  SELECT gp_segment_id, min(xmin::text::bigint) AS bx '
+            '    FROM gp_dist_random(%L) '
+            '   WHERE state = 2 '
+            '   GROUP BY gp_segment_id) s',
+            segrel) INTO bx_max; /*in func*/
+        IF bx_max IS NULL THEN RETURN 'OK'; /*in func*/
+        END IF; /*in func*/
+
+        -- Any backend whose horizon is at or below the conservative threshold.
+        EXECUTE format(
+            'SELECT count(*) FROM gp_dist_random(%L) '
+            ' WHERE LEAST(backend_xmin::text::bigint, backend_xid::text::bigint) <= %s '
+            '   AND sess_id <> %s',
+            'pg_stat_activity', bx_max, own_sess) INTO n; /*in func*/
+
+        IF n = 0 THEN RETURN 'OK'; /*in func*/
+        END IF; /*in func*/
+        PERFORM pg_sleep(0.1); /*in func*/
+    END LOOP; /*in func*/
+
+    EXECUTE format(
+        'SELECT string_agg(format(''pid=%s xid=%s xmin=%s state=%s'', '
+        '  pid, backend_xid, backend_xmin, state), '' | '') '
+        '  FROM gp_dist_random(%L) '
+        ' WHERE LEAST(backend_xmin::text::bigint, backend_xid::text::bigint) <= %s '
+        '   AND sess_id <> %s',
+        'pg_stat_activity', bx_max, own_sess) INTO msg; /*in func*/
+
+    RETURN format('FAIL: still blocked by %s txns [%s]', n, coalesce(msg, 'no rows')); /*in func*/
+END; /*in func*/
+$$ LANGUAGE plpgsql;
 2:CREATE TABLE crash_coordinator_before_cleanup_phase (a INT, b INT, c CHAR(20));
 2:CREATE INDEX crash_coordinator_before_cleanup_phase_index ON crash_coordinator_before_cleanup_phase(b);
 2:INSERT INTO crash_coordinator_before_cleanup_phase SELECT i AS a, 1 AS b, 'hello world' AS c FROM generate_series(1, 10) AS i;
@@ -106,6 +170,11 @@
 4:UPDATE crash_coordinator_before_cleanup_phase SET b = b+10 WHERE a=25;
 4:SELECT * FROM crash_coordinator_before_cleanup_phase ORDER BY a,b;
 4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
+-- Leaving uncommited (because of panic) transaction's xid in 
+-- procarray leads to segfiles staying in AOSEG_STATE_AWAITING_DROP 
+-- and being unable to be dropped.
+5:SELECT wait_for_new_oldest_xid('crash_coordinator_before_cleanup_phase');
+5q:
 4:VACUUM crash_coordinator_before_cleanup_phase;
 4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
 4:INSERT INTO crash_coordinator_before_cleanup_phase VALUES(21, 1, 'c'), (26, 1, 'c');
