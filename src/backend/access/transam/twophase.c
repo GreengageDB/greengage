@@ -79,6 +79,7 @@
 #include "access/commit_ts.h"
 #include "access/htup_details.h"
 #include "access/subtrans.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/twophase.h"
 #include "access/twophase_rmgr.h"
@@ -1814,6 +1815,9 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 		RemoveTwoPhaseFile(xid, true);
 
 	MyLockedGxact = NULL;
+
+	/* Decide the parked tempcat changes only after the outcome is durable. */
+	tempcat_finish_prepared_transaction(isCommit);
 
 	SIMPLE_FAULT_INJECTOR("finish_prepared_after_record_commit_prepared");
 
