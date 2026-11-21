@@ -1,0 +1,320 @@
+-- The hooks of EXPLAIN for extensions: an option, its validation, a line
+-- on each plan node and after the plan, and the data that each qExec
+-- sends to the qDisp. The plans are those of the Postgres-based planner.
+SET optimizer = off;
+CREATE TABLE teh (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO teh SELECT i, i % 10 FROM generate_series(1, 100) i;
+ANALYZE teh;
+-- An option that no extension registered is still refused.
+EXPLAIN (COSTS OFF, NO_SUCH_OPTION) SELECT 1;
+ERROR:  unrecognized EXPLAIN option "no_such_option"
+LINE 1: EXPLAIN (COSTS OFF, NO_SUCH_OPTION) SELECT 1;
+                            ^
+-- The module refuses its option without ANALYZE in the validation hook.
+EXPLAIN (COSTS OFF, TEST_HOOKS) SELECT 1;
+ERROR:  EXPLAIN option TEST_HOOKS requires ANALYZE
+-- Without the option the hooks print nothing.
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF)
+SELECT count(*) FROM teh;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Finalize Aggregate (actual rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
+         ->  Partial Aggregate (actual rows=1 loops=1)
+               ->  Seq Scan on teh (actual rows=38 loops=1)
+ Optimizer: Postgres-based planner
+(5 rows)
+
+-- One slice on the segments: each of its three qExecs reports, and sends
+-- an empty piece under another name besides.
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, TEST_HOOKS)
+SELECT count(*) FROM teh;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Finalize Aggregate (actual rows=1 loops=1)
+   Hooked: true
+   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
+         Hooked: true
+         ->  Partial Aggregate (actual rows=1 loops=1)
+               Hooked: true
+               ->  Seq Scan on teh (actual rows=38 loops=1)
+                     Hooked: true
+ Optimizer: Postgres-based planner
+ QE Reports: slice1: seg0 seg1 seg2
+ QE Messages: 3
+ Other Pieces: 3
+ Reports of Other Statements: 0
+(13 rows)
+
+-- A statement that writes runs its root slice on the segments too: the
+-- qExecs of both slices report.
+CREATE TABLE teh2 (a int, b int) DISTRIBUTED BY (b);
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, TEST_HOOKS)
+INSERT INTO teh2 SELECT * FROM teh;
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Insert on teh2 (actual rows=0 loops=1)
+   Hooked: true
+   ->  Redistribute Motion 3:3  (slice1; segments: 3) (actual rows=50 loops=1)
+         Hash Key: teh.b
+         Hooked: true
+         ->  Seq Scan on teh (actual rows=38 loops=1)
+               Hooked: true
+ Optimizer: Postgres-based planner
+ QE Reports: slice0: seg0 seg1 seg2 slice1: seg0 seg1 seg2
+ QE Messages: 6
+ Other Pieces: 6
+ Reports of Other Statements: 0
+(12 rows)
+
+-- An initplan is dispatched on its own, and its qExecs report too.
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, TEST_HOOKS)
+SELECT count(*) FROM teh WHERE a > (SELECT avg(a) FROM teh);
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Finalize Aggregate (actual rows=1 loops=1)
+   Hooked: true
+   InitPlan 1 (returns $0)  (slice2)
+     ->  Finalize Aggregate (actual rows=1 loops=1)
+           Hooked: true
+           ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=3 loops=1)
+                 Hooked: true
+                 ->  Partial Aggregate (actual rows=1 loops=1)
+                       Hooked: true
+                       ->  Seq Scan on teh teh_1 (actual rows=38 loops=1)
+                             Hooked: true
+   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
+         Hooked: true
+         ->  Partial Aggregate (actual rows=1 loops=1)
+               Hooked: true
+               ->  Seq Scan on teh (actual rows=20 loops=1)
+                     Filter: ((a)::numeric > $0)
+                     Rows Removed by Filter: 18
+                     Hooked: true
+ Optimizer: Postgres-based planner
+ QE Reports: slice1: seg0 seg1 seg2 slice3: seg0 seg1 seg2
+ QE Messages: 6
+ Other Pieces: 6
+ Reports of Other Statements: 0
+(24 rows)
+
+-- A slice that reads a catalog runs on the coordinator: its qExec
+-- reports as seg-1.
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, TEST_HOOKS)
+INSERT INTO teh2 SELECT 0, 0 FROM pg_am LIMIT 1;
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Insert on teh2 (actual rows=0 loops=1)
+   Hooked: true
+   ->  Redistribute Motion 1:3  (slice1) (actual rows=1 loops=1)
+         Hash Key: (0)
+         Hooked: true
+         ->  Limit (actual rows=1 loops=1)
+               Hooked: true
+               ->  Seq Scan on pg_am (actual rows=1 loops=1)
+                     Hooked: true
+ Optimizer: Postgres-based planner
+ QE Reports: slice0: seg0 seg1 seg2 slice1: seg-1
+ QE Messages: 4
+ Other Pieces: 4
+ Reports of Other Statements: 0
+(14 rows)
+
+-- A rule gives one EXPLAIN two plans: each shows the reports of its own
+-- statement only.
+CREATE TABLE teh3 (a int, b int) DISTRIBUTED BY (a);
+CREATE RULE teh_also AS ON INSERT TO teh3
+  DO ALSO INSERT INTO teh2 VALUES (new.a, new.b);
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, TEST_HOOKS)
+INSERT INTO teh3 SELECT * FROM teh;
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Insert on teh3 (actual rows=0 loops=1)
+   Hooked: true
+   ->  Seq Scan on teh (actual rows=38 loops=1)
+         Hooked: true
+ Optimizer: Postgres-based planner
+ QE Reports: slice0: seg0 seg1 seg2
+ QE Messages: 3
+ Other Pieces: 3
+ Reports of Other Statements: 0
+ 
+ Insert on teh2 (actual rows=0 loops=1)
+   Hooked: true
+   ->  Redistribute Motion 3:3  (slice1; segments: 3) (actual rows=50 loops=1)
+         Hash Key: teh.b
+         Hooked: true
+         ->  Seq Scan on teh (actual rows=38 loops=1)
+               Hooked: true
+ Optimizer: Postgres-based planner
+ QE Reports: slice0: seg0 seg1 seg2 slice1: seg0 seg1 seg2
+ QE Messages: 6
+ Other Pieces: 6
+ Reports of Other Statements: 0
+(22 rows)
+
+DROP TABLE teh3;
+-- The option set to false prints nothing either.
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, TEST_HOOKS false)
+SELECT count(*) FROM teh;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Finalize Aggregate (actual rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
+         ->  Partial Aggregate (actual rows=1 loops=1)
+               ->  Seq Scan on teh (actual rows=38 loops=1)
+ Optimizer: Postgres-based planner
+(5 rows)
+
+-- The lines in another format.
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, TEST_HOOKS,
+         FORMAT YAML)
+SELECT count(*) FROM teh;
+                  QUERY PLAN                  
+----------------------------------------------
+ - Plan:                                     +
+     Node Type: "Aggregate"                  +
+     Strategy: "Plain"                       +
+     Partial Mode: "Finalize"                +
+     Slice: 0                                +
+     Segments: 0                             +
+     Gang Type: "unallocated"                +
+     Parallel Aware: false                   +
+     Actual Rows: 1                          +
+     Actual Loops: 1                         +
+     Hooked: true                            +
+     Plans:                                  +
+       - Node Type: "Gather Motion"          +
+         Senders: 3                          +
+         Receivers: 1                        +
+         Parent Relationship: "Outer"        +
+         Slice: 1                            +
+         Segments: 3                         +
+         Gang Type: "primary reader"         +
+         Parallel Aware: false               +
+         Actual Rows: 3                      +
+         Actual Loops: 1                     +
+         Hooked: true                        +
+         Plans:                              +
+           - Node Type: "Aggregate"          +
+             Strategy: "Plain"               +
+             Partial Mode: "Partial"         +
+             Parent Relationship: "Outer"    +
+             Slice: 1                        +
+             Segments: 3                     +
+             Gang Type: "primary reader"     +
+             Parallel Aware: false           +
+             Actual Rows: 1                  +
+             Actual Loops: 1                 +
+             Hooked: true                    +
+             Plans:                          +
+               - Node Type: "Seq Scan"       +
+                 Parent Relationship: "Outer"+
+                 Slice: 1                    +
+                 Segments: 3                 +
+                 Gang Type: "primary reader" +
+                 Parallel Aware: false       +
+                 Relation Name: "teh"        +
+                 Alias: "teh"                +
+                 Actual Rows: 38             +
+                 Actual Loops: 1             +
+                 Hooked: true                +
+   Optimizer: "Postgres-based planner"       +
+   Triggers:                                 +
+   QE Reports: "slice1: seg0 seg1 seg2"      +
+   QE Messages: 3                            +
+   Other Pieces: 3                           +
+   Reports of Other Statements: 0
+(1 row)
+
+-- A qExec that sends no piece still has its message passed on.
+SET test_explain_hooks.send = off;
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, TEST_HOOKS)
+SELECT count(*) FROM teh;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Finalize Aggregate (actual rows=1 loops=1)
+   Hooked: true
+   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
+         Hooked: true
+         ->  Partial Aggregate (actual rows=1 loops=1)
+               Hooked: true
+               ->  Seq Scan on teh (actual rows=38 loops=1)
+                     Hooked: true
+ Optimizer: Postgres-based planner
+ QE Reports: 
+ QE Messages: 3
+ Other Pieces: 0
+ Reports of Other Statements: 0
+(13 rows)
+
+RESET test_explain_hooks.send;
+-- A plain EXPLAIN that a function runs on the coordinator, after the
+-- initplan reported, keeps the reports of the explained statement.
+CREATE FUNCTION teh_nested() RETURNS int
+LANGUAGE plpgsql AS $$
+BEGIN
+  EXECUTE 'EXPLAIN SELECT 1';
+  RETURN 1;
+END
+$$;
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, TEST_HOOKS)
+SELECT count(*), teh_nested() FROM teh WHERE a > (SELECT avg(a) FROM teh);
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Finalize Aggregate (actual rows=1 loops=1)
+   Hooked: true
+   InitPlan 1 (returns $0)  (slice2)
+     ->  Finalize Aggregate (actual rows=1 loops=1)
+           Hooked: true
+           ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=3 loops=1)
+                 Hooked: true
+                 ->  Partial Aggregate (actual rows=1 loops=1)
+                       Hooked: true
+                       ->  Seq Scan on teh teh_1 (actual rows=38 loops=1)
+                             Hooked: true
+   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
+         Hooked: true
+         ->  Partial Aggregate (actual rows=1 loops=1)
+               Hooked: true
+               ->  Seq Scan on teh (actual rows=20 loops=1)
+                     Filter: ((a)::numeric > $0)
+                     Rows Removed by Filter: 18
+                     Hooked: true
+ Optimizer: Postgres-based planner
+ QE Reports: slice1: seg0 seg1 seg2 slice3: seg0 seg1 seg2
+ QE Messages: 6
+ Other Pieces: 6
+ Reports of Other Statements: 0
+(24 rows)
+
+DROP FUNCTION teh_nested();
+-- The qDisp refuses a piece of data that does not lie within the
+-- message, whether or not the EXPLAIN asks for TEST_HOOKS: one too short
+-- for the length of its name, one whose name is empty, one whose name
+-- is longer than the message, one whose name has no zero, one without
+-- the length of its data, one whose length is below zero, and one whose
+-- data is missing.
+SET test_explain_hooks.bad_piece = 'short';
+EXPLAIN (ANALYZE, COSTS OFF) SELECT count(*) FROM teh;
+ERROR:  Invalid data of extensions in execution statistics returned from seg0
+SET test_explain_hooks.bad_piece = 'empty_name';
+EXPLAIN (ANALYZE, COSTS OFF) SELECT count(*) FROM teh;
+ERROR:  Invalid data of extensions in execution statistics returned from seg0
+SET test_explain_hooks.bad_piece = 'long_name';
+EXPLAIN (ANALYZE, COSTS OFF) SELECT count(*) FROM teh;
+ERROR:  Invalid data of extensions in execution statistics returned from seg0
+SET test_explain_hooks.bad_piece = 'unterminated';
+EXPLAIN (ANALYZE, COSTS OFF) SELECT count(*) FROM teh;
+ERROR:  Invalid data of extensions in execution statistics returned from seg0
+SET test_explain_hooks.bad_piece = 'no_length';
+EXPLAIN (ANALYZE, COSTS OFF) SELECT count(*) FROM teh;
+ERROR:  Invalid data of extensions in execution statistics returned from seg0
+SET test_explain_hooks.bad_piece = 'negative';
+EXPLAIN (ANALYZE, COSTS OFF) SELECT count(*) FROM teh;
+ERROR:  Invalid data of extensions in execution statistics returned from seg0
+SET test_explain_hooks.bad_piece = 'truncated';
+EXPLAIN (ANALYZE, COSTS OFF) SELECT count(*) FROM teh;
+ERROR:  Invalid data of extensions in execution statistics returned from seg0
+RESET test_explain_hooks.bad_piece;
+DROP TABLE teh, teh2;

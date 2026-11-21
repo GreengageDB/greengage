@@ -20,6 +20,7 @@
 #include "catalog/pg_inherits.h"
 #include "commands/createas.h"
 #include "commands/defrem.h"
+#include "commands/explain_state.h"
 #include "commands/prepare.h"
 #include "commands/queue.h"
 #include "executor/execUtils.h"
@@ -65,6 +66,10 @@ ExplainOneQuery_hook_type ExplainOneQuery_hook = NULL;
 
 /* Hook for plugins to get control in explain_get_index_name() */
 explain_get_index_name_hook_type explain_get_index_name_hook = NULL;
+
+/* per-plan and per-node hooks for plugins to print additional info */
+explain_per_plan_hook_type explain_per_plan_hook = NULL;
+explain_per_node_hook_type explain_per_node_hook = NULL;
 
 
 /* OR-able flags for ExplainXMLTag() */
@@ -235,7 +240,7 @@ ExplainQuery(ParseState *pstate, ExplainStmt *stmt, const char *queryString,
 			es->dxl = defGetBoolean(opt);
 		else if (strcmp(opt->defname, "slicetable") == 0)
 			es->slicetable = defGetBoolean(opt);
-		else
+		else if (!ApplyExtensionExplainOption(es, opt, pstate))
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
 					 errmsg("unrecognized EXPLAIN option \"%s\"",
@@ -262,6 +267,10 @@ ExplainQuery(ParseState *pstate, ExplainStmt *stmt, const char *queryString,
 
 	if (explain_memory_verbosity >= EXPLAIN_MEMORY_VERBOSITY_DETAIL)
 		es->memory_detail = true;
+
+	/* plugin specific option validation */
+	if (explain_validate_options_hook)
+		(*explain_validate_options_hook) (es, stmt->options, pstate);
 
 	/*
 	 * Parse analysis was done already, but we still have to run the rule
@@ -758,6 +767,11 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 		else
 			ExplainPrintJITSummary(es,queryDesc);
 	}
+
+	/* Allow plugins to print additional information */
+	if (explain_per_plan_hook)
+		(*explain_per_plan_hook) (plannedstmt, into, es, queryString,
+								  params, queryEnv);
 
 	/*
 	 * Close down the query and free resources.  Include time for this in the
@@ -2733,6 +2747,11 @@ ExplainNode(PlanState *planstate, List *ancestors,
 		if (opened_group)
 			ExplainCloseGroup("Workers", "Workers", false, es);
 	}
+
+	/* Allow plugins to print additional information */
+	if (explain_per_node_hook)
+		(*explain_per_node_hook) (planstate, ancestors, relationship,
+								  plan_name, es);
 
 	/*
 	 * If partition pruning was done during executor initialization, the
