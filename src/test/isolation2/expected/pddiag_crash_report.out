@@ -81,7 +81,7 @@ DROP
 
 -- session 3 is dead; the newest pddiag report must carry signo=11, the
 -- si_code-accepted (but NULL) fault address, and the completion marker
-4: SELECT position('signo=11' in content) > 0 AS has_segv_signo, position(E'fault=0\n' in content) > 0 AS has_null_fault, position('end.' in content) > 0 AS is_complete FROM (SELECT pg_read_file('pg_log/' || filename) AS content FROM (SELECT f AS filename, (SELECT modification FROM pg_stat_file('pg_log/' || f)) AS mtime FROM pg_ls_dir('pg_log') AS f WHERE f LIKE 'pddiag-%.log' AND (SELECT modification FROM pg_stat_file('pg_log/' || f)) > now() - interval '10 minutes' ORDER BY mtime DESC, substring(f from 'pddiag-([0-9]+)\.log')::int DESC LIMIT 1) s) r;
+4: SELECT position('signo=11' in content) > 0 AS has_segv_signo, position(E'fault=0\n' in content) > 0 AS has_null_fault, position('end.' in content) > 0 AS is_complete FROM (SELECT pg_read_file(current_setting('log_directory') || '/' || filename) AS content FROM (SELECT f AS filename, (SELECT modification FROM pg_stat_file(current_setting('log_directory') || '/' || f)) AS mtime FROM pg_ls_dir(current_setting('log_directory')) AS f WHERE f LIKE 'pddiag-%.log' AND (SELECT modification FROM pg_stat_file(current_setting('log_directory') || '/' || f)) > now() - interval '10 minutes' ORDER BY mtime DESC, substring(f from 'pddiag-([0-9]+)\.log')::int DESC NULLS LAST LIMIT 1) s) r;
  has_segv_signo | has_null_fault | is_complete 
 ----------------+----------------+-------------
  t              | t              | t           

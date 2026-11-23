@@ -12,8 +12,7 @@
  *
  * Event ring entry: seq, ptr, ctx, size, caller return address, tid,
  * flags.  The crash handler (async-signal-safe apart from open/access,
- * custom u64
- * formatting, one write() per fully formatted line) appends
+ * plus custom u64 formatting, one write() per fully formatted line) appends
  * <logdir>/pddiag-<pid>.log with: fault address, chunk-header probe, the
  * ring history for the fault pointer (or the newest events), and the
  * tagged trace log; then the previous handler runs (GPDB's segv printer).
@@ -539,6 +538,8 @@ pd_dump_crash_impl(int signo, uint64 fault)
 		fd = pd_open_log((int) pid);
 		if (fd >= 0)
 		{
+			if (pd_log_fd >= 0)
+				close(pd_log_fd);	/* the inherited parent's report fd */
 			pd_log_fd = fd;
 			pd_log_fd_pid = pid;
 		}
