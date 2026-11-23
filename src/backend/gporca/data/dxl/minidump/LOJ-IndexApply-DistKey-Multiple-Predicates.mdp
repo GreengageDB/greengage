@@ -456,7 +456,7 @@ explain select * from foo left join bar on bar.a=foo.a and bar.a<foo.b left oute
     <dxl:Plan Id="0" SpaceSize="2">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1330178.360283" Rows="3.000000" Width="48"/>
+          <dxl:Cost StartupCost="0" TotalCost="1330177.713241" Rows="1.000000" Width="48"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -482,7 +482,7 @@ explain select * from foo left join bar on bar.a=foo.a and bar.a<foo.b left oute
         <dxl:SortingColumnList/>
         <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="false" OuterRefAsParam="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1330178.359747" Rows="3.000000" Width="48"/>
+            <dxl:Cost StartupCost="0" TotalCost="1330177.713062" Rows="1.000000" Width="48"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -527,7 +527,7 @@ explain select * from foo left join bar on bar.a=foo.a and bar.a<foo.b left oute
           </dxl:JoinFilter>
           <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="true" OuterRefAsParam="true">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="437.000410" Rows="2.000000" Width="32"/>
+              <dxl:Cost StartupCost="0" TotalCost="437.000298" Rows="1.000000" Width="32"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">

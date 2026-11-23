@@ -523,7 +523,7 @@ ON a = c
     <dxl:Plan Id="0" SpaceSize="36848">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="2206722.016117" Rows="1.000000" Width="1"/>
+          <dxl:Cost StartupCost="0" TotalCost="2206722.001481" Rows="1.000000" Width="1"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="30" Alias="g">
@@ -534,7 +534,7 @@ ON a = c
         <dxl:SortingColumnList/>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="2206722.016113" Rows="1.000000" Width="1"/>
+            <dxl:Cost StartupCost="0" TotalCost="2206722.001477" Rows="1.000000" Width="1"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="30" Alias="g">
@@ -548,7 +548,7 @@ ON a = c
           <dxl:OneTimeFilter/>
           <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="false" OuterRefAsParam="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="2206722.016113" Rows="2.000000" Width="8"/>
+              <dxl:Cost StartupCost="0" TotalCost="2206722.001477" Rows="1.000000" Width="8"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="39" Alias="ColRef_0039">

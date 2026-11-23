@@ -524,7 +524,7 @@ select * from bar where c not in (select distinct a from foo);
     <dxl:Plan Id="0" SpaceSize="3293136">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="4310.001599" Rows="3.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="4310.001534" Rows="1.000000" Width="8"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="c">
@@ -538,7 +538,7 @@ select * from bar where c not in (select distinct a from foo);
         <dxl:SortingColumnList/>
         <dxl:Append IsTarget="false" IsZapped="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="4310.001509" Rows="3.000000" Width="8"/>
+            <dxl:Cost StartupCost="0" TotalCost="4310.001504" Rows="1.000000" Width="8"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="c">
