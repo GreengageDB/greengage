@@ -11,11 +11,16 @@
  * PD_FREE_MASK in pddiag.h: one event per 2^k alloc/free operations).
  *
  * Event ring entry: seq, ptr, ctx, size, caller return address, tid,
- * flags.  The crash handler (async-signal-safe apart from open/access,
- * plus custom u64 formatting, one write() per fully formatted line) appends
- * <logdir>/pddiag-<pid>.log with: fault address, chunk-header probe, the
- * ring history for the fault pointer (or the newest events), and the
- * tagged trace log; then the previous handler runs (GPDB's segv printer).
+ * flags.  The crash handler (async-signal-safe: custom u64 formatting,
+ * one write() per fully formatted line) emits the report to stderr, every
+ * line prefixed "pddiag: ": under logging_collector the syslogger passes
+ * non-protocol pipe data straight into the server log (with the standard
+ * rotation), so the report lands next to GPDB's own crash output; without
+ * the collector it lands wherever the postmaster's stderr points.  The
+ * report carries: signo, pid, fault address, the ring history for the
+ * fault pointer (or the newest events), the tagged trace log, and --
+ * deliberately last -- the chunk-header probe; then the previous handler
+ * runs (GPDB's segv printer).
  *
  * The ring and the trace log are static buffers, so they need no setup,
  * cannot fail to allocate, and are directly inspectable in core dumps.
@@ -26,7 +31,6 @@
 #include "utils/pddiag.h"
 #include "miscadmin.h"
 
-#include <fcntl.h>
 #include <signal.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
@@ -75,11 +79,6 @@ uint64 pd_diag_seq = 1;
  * funnels (see pddiag.h); sampled events copy it into the ring */
 void *volatile pd_last_ret = NULL;
 static struct sigaction pd_old_segv, pd_old_abrt, pd_old_bus;
-
-static int	pd_log_fd = -1; /* this process's report fd, cached after first dump */
-static uint64 pd_log_fd_pid = 0;	/* pid that opened pd_log_fd: a fork
-									 * after a dump must not append its own
-									 * report to the parent's pid-keyed file */
 
 static PdMLogEnt pd_trace_ring[PD_MLOG_ENTRIES];
 static uint64 pd_trace_idx = 0;
@@ -243,20 +242,32 @@ pd_hex(char *out, uint64 v)
 	return n;
 }
 
-/* one write() per fully formatted line: a partial line is far worse
- * than a lost one, and shared state is forbidden here (signal context,
- * other threads) */
+/* every report line carries the "pddiag: " prefix so the block stays
+ * greppable inside the shared server log; assemble the full line first and
+ * issue a single write(): writes of <= PIPE_BUF bytes are atomic on the
+ * syslogger pipe, so concurrent log traffic cannot tear our lines */
+#define PD_LOG_PREFIX	"pddiag: "
+
 static void
 pd_emit(int fd, const char *s, int len)
 {
-	while (len > 0)
+	char		line[320];
+	const int	plen = sizeof(PD_LOG_PREFIX) - 1;
+	int			total;
+	int			off = 0;
+
+	if (len > (int) sizeof(line) - plen)
+		len = (int) sizeof(line) - plen;	/* truncate rather than overflow */
+	memcpy(line, PD_LOG_PREFIX, plen);
+	memcpy(line + plen, s, len);
+	total = plen + len;
+	while (off < total)
 	{
-		ssize_t		w = write(fd, s, len);
+		ssize_t		w = write(fd, line + off, total - off);
 
 		if (w <= 0)
 			return;
-		s += w;
-		len -= (int) w;
+		off += (int) w;
 	}
 }
 
@@ -444,110 +455,22 @@ pd_dump_trace(int fd)
 
 static volatile int pd_dumping = 0;
 
-/* async-safe replacement for snprintf("%s%s%d.log"): only strlen-width
- * string copies and the custom u64 formatter */
-static char pd_log_dir[640];	/* resolved at pd_boot: "<datadir>/log" etc. */
-
-/*
- * Pick the report directory once per process: the usual log directories,
- * falling back to the data directory.  Not called from signal context.
- * Resolving the directory here (rather than probing three candidates in
- * the crash handler) keeps the dump to a single open(); creating the file
- * is deliberately left to the dump so that short-lived backends do not
- * litter the log directory with empty pddiag-<pid>.log files.
- */
-static void
-pd_resolve_logdir(void)
-{
-	static const char *candidates[] = {"/log", "/pg_log", ""};
-	int			i;
-
-	pd_log_dir[0] = '\0';
-	if (DataDir == NULL)
-		return;			/* crash before DataDir is set must not fault again */
-	for (i = 0; i < 3; i++)
-	{
-		const char *dir = DataDir;
-		const char *suff = candidates[i];
-		char		path[640];
-		int			n = 0;
-
-		while (dir[n] && n < (int) sizeof(path) - 48)
-		{
-			path[n] = dir[n];
-			n++;
-		}
-		while (*suff && n < (int) sizeof(path) - 2)
-			path[n++] = *suff++;
-		path[n] = '\0';
-		if (access(path, W_OK) == 0 && n < (int) sizeof(pd_log_dir) - 32)
-		{
-			memcpy(pd_log_dir, path, n + 1);
-			return;
-		}
-	}
-}
-
-/* open (or create) this process's report file in the resolved directory;
- * the fd is cached for subsequent dumps in this process */
-static int
-pd_open_log(int pid)
-{
-	char		path[700];
-	const char *dir = pd_log_dir;
-	int			n = 0;
-
-	if (dir[0] == '\0')
-	{
-		/* never booted (or booted before DataDir existed): last-resort
-		 * resolution; open() -- and access() during this last-resort
-		 * resolution -- are the only not-quite-async-signal-safe calls in
-		 * the whole dump: unavoidable if the report file does not exist yet
-		 * and the directory was never cached at boot */
-		pd_resolve_logdir();
-		dir = pd_log_dir;
-		if (dir[0] == '\0')
-			return -1;
-	}
-	while (dir[n] && n < (int) sizeof(path) - 32)
-	{
-		path[n] = dir[n];
-		n++;
-	}
-	memcpy(path + n, "/pddiag-", 8);
-	n += 8;
-	n += pd_u64(path + n, (uint64) pid);
-	memcpy(path + n, ".log", 5);
-	n += 5;
-	return open(path, O_WRONLY | O_CREAT | O_APPEND, 0600);
-}
-
 static void
 pd_dump_crash_impl(int signo, uint64 fault)
 {
-	int			fd;
+	/* stderr: with logging_collector on, the postmaster started us with
+	 * stderr pointing at the syslogger pipe and non-protocol data is passed
+	 * into the server log; without the collector the report goes wherever
+	 * the postmaster's stderr points (possibly /dev/null -- there is no
+	 * separate report file by design) */
+	int			fd = 2;
 
 	if (pd_dumping)
 		return;
 	pd_dumping = 1;
-	fd = pd_log_fd;
-	if (fd < 0 || pd_log_fd_pid != (uint64) getpid())
-	{
-		uint64		pid = (uint64) getpid();
-
-		fd = pd_open_log((int) pid);
-		if (fd >= 0)
-		{
-			if (pd_log_fd >= 0)
-				close(pd_log_fd);	/* the inherited parent's report fd */
-			pd_log_fd = fd;
-			pd_log_fd_pid = pid;
-		}
-	}
-	if (fd < 0)
-		return;
 	pd_emit_str(fd, "", "pddiag crash report");
 	pd_emit_u64(fd, "signo=", (uint64) signo);
+	pd_emit_u64(fd, "pid=", (uint64) getpid());
 	pd_emit_u64(fd, "seq=", pd_diag_seq);
 	/* the SA_SIGINFO handler may already know the fault address even when
 	 * our caller passed NULL (GPDB's 1-arg handler path): resolve it before
@@ -573,7 +496,6 @@ pd_dump_crash_impl(int signo, uint64 fault)
 		if (hdr1 > 0 && hdr1 < (1ULL << 40))
 			pd_emit_u64(fd, "chunk_size_guess=", hdr1);
 	}
-	/* no close(): the fd stays for a possible next dump in this process */
 }
 
 /* public entry: called from our SA_SIGINFO handler (fault known) and from
@@ -662,22 +584,11 @@ pd_boot(void)
 {
 	pd_install();
 	pd_ev_hook = pd_event;
-	/* a child forked after a postmaster-side dump would inherit the cached
-	 * fd and append its own report to the postmaster's file: force every
-	 * booted process to open its pid-keyed file at its first dump (the
-	 * fd pid check in pd_dump_crash_impl covers processes that never
-	 * boot).  Same for the cached tid, which would otherwise keep naming
-	 * the postmaster's thread in every forked backend (the pid compare in
-	 * pd_tid() is the backstop for never-booted processes) */
-	if (pd_log_fd >= 0)
-		close(pd_log_fd);	/* a dump between two boots of this process
-							 * (e.g. during authentication) would otherwise
-							 * leak the report fd */
-	pd_log_fd = -1;
-	pd_log_fd_pid = 0;
+	/* reset the cached tid: a forked backend would otherwise keep naming
+	 * the postmaster's thread until its pid first changes (the pid compare
+	 * in pd_tid() is the backstop for processes that never boot) */
 	pd_tls_tid = 0;
 	pd_tls_pid = 0;
-	pd_resolve_logdir();
 }
 
 /*

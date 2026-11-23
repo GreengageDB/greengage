@@ -26,9 +26,18 @@
  * their own init paths.  Aux processes that run neither init path
  * (checkpointer, bgwriter, syslogger, stats collector, ...) inherit the
  * handler and the event hook through fork(), so they still record events
- * and dump their own pid-keyed report on a crash; the recheck cadence in
+ * and dump their own report on a crash; the recheck cadence in
  * pd_event()/pd_trace() re-takes the signal slots there too, as soon as
  * any recorded event or trace fires.
+ *
+ * The crash report: on SIGSEGV/SIGABRT/SIGBUS the handler emits a
+ * "pddiag: "-prefixed report to stderr -- under logging_collector the
+ * syslogger copies non-protocol pipe data verbatim into the current server
+ * log file (so the report lives in the ordinary log, with the ordinary
+ * rotation, next to GPDB's own crash output); without the collector it
+ * goes wherever the postmaster's stderr points, possibly /dev/null.  There
+ * is no separate report file.  The header carries signo, pid and seq so
+ * the block can be correlated with the surrounding log lines.
  *
  * Coverage gaps (documented, not accidental): AllocSetRealloc of a large
  * (single-chunk block) allocation moves the block via gp_realloc() without
@@ -45,12 +54,6 @@
  *
  * Usage at a site of interest (one line, no new arrays/functions):
  *		pd_trace(PD_TAG_<something>, ptr, owner);
- *
- * Operations: a crash leaves a pddiag-<pid>.log report in the log
- * directory; reports are append-only and are never cleaned up by the
- * server, so operators should purge stale pddiag-*.log files from the
- * log directory periodically (a crash loop would otherwise accumulate
- * one small file per crashed pid).
  *
  * Part of the standard build: always compiled in, always on.
  *
