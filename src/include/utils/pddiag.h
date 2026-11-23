@@ -42,8 +42,11 @@
  * Coverage gaps (documented, not accidental): AllocSetRealloc of a large
  * (single-chunk block) allocation moves the block via gp_realloc() without
  * recording free+alloc events, so the ring history for the old address
- * ends at the last event before the move; AllocSetAllocHeader (shared
- * headers) is not instrumented either.  Frees done en masse by
+ * ends at the last event before the move; a small-chunk realloc has the
+ * same effect in reverse (the new chunk is a recorded ALLOC, but the old
+ * chunk returns to the freelist inline, with no FREE event); and
+ * AllocSetAllocHeader (shared headers) is not instrumented either.
+ * Frees done en masse by
  * MemoryContextReset/Delete (AllocSetReset/AllocSetDelete) record no FREE
  * events: the ring history for a dangling pointer ends at its last ALLOC,
  * and the reset/delete itself is visible only as a CTX_RESET/CTX_DELETE
