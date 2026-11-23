@@ -319,6 +319,27 @@ class TestHostsOptions(GpTestCase):
         self.assertTrue(planner.target_hosts[3].status == HostStatus.NEW)
         self.assertTrue(planner.target_hosts[0].status == HostStatus.DECOMMISSIONED)
 
+    @patch('ggrebalance_modules.planner.HostResolver.resolve_hostname')
+    @patch('ggrebalance_modules.planner.LNS.solve')
+    def test_multiple_addresses_only_rejected_for_move_destination(self, solve, resolve_hostname):
+        array = initGparrayFromFile('balanced_grouped_6')
+        array.segmentPairs[0].primaryDB.setSegmentAddress('sdw1-2')
+        self.options.target_hosts = 'sdw1,sdw3'
+        self.options.solver_seed = 1
+        self.options.skip_resource_estimation = True
+        planner = Planner(Mock(), Mock(), array, self.options)
+
+        # Replace sdw2 with sdw3, keeping all segments on sdw1 in place.
+        solve.return_value = ([(0, 1)] * 3 + [(1, 0)] * 3, None)
+        moves = planner.form_moves()
+        self.assertEqual([(m.srcHost.hostname, m.dstHost.hostname) for m in moves],
+                         [('sdw2', 'sdw3')] * 6)
+
+        # Reverse the placement so moves now land on sdw1.
+        solve.return_value = ([(1, 0)] * 3 + [(0, 1)] * 3, None)
+        with self.assertRaisesRegex(ValidationError, 'sdw1.*sdw1, sdw1-2'):
+            planner.form_moves()
+
 
 class TestDestinationAddresses(GpTestCase):
     def setUp(self):
@@ -344,10 +365,16 @@ class TestDestinationAddresses(GpTestCase):
                          config.initial_mirror_mapping)
         self.resolver.get_address.assert_not_called()
 
-    def test_multiple_destination_addresses_are_rejected(self):
+    def test_intermediate_host_skips_multiple_addresses(self):
         self.array.segmentPairs[0].primaryDB.setSegmentAddress('10.21.0.30')
-        with self.assertRaisesRegex(ValidationError, 'sdw1.*10.20.0.30, 10.21.0.30'):
-            Planner.get_target_hosts(self.array, resolver=self.resolver)
+        planner = Mock()
+        planner.target_hosts, _ = Planner.get_target_hosts(
+            self.array, add_hostname_list=['sdw3', 'sdw4'], resolver=self.resolver)
+        primary_move, mirror_move = Mock(), Mock(segment_size=None)
+        primary_move.dstHost.hostname = 'sdw2'
+        mirror_move.dstHost.hostname = 'sdw3'
+        host = Planner.select_intermediate_host(planner, primary_move, mirror_move, {})
+        self.assertEqual(host.hostname, 'sdw4')
 
     def test_multiple_addresses_on_removed_host_are_allowed(self):
         self.array.segmentPairs[0].primaryDB.setSegmentAddress('10.21.0.30')
@@ -364,6 +391,14 @@ class TestDestinationAddresses(GpTestCase):
         self.assertTrue(changed)
         self.assertEqual('192.168.1.30', next(h.address for h in hosts if h.hostname == 'sdw3'))
         self.resolver.get_address.assert_called_once_with('sdw3')
+
+    def test_new_host_keeps_hostname_on_hostname_based_cluster(self):
+        array = initGparrayFromFile('balanced_grouped_6')
+        for options in ({'add_hostname_list': ['sdw3']},
+                        {'target_hostname_list': ['sdw1', 'sdw2', 'sdw3']}):
+            with self.subTest(options=options):
+                hosts, _ = Planner.get_target_hosts(array, resolver=self.resolver, **options)
+                self.assertEqual('sdw3', next(h.address for h in hosts if h.hostname == 'sdw3'))
 
 
 class TestMirrorMoveConfig(GpTestCase):
