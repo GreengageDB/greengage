@@ -29,7 +29,6 @@
  */
 #include "postgres.h"
 #include "utils/pddiag.h"
-#include "miscadmin.h"
 
 #include <signal.h>
 #include <sys/syscall.h>
