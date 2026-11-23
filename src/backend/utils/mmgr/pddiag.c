@@ -669,6 +669,10 @@ pd_boot(void)
 	 * boot).  Same for the cached tid, which would otherwise keep naming
 	 * the postmaster's thread in every forked backend (the pid compare in
 	 * pd_tid() is the backstop for never-booted processes) */
+	if (pd_log_fd >= 0)
+		close(pd_log_fd);	/* a dump between two boots of this process
+							 * (e.g. during authentication) would otherwise
+							 * leak the report fd */
 	pd_log_fd = -1;
 	pd_log_fd_pid = 0;
 	pd_tls_tid = 0;

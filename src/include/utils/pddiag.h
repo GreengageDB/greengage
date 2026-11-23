@@ -46,6 +46,12 @@
  * Usage at a site of interest (one line, no new arrays/functions):
  *		pd_trace(PD_TAG_<something>, ptr, owner);
  *
+ * Operations: a crash leaves a pddiag-<pid>.log report in the log
+ * directory; reports are append-only and are never cleaned up by the
+ * server, so operators should purge stale pddiag-*.log files from the
+ * log directory periodically (a crash loop would otherwise accumulate
+ * one small file per crashed pid).
+ *
  * Part of the standard build: always compiled in, always on.
  *
  * Portability: Linux-only for now (tid via SYS_gettid, handlers via
