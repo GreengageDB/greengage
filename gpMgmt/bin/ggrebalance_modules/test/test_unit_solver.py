@@ -3,10 +3,13 @@
 #
 
 import random
+import signal
+import time
 from collections import defaultdict
+from mock import patch
 
 from gppylib.test.unit.gp_unittest import *
-from ..solver import GreedySolver, Solution, SolverConfig, LNS, LNSConfig
+from ..solver import GreedySolver, Solution, SolverConfig, LNS, LNSConfig, LNSRepairMethod
 from ..planner import MAX_SOLVER_ITERS, SOLVER_TIMEOUT_SEC
 from .config import getEncoding
 
@@ -500,6 +503,117 @@ class TestGreedySolverFunc(GpTestCase):
         
         # Must find a swap
         self.assertEqual(1, result)
-    
+
+class TestLNSTimeout(GpTestCase):
+    def _make_lns(self, timeout=1.0, max_iterations=1):
+        config = LNSConfig(
+            n_segments=2,
+            n_hosts_target=2,
+            n_hosts_initial=3,
+            initial_primary_mapping=[0, 2],
+            initial_mirror_mapping=[2, 0],
+            strategy='grouped',
+            max_iterations=max_iterations,
+            timeout=timeout,
+        )
+        return LNS(config, seed=42)
+
+    def test_lns_skips_improvement_with_nonpositive_timeout(self):
+        for timeout in (0.0, -1.0):
+            with self.subTest(timeout=timeout):
+                lns = self._make_lns(timeout)
+                with patch.object(lns, '_apply_repair', wraps=lns._apply_repair) as repair:
+                    solution, cost = lns.solve()
+
+                self.assertEqual(solution, {0: (0, 1), 1: (1, 0)})
+                self.assertEqual(cost, 2)
+                repair.assert_not_called()
+
+    @patch('ggrebalance_modules.solver.time.monotonic', return_value=100.0)
+    def test_lns_stops_each_repair_at_deadline(self, mock_clock):
+        for method in LNSRepairMethod:
+            with self.subTest(method=method):
+                mock_clock.return_value = 100.0
+                lns = self._make_lns()
+                lns._r_methods = [method]
+                get_valid_mirrors = lns._repair._get_valid_mirrors
+
+                def expire_after_candidate(*args):
+                    mirrors = get_valid_mirrors(*args)
+                    mock_clock.return_value = 101.0
+                    return mirrors
+
+                with patch.object(lns, '_apply_destroy', return_value={0, 1}), \
+                     patch.object(lns._repair, '_get_valid_mirrors',
+                                  side_effect=expire_after_candidate) as candidates:
+                    solution, cost = lns.solve()
+
+                candidates.assert_called_once()
+                self.assertEqual(solution, {0: (0, 1), 1: (1, 0)})
+                self.assertEqual(cost, 2)
+
+    @patch('ggrebalance_modules.solver.time.monotonic', return_value=100.0)
+    def test_lns_keeps_completed_improvement_on_timeout(self, mock_clock):
+        lns = self._make_lns(max_iterations=2)
+        repair = lns._apply_repair
+        attempts = []
+
+        def improve_then_expire(*args):
+            attempts.append(True)
+            if len(attempts) == 1:
+                return [0, 1], [1, 0]
+            mock_clock.return_value = 101.0
+            return repair(*args)
+
+        with patch.object(lns.solver, 'solve', return_value=({0: (1, 0), 1: (0, 1)}, 4)), \
+             patch.object(lns, '_apply_destroy', return_value={0, 1}), \
+             patch.object(lns, '_apply_repair', side_effect=improve_then_expire):
+            solution, cost = lns.solve()
+
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(solution, {0: (0, 1), 1: (1, 0)})
+        self.assertEqual(cost, 2)
+
+    @patch('ggrebalance_modules.solver.time.monotonic', return_value=100.0)
+    def test_lns_timeout_does_not_interrupt_sigint(self, mock_clock):
+        lns = self._make_lns(timeout=0.05)
+        lns._r_methods = [LNSRepairMethod.GREEDY_REPAIR]
+        shutdown_requested = []
+        get_valid_mirrors = lns._repair._get_valid_mirrors
+
+        def sigint_handler(signum, frame):
+            time.sleep(0.1)
+            mock_clock.return_value = 101.0
+            shutdown_requested.append(True)
+
+        def request_shutdown(*args):
+            signal.raise_signal(signal.SIGINT)
+            return get_valid_mirrors(*args)
+
+        old_handler = signal.signal(signal.SIGINT, sigint_handler)
+        try:
+            with patch.object(lns, '_apply_destroy', return_value={0, 1}), \
+                 patch.object(lns._repair, '_get_valid_mirrors', side_effect=request_shutdown):
+                solution, cost = lns.solve()
+        finally:
+            signal.signal(signal.SIGINT, old_handler)
+
+        self.assertEqual(shutdown_requested, [True])
+        self.assertEqual(solution, {0: (0, 1), 1: (1, 0)})
+        self.assertEqual(cost, 2)
+
+    @getEncoding('1000_50_unbalanced_spread', 'spread', None, None, None)
+    def test_lns_respects_timeout(self):
+        timeout_sec = 1.0
+        allowed_overrun_sec = 2.0
+
+        lns = LNS(LNSConfig.from_parent(self.encoding[0], MAX_SOLVER_ITERS, timeout_sec), seed=42)
+        start = time.perf_counter()
+        lns.solve()
+        elapsed = time.perf_counter() - start
+
+        self.assertLess(elapsed, timeout_sec + allowed_overrun_sec,
+                        f"LNS with timeout {timeout_sec}s took {elapsed:.1f}s")
+
 if __name__ == '__main__':
     run_tests()

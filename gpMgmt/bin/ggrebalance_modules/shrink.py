@@ -21,7 +21,7 @@ try:
     from gppylib.system.environment import *
     from gppylib.utils import escape_string, escapeDoubleQuoteInSQLString
     from ggrebalance_modules.planner import *
-    from ggrebalance_modules.rebalance_commons import interactive_check_yesno
+    from ggrebalance_modules.rebalance_commons import ValidationError, interactive_check_yesno
     from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED, get_table_distr_segment_count
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
@@ -222,6 +222,7 @@ class GGShrink:
 
     def run(self, shrinkPlan: ShrinkPlan) -> None:
         self.shrink_plan = shrinkPlan
+        self.validate_databases_allow_connections()
         self.trigger('start')
 
     def rollback(self, shrinkPlan: ShrinkPlan) -> None:
@@ -244,7 +245,18 @@ class GGShrink:
                     self.trigger('move_to_STATE_END_FROM_ROLLBACK')
                     return
 
+        self.validate_databases_allow_connections()
         self.trigger('start')
+
+    def validate_databases_allow_connections(self) -> None:
+        cursor = dbconn.query(self.conn, """SELECT datname FROM pg_database
+            WHERE NOT datallowconn AND datname <> 'template0' ORDER BY datname""")
+        databases = [escapeDoubleQuoteInSQLString(row[0], True) for row in cursor]
+        if databases:
+            raise ValidationError(
+                'Cannot proceed: the following databases do not allow connections '
+                f'(datallowconn = false): {", ".join(databases)}. '
+                'Enable connections to these databases before retrying.')
 
     def get_state_after_interrupt(self, prev_state) -> str:
         prev_idx = self.states_main_shrink_flow.index(prev_state)
@@ -546,7 +558,11 @@ class GGShrink:
 
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_DONE(self) -> None:
-        os.remove(self.gparray_dump_file)
+        # We may repeat this step after an interrupt,
+        # so cleanup the file only if it hasn't been
+        # done yet
+        if os.path.exists(self.gparray_dump_file):
+            os.remove(self.gparray_dump_file)
         self.logger.info('Shrink is complete')
         self.trigger('move_to_STATE_END')
 
