@@ -35,3 +35,21 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 -- session 1 is dead now; verify the report from a fresh session
 2: SELECT substring(content from 1 for 15) AS report_header, position('signo=6' in content) > 0 AS has_signo, position('end.' in content) > 0 AS is_complete, position('trace log' in content) > 0 AS has_trace, (SELECT count(*) > 0 FROM regexp_matches(content, '  #[0-9]+ ', 'g')) AS has_trace_entries, (SELECT count(*) > 0 FROM regexp_matches(content, 'size=[1-9]', 'g')) AS has_sized_events FROM (SELECT pg_read_file(current_setting('log_directory') || '/pddiag-' || (SELECT victim_pid FROM pddiag_victim_pid) || '.log') AS content) r;
 2: DROP TABLE pddiag_victim_pid;
+
+-- phase 2: cover the SIGSEGV slot itself (the panic case above exercised
+-- only SIGABRT) and the si_code-acceptance path in the SA_SIGINFO handler.
+-- The stock 'segv' fault writes through NULL, so the recorded fault address
+-- is 0 and the report again falls back to the unfiltered ring tail; a
+-- nonzero-address probe of the per-pointer ring history would need a
+-- wild-pointer fault the stock injector cannot emit.  The report is located
+-- by recency, not by a victim-pid table: killing a QD backend takes every
+-- other backend down with it (shared-memory reinit) and on the SIGSEGV path
+-- a just-committed distributed transaction of the dead session is not
+-- reliably visible to a fresh session, so state written by the victim
+-- cannot be trusted here.
+3: select gp_inject_fault('exec_simple_query_start', 'segv', current_setting('gp_dbid')::smallint);
+-- the error text a client sees for a segv is not stable: blank it
+3: @post_run 'echo ""' : select 1;
+-- session 3 is dead; the newest pddiag report must carry signo=11, the
+-- si_code-accepted (but NULL) fault address, and the completion marker
+4: SELECT position('signo=11' in content) > 0 AS has_segv_signo, position(E'fault=0\n' in content) > 0 AS has_null_fault, position('end.' in content) > 0 AS is_complete FROM (SELECT pg_read_file('pg_log/' || filename) AS content FROM (SELECT f AS filename, (SELECT modification FROM pg_stat_file('pg_log/' || f)) AS mtime FROM pg_ls_dir('pg_log') AS f WHERE f LIKE 'pddiag-%.log' AND (SELECT modification FROM pg_stat_file('pg_log/' || f)) > now() - interval '10 minutes' ORDER BY mtime DESC, substring(f from 'pddiag-([0-9]+)\.log')::int DESC LIMIT 1) s) r;

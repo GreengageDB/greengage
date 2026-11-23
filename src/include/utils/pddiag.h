@@ -34,7 +34,11 @@
  * (single-chunk block) allocation moves the block via gp_realloc() without
  * recording free+alloc events, so the ring history for the old address
  * ends at the last event before the move; AllocSetAllocHeader (shared
- * headers) is not instrumented either.  "ret" names the caller of the
+ * headers) is not instrumented either.  Frees done en masse by
+ * MemoryContextReset/Delete (AllocSetReset/AllocSetDelete) record no FREE
+ * events: the ring history for a dangling pointer ends at its last ALLOC,
+ * and the reset/delete itself is visible only as a CTX_RESET/CTX_DELETE
+ * trace entry (correlate by ctx).  "ret" names the caller of the
  * palloc/pfree/MemoryContextAlloc funnel; code that invokes the context
  * methods pointer directly bypasses the funnels and attributes the event
  * to an earlier caller.

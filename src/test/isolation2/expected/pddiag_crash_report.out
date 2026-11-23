@@ -59,3 +59,30 @@ server closed the connection unexpectedly
 (1 row)
 2: DROP TABLE pddiag_victim_pid;
 DROP
+
+-- phase 2: cover the SIGSEGV slot itself (the panic case above exercised
+-- only SIGABRT) and the si_code-acceptance path in the SA_SIGINFO handler.
+-- The stock 'segv' fault writes through NULL, so the recorded fault address
+-- is 0 and the report again falls back to the unfiltered ring tail; a
+-- nonzero-address probe of the per-pointer ring history would need a
+-- wild-pointer fault the stock injector cannot emit.  The report is located
+-- by recency, not by a victim-pid table: killing a QD backend takes every
+-- other backend down with it (shared-memory reinit) and on the SIGSEGV path
+-- a just-committed distributed transaction of the dead session is not
+-- reliably visible to a fresh session, so state written by the victim
+-- cannot be trusted here.
+3: select gp_inject_fault('exec_simple_query_start', 'segv', current_setting('gp_dbid')::smallint);
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+-- the error text a client sees for a segv is not stable: blank it
+3: @post_run 'echo ""' : select 1;
+
+-- session 3 is dead; the newest pddiag report must carry signo=11, the
+-- si_code-accepted (but NULL) fault address, and the completion marker
+4: SELECT position('signo=11' in content) > 0 AS has_segv_signo, position(E'fault=0\n' in content) > 0 AS has_null_fault, position('end.' in content) > 0 AS is_complete FROM (SELECT pg_read_file('pg_log/' || filename) AS content FROM (SELECT f AS filename, (SELECT modification FROM pg_stat_file('pg_log/' || f)) AS mtime FROM pg_ls_dir('pg_log') AS f WHERE f LIKE 'pddiag-%.log' AND (SELECT modification FROM pg_stat_file('pg_log/' || f)) > now() - interval '10 minutes' ORDER BY mtime DESC, substring(f from 'pddiag-([0-9]+)\.log')::int DESC LIMIT 1) s) r;
+ has_segv_signo | has_null_fault | is_complete 
+----------------+----------------+-------------
+ t              | t              | t           
+(1 row)

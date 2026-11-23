@@ -78,6 +78,9 @@ void *volatile pd_last_ret = NULL;
 static struct sigaction pd_old_segv, pd_old_abrt, pd_old_bus;
 
 static int	pd_log_fd = -1; /* this process's report fd, cached after first dump */
+static uint64 pd_log_fd_pid = 0;	/* pid that opened pd_log_fd: a fork
+									 * after a dump must not append its own
+									 * report to the parent's pid-keyed file */
 
 static PdMLogEnt pd_trace_ring[PD_MLOG_ENTRIES];
 static uint64 pd_trace_idx = 0;
@@ -105,16 +108,23 @@ static const struct
 #endif
 
 static __thread uint64 pd_tls_tid = 0;
+static __thread uint64 pd_tls_pid = 0;
 
 static uint64
 pd_tid(void)
 {
-	/* one syscall per thread; the event path then pays a load+branch.
-	 * File-scope TLS (not function-static) so pd_boot() can reset it: a
-	 * tid cached before fork() would otherwise pin every child process to
-	 * the postmaster's thread id for the rest of its life */
-	if (pd_tls_tid == 0)
+	/* one gettid per thread per process lifetime.  The event path pays a
+	 * getpid plus two TLS loads: recorded events are 1:2^k sampled, and the
+	 * pid compare is what keeps a forked aux process (checkpointer, syslogger,
+	 * ...) -- which never runs pd_boot -- from naming the postmaster's thread
+	 * in every event for the rest of its life */
+	uint64		pid = (uint64) getpid();
+
+	if (pd_tls_tid == 0 || pd_tls_pid != pid)
+	{
 		pd_tls_tid = (uint64) syscall(SYS_gettid);
+		pd_tls_pid = pid;
+	}
 	return pd_tls_tid;
 }
 
@@ -522,8 +532,17 @@ pd_dump_crash_impl(int signo, uint64 fault)
 		return;
 	pd_dumping = 1;
 	fd = pd_log_fd;
-	if (fd < 0)
-		fd = pd_log_fd = pd_open_log((int) getpid());
+	if (fd < 0 || pd_log_fd_pid != (uint64) getpid())
+	{
+		uint64		pid = (uint64) getpid();
+
+		fd = pd_open_log((int) pid);
+		if (fd >= 0)
+		{
+			pd_log_fd = fd;
+			pd_log_fd_pid = pid;
+		}
+	}
 	if (fd < 0)
 		return;
 	pd_emit_str(fd, "", "pddiag crash report");
@@ -644,11 +663,15 @@ pd_boot(void)
 	pd_ev_hook = pd_event;
 	/* a child forked after a postmaster-side dump would inherit the cached
 	 * fd and append its own report to the postmaster's file: force every
-	 * process to open its pid-keyed file at its first dump.  Same for the
-	 * cached tid, which would otherwise keep naming the postmaster's
-	 * thread in every forked backend */
+	 * booted process to open its pid-keyed file at its first dump (the
+	 * fd pid check in pd_dump_crash_impl covers processes that never
+	 * boot).  Same for the cached tid, which would otherwise keep naming
+	 * the postmaster's thread in every forked backend (the pid compare in
+	 * pd_tid() is the backstop for never-booted processes) */
 	pd_log_fd = -1;
+	pd_log_fd_pid = 0;
 	pd_tls_tid = 0;
+	pd_tls_pid = 0;
 	pd_resolve_logdir();
 }
 
