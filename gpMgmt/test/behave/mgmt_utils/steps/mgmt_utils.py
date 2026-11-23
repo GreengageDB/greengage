@@ -1085,6 +1085,36 @@ def impl(context, filename, list):
     create_value_list_file_locally(context, filename, list)
 
 
+def get_another_dns_name(host):
+    """
+    Returns a name, which differs from the given one, but resolves to the same
+    address (e.g. the name reverse DNS gives for the address of the host).
+    """
+    address = socket.gethostbyname(host)
+    output = subprocess.run(['getent', 'hosts', address], stdout=PIPE, universal_newlines=True).stdout
+    for line in output.splitlines():
+        for name in line.split()[1:]:
+            if name == host:
+                continue
+            try:
+                if socket.gethostbyname(name) == address:
+                    return name
+            except socket.error:
+                pass
+    raise Exception("host '%s' (%s) has no other DNS name, 'getent hosts' printed: '%s'" % (host, address, output.strip()))
+
+
+@given('there is a file "{filename}" with hosts "{list}", where "{host}" is given by its another DNS name')
+@when('there is a file "{filename}" with hosts "{list}", where "{host}" is given by its another DNS name')
+@then('there is a file "{filename}" with hosts "{list}", where "{host}" is given by its another DNS name')
+def impl(context, filename, list, host):
+    hosts = [h.strip() for h in list.split(',')]
+    if host not in hosts:
+        raise Exception("host '%s' is not in the list '%s'" % (host, list))
+    alias = get_another_dns_name(host)
+    create_value_list_file_locally(context, filename, '|'.join(alias if h == host else h for h in hosts))
+
+
 @given('the row "{row_values}" is inserted into "{table}" in "{dbname}"')
 def impl(context, row_values, table, dbname):
     insert_row(context, row_values, table, dbname)
