@@ -5360,11 +5360,12 @@ ResGroupMoveSignalTarget(int sessionId, void *slot, Oid groupId,
  * Cleaning and checking should be performed as one atomic operation inside one
  * mutex.
  * 'clean' flag is bidirectional. If 'clean' is set to true, then all moveto*
- * params will be cleaned, no matter was target handled them or not.
- * More, it will be forcefully set to true, if target process handled our
- * command. Thus, if function returned true in 'clean', it should be treated
- * as terminal state and all new calls to ResGroupMoveCheckTargetReady()
- * before calling ResGroupMoveSignalTarget() make no sense.
+ * params will be cleaned unless the target owns the slot and has not completed
+ * the move. In that case the request is marked as abandoned, and the target
+ * cleans it after completing the move. Thus, if function returned true in
+ * 'clean', it should be treated as terminal state and all new calls to
+ * ResGroupMoveCheckTargetReady() before calling ResGroupMoveSignalTarget()
+ * make no sense.
  * If waitForCompletion is true, taking slot control is not terminal until
  * the target has published the new session slot.
  */
@@ -5373,6 +5374,7 @@ resGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result,
 							 bool waitForCompletion)
 {
 	ProcArrayStruct *arrayP = procArray;
+	bool		abandon = false;
 
 	Assert(Gp_role == GP_ROLE_DISPATCH);
 
@@ -5421,6 +5423,8 @@ resGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result,
 				*result = (proc->movetoResSlot == NULL);
 				if (*result && waitForCompletion)
 					*clean = false;
+				else if (*result && *clean)
+					abandon = true;
 				else
 					*clean = true;
 			}
@@ -5429,8 +5433,11 @@ resGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result,
 			 * Clean all params, especially movetoCallerPid, which guards
 			 * target processes from another initiators. After releasing
 			 * spinlock any other process allowed to start new move command.
+			 * An abandoned request keeps the guard until the target finishes.
 			 */
-			if (*clean)
+			if (abandon)
+				proc->movetoCallerPid = ResGroupMoveAbandonedPid;
+			else if (*clean)
 			{
 				proc->movetoResSlot = NULL;
 				proc->movetoGroupId = InvalidOid;

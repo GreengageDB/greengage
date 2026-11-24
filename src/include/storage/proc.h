@@ -42,6 +42,9 @@
  */
 #define PGPROC_MAX_CACHED_SUBXIDS 64	/* XXX guessed-at value */
 
+/* movetoCallerPid value after abandoning a transferred resource group move */
+#define ResGroupMoveAbandonedPid 0
+
 struct XidCache
 {
 	TransactionId xids[PGPROC_MAX_CACHED_SUBXIDS];
@@ -233,7 +236,8 @@ struct PGPROC
 								 * a NULL movetoResSlot means it completed */
 	pid_t		movetoCallerPid; /* pid of moving initiator; valid only on QD;
 								  * guards current moving command from another
-								  * commands */
+								  * commands; ResGroupMoveAbandonedPid means
+								  * the caller abandoned a transferred move */
 
 	/* Support for group XID clearing. */
 	/* true, if member of ProcArray group waiting for XID clear */

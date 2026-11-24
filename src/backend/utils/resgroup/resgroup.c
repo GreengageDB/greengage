@@ -3539,10 +3539,21 @@ HandleMoveResourceGroup(void)
 		self->caps = slot->caps;
 
 		SpinLockAcquire(&MyProc->movetoMutex);
-		MyProc->movetoGroupId = groupId;
+		callerPid = MyProc->movetoCallerPid;
+		if (callerPid == ResGroupMoveAbandonedPid)
+		{
+			MyProc->movetoCallerPid = InvalidPid;
+			MyProc->movetoGroupId = InvalidOid;
+			callerPid = InvalidPid;
+		}
+		else
+			MyProc->movetoGroupId = groupId;
 		SpinLockRelease(&MyProc->movetoMutex);
 
-		ResGroupMoveNotifyInitiator(callerPid);
+		SIMPLE_FAULT_INJECTOR("resource_group_move_handler_before_initiator_notify");
+
+		if (callerPid != InvalidPid)
+			ResGroupMoveNotifyInitiator(callerPid);
 
 		/*
 		 * You may say it's ugly to notify entrydb process here, but not in
@@ -3685,36 +3696,32 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 	for (;;)
 	{
 		/*
-		 * In an infinite loop, call ResGroupMoveCheckTargetCompletion() to check
-		 * whether the target process has completed the RG move.
-		 * If we have hit gp_resource_group_move_timeout, try to cancel the move
-		 * operation (no matter was target handled signal) and clean remained stuffs.
-		 * Once the target has taken slot control, wait for it to publish the new
-		 * session slot before reporting success.
+		 * Wait for the target to publish the new session slot. On timeout,
+		 * cancel a pending request or abandon one whose slot was transferred.
 		 */
 		curTime = GetCurrentTimestamp();
 		timeout = gp_resource_group_move_timeout - (curTime - waitStart) / 1000;
-		if (timeout > 0 || (res && !clean))
+		if (timeout > 0)
 		{
 			PG_TRY();
 			{
 				SIMPLE_FAULT_INJECTOR("resource_group_give_away_wait_latch");
 
 				/*
-				 * do check here to clean all target's moveto* params in case
-				 * of interruption or any exception
+				 * do check here to clean or abandon the request in case of
+				 * interruption or any exception
 				 */
 				CHECK_FOR_INTERRUPTS();
 
 				latchRes = WaitLatch(&MyProc->procLatch,
-				   WL_LATCH_SET | (timeout > 0 ? WL_TIMEOUT : 0) |
-				   WL_POSTMASTER_DEATH,
-				   timeout,
-				   PG_WAIT_RESOURCE_GROUP);
+									 WL_LATCH_SET | WL_TIMEOUT |
+									 WL_POSTMASTER_DEATH,
+									 timeout,
+									 PG_WAIT_RESOURCE_GROUP);
 
 				if (latchRes & WL_POSTMASTER_DEATH)
 					elog(ERROR,
-					 "got WL_POSTMASTER_DEATH waiting on latch; exiting...");
+						 "got WL_POSTMASTER_DEATH waiting on latch; exiting...");
 			}
 			PG_CATCH();
 			{
@@ -3741,10 +3748,25 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 		SIMPLE_FAULT_INJECTOR("resource_group_give_away_after_latch");
 
 		ResetLatch(&MyProc->procLatch);
-		clean = (latchRes & WL_TIMEOUT);
+		clean = false;
 		ResGroupMoveCheckTargetCompletion(sessionId, &clean, &res);
+		if (res && !clean)
+		{
+			SIMPLE_FAULT_INJECTOR("resource_group_give_away_after_handoff");
+			ResGroupMoveCheckTargetCompletion(sessionId, &clean, &res);
+		}
 		if (clean)
 			break;
+
+		if (latchRes & WL_TIMEOUT)
+		{
+			clean = true;
+			ResGroupMoveCheckTargetReady(sessionId, &clean, &res);
+			if (res)
+				*slot = NULL;
+			res = false;
+			break;
+		}
 	}
 
 	if (!res)
