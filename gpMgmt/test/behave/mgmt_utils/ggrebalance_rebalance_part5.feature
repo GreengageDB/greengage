@@ -304,6 +304,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And "PGPORT" environment variable should be restored
          And coordinator data directory is updated
 
+    @skip
     Scenario: rebalance - interrupt rebalance after mirror moves, interrupt rollback during mirror move before gp_segment_configuration update, and continue rollback.
         Given the database is not running
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast'"

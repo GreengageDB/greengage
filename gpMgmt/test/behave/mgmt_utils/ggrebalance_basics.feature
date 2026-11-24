@@ -48,6 +48,8 @@ Feature: ggrebalance behave tests
           | -c --detailed-progress                                      | Can't use together options '--clean-required' and '--detailed-progress'        | stub |stub|
           | -c --simple-progress                                        | Can't use together options '--clean-required' and '--simple-progress'          | stub |stub|
           | -c --no-progress                                            | Can't use together options '--clean-required' and '--no-progress'              | stub |stub|
+          | -c --seed 1                                                 | Can't use together options '--clean-required' and '--seed'                     | stub |stub|
+          | -c --seed 0                                                 | Can't use together options '--clean-required' and '--seed'                     | stub |stub|
           | -r --target-hosts sdw1,sdw2                                 | Can't use together options '--rollback-required' and '--target-hosts'    | stub       |stub|
           | -r --add-hosts sdw3                                         | Can't use together options '--rollback-required' and '--add-hosts'       | stub       |stub|
           | -r --add-hosts-file /tmp/add.txt                            | Can't use together options '--rollback-required' and '--add-hosts-file'  | stub       |stub|
@@ -61,7 +63,11 @@ Feature: ggrebalance behave tests
           | -r --detailed-progress                                      | Can't use together options '--rollback-required' and '--detailed-progress' | stub     |stub|
           | -r --simple-progress                                        | Can't use together options '--rollback-required' and '--simple-progress'   | stub     |stub|
           | -r --no-progress                                            | Can't use together options '--rollback-required' and '--no-progress'       | stub     |stub|
+          | -r --seed 1                                                 | Can't use together options '--rollback-required' and '--seed'              | stub     |stub|
+          | -r --seed 0                                                 | Can't use together options '--rollback-required' and '--seed'              | stub     |stub|
           | -r --inplace-swap-roles                                     | Can't use together options '--rollback-required' and '--inplace-swap-roles'     | stub     |stub|
+          | -r --clean                                                  | Can't use together options '--clean-required' and '--rollback-required'    | stub     |stub|
+          | -c --rollback                                               | Can't use together options '--clean-required' and '--rollback-required'    | stub     |stub|
           | -c --duration 00:00:01                                      | Can't use together options '--clean-required' and '--duration'                  | stub     |stub|
           | -c --end '2099-01-01 01:01:01'                              | Can't use together options '--clean-required' and '--end'                       | stub     |stub|
           | --duration 00:00:01 --end '2099-01-01 01:01:01'             | Can't use together options '--duration' and '--end'                             | stub     |stub|
