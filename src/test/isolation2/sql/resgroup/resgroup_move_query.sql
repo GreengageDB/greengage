@@ -243,7 +243,32 @@ SELECT is_session_in_group(pid, 'default_group') FROM pg_stat_activity WHERE wai
 3: SELECT num_running FROM gp_toolkit.gp_resgroup_status WHERE groupname='default_group';
 1q:
 
--- Test11: check entrydb queries working
+-- Test11: transaction abort must clean an abandoned move after a target error
+1: SET ROLE role_move_query_small;
+1: SELECT gp_inject_fault('resource_group_move_handler_after_qd_control', 'reset', dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
+1: SELECT gp_inject_fault('resource_group_move_handler_after_qd_control', 'suspend', dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
+1: SELECT gp_inject_fault('resource_group_move_handler_before_completion', 'reset', dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
+1: SELECT gp_inject_fault('resource_group_move_handler_before_completion', 'error', dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
+1: BEGIN;
+1&: SELECT pg_sleep(5);
+2: SET gp_resource_group_move_timeout = 1000;
+2&: SELECT pg_resgroup_move_query(pid, 'rg_move_query') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND rsgname='rg_move_query_small';
+3: SELECT gp_wait_until_triggered_fault('resource_group_move_handler_after_qd_control', 1, dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
+2<:
+-- the target errors after slot assignment but before publishing completion
+3: SELECT gp_inject_fault('resource_group_move_handler_after_qd_control', 'resume', dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
+1<:
+3: SELECT gp_inject_fault('resource_group_move_handler_before_completion', 'reset', dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
+1: ROLLBACK;
+-- transaction abort cleaned the abandoned request, so another move can succeed
+1&: SELECT pg_sleep(3);
+3: SELECT pg_resgroup_move_query(pid, 'rg_move_query') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND rsgname='rg_move_query_small';
+1<:
+2: RESET gp_resource_group_move_timeout;
+3: SELECT num_running FROM gp_toolkit.gp_resgroup_status WHERE groupname='rg_move_query';
+1q:
+
+-- Test12: check entrydb queries working
 -- Previously, we sent a signal to only one process - dispatcher or entrydb.
 -- This led to various errors - triggered assertions or only entrydb process moving.
 -- But it never led to the only one correct result - ALL processes should be moved.

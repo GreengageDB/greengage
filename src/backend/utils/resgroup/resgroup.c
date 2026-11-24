@@ -1735,6 +1735,22 @@ UnassignResGroup(void)
 	ResGroupData		*group;
 	ResGroupSlotData	*slot;
 
+	if (Gp_role == GP_ROLE_DISPATCH)
+	{
+		SpinLockAcquire(&MyProc->movetoMutex);
+		if (MyProc->movetoCallerPid == ResGroupMoveAbandonedPid)
+		{
+			/*
+			 * The target normally clears an abandoned request on completion.
+			 * Transaction abort must do so if the move failed before then.
+			 */
+			MyProc->movetoResSlot = NULL;
+			MyProc->movetoGroupId = InvalidOid;
+			MyProc->movetoCallerPid = InvalidPid;
+		}
+		SpinLockRelease(&MyProc->movetoMutex);
+	}
+
 	if (bypassedGroup)
 	{
 		/* bypass mode ref count is only maintained on qd */
@@ -3537,6 +3553,8 @@ HandleMoveResourceGroup(void)
 
 		/* Init self */
 		self->caps = slot->caps;
+
+		SIMPLE_FAULT_INJECTOR("resource_group_move_handler_before_completion");
 
 		SpinLockAcquire(&MyProc->movetoMutex);
 		callerPid = MyProc->movetoCallerPid;
