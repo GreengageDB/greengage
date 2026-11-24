@@ -728,6 +728,9 @@ BufFileRead(BufFile *file, void *ptr, size_t size)
  * In that case, it returns a pointer to the data in the buffer
  * If the data is not in the buffer, returns NULL and the caller must
  * call the regular BufFileRead with a destination buffer.
+ * A successful call advances the file position by size; on failure the
+ * logical position is unchanged.  The returned pointer is valid only until
+ * the next operation on the file, so callers must consume it immediately.
  */
 void *
 BufFileReadFromBuffer(BufFile *file, size_t size)
@@ -752,7 +755,8 @@ BufFileReadFromBuffer(BufFile *file, size_t size)
 	if (file->dirty)
 		BufFileFlush(file);
 
-	if (file->pos + size < file->nbytes)
+	if (file->pos < file->nbytes &&
+		size <= (size_t) (file->nbytes - file->pos))
 	{
 		result = file->buffer.data + file->pos;
 		file->pos += size;
