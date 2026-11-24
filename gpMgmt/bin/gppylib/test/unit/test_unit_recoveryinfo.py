@@ -546,4 +546,4 @@ class RecoveryResultTestCase(GpTestCase):
 
         recovery_result = RecoveryResult('action', [], None)
         result_path = recovery_result.get_current_logfile_path(coordinator_datadir, host)
-        self.assertRegex(result_path, 'log/gpdb-\d{4}-\d{2}-\d{2}_\d+\.csv$')
+        self.assertRegex(result_path, r'log/gpdb-\d{4}-\d{2}-\d{2}_\d+\.csv$')
