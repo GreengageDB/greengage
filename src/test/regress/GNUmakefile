@@ -106,6 +106,15 @@ LIBPQ_BE_OBJS = $(LIBPQ_BE_SRCS:%.c=%.o)
 
 OBJS += $(LIBPQ_BE_OBJS)
 
+ifeq ($(PORTNAME), darwin)
+# The bundled libpq objects call GSSAPI and LDAP directly.  The bundle
+# loader resolves postgres symbols, not symbols from its dependent dylibs.
+ifeq ($(with_gssapi),yes)
+SHLIB_LINK += $(filter -lgssapi_krb5 -lgss -lgssapi -lkrb5 -lcrypto,$(LIBS))
+endif
+SHLIB_LINK += $(LDAP_LIBS_BE)
+endif
+
 include $(top_srcdir)/src/Makefile.shlib
 
 all: all-lib

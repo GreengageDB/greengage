@@ -127,6 +127,11 @@ are good to go.  Remember to exit all of your ssh session before moving on.
 At this point head back the main [README.md](./README.md#build-the-database),
 and continue from __Build the Database__.
 
+If you enable `--with-gssapi` or `--with-ldap` and use libraries outside the
+macOS SDK, pass their include and library directories to `configure` with
+`--with-includes` and `--with-libraries`. Use `brew --prefix krb5` or
+`brew --prefix openldap` to locate Homebrew installations.
+
 ## Troubleshooting macOS specific issues: 
 
 ### Workaround for libreadline / libxml2 on OSX 10.11 (El Capitan)

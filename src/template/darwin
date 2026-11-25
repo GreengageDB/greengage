@@ -40,6 +40,9 @@ if test x"$PG_SYSROOT" != x"" ; then
   fi
 fi
 
+# OpenLDAP can provide the LDAP_OPT_ON symbol in a separate liblber.
+EXTRA_LDAP_LIBS="-llber"
+
 # Extra CFLAGS for code that will go into a shared library
 CFLAGS_SL=""
 
