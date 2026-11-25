@@ -89,6 +89,54 @@ class TestRebalanceUtilityCLI(GpTestCase):
         sys.argv = self.old_sys_argv
         super(TestRebalanceUtilityCLI, self).tearDown()
 
+    def test_zero_target_segment_count_is_rejected_before_connecting(self):
+        options, args = self.parser.parse_args(
+            ['--non-interactive-mode', '-x', '0', '--skip-rebalance'])
+        with self.assertRaises(SystemExit) as exit_context:
+            self.subject.main(options, args, self.parser)
+        self.assertEqual(exit_context.exception.code, 1)
+        self.subject.logger.error.assert_called_once_with(
+            'Invalid value of --target-segment-count. It must be >= 1 and <= 4096')
+        self.subject.dbconn.connect.assert_not_called()
+
+    # The tests below set the options directly instead of parsing a command
+    # line, because 'open' is mocked in setUp(), and optparse can't be
+    # instantiated again. The attribute name is taken from the parser to check
+    # that validate_options() looks at the attribute '--seed' is stored to.
+    def set_seed(self, value):
+        setattr(self.options, self.parser.get_option('--seed').dest, value)
+
+    def check_seed_is_incompatible_with(self, option, seed=1):
+        setattr(self.options, option, True)
+        self.set_seed(seed)
+        with self.assertRaises(SystemExit):
+            self.subject.validate_options(self.options, self.args, self.parser)
+        self.subject.logger.error.assert_any_call(
+            f"Can't use together options '--{option.replace('_', '-')}' and '--seed'")
+
+    def test_seed_is_incompatible_with_rollback(self):
+        self.check_seed_is_incompatible_with('rollback_required')
+
+    def test_seed_is_incompatible_with_clean(self):
+        self.check_seed_is_incompatible_with('clean_required')
+
+    # 0 is a valid seed, so it should be treated as a set option too
+    def test_zero_seed_is_incompatible_with_rollback(self):
+        self.check_seed_is_incompatible_with('rollback_required', seed=0)
+
+    def test_zero_seed_is_incompatible_with_clean(self):
+        self.check_seed_is_incompatible_with('clean_required', seed=0)
+
+    def test_zero_seed_is_accepted(self):
+        self.set_seed(0)
+        self.subject.validate_options(self.options, self.args, self.parser)
+
+    def test_negative_seed_is_rejected(self):
+        self.set_seed(-1)
+        with self.assertRaises(SystemExit):
+            self.subject.validate_options(self.options, self.args, self.parser)
+        self.subject.logger.error.assert_any_call('Invalid value of --seed. Must be >= 0')
+
     @patch('gppylib.db.dbconn.query', side_effect=mock_query)
     @patch('gppylib.db.dbconn.execSQL')
     @patch('gppylib.db.dbconn.connect', return_value=MagicMock())
@@ -307,6 +355,7 @@ class TestHostsOptions(GpTestCase):
         self.options.target_hosts = "172.20.0.7, 172.20.0.8, 172.20.0.9"
         mockHostResolver.return_value.resolve_hostname.side_effect = ['172.20.0.6', '172.20.0.7', '172.20.0.8', '172.20.0.9']
         mockHostResolver.return_value.resolve_ip.side_effect = ['sdw2', 'sdw3', 'sdw4']
+        mockHostResolver.return_value.find_matching_hostname.return_value = None
         mockHostResolver.return_value.get_address.side_effect = ['172.20.0.6', '172.20.0.7', '172.20.0.8', '172.20.0.9']
         planner = Planner(logger=Mock(),
                           dburl=Mock(),
@@ -315,6 +364,72 @@ class TestHostsOptions(GpTestCase):
         self.assertEqual(len(planner.target_hosts), 4)
         self.assertTrue(planner.target_hosts[3].status == HostStatus.NEW)
         self.assertTrue(planner.target_hosts[0].status == HostStatus.DECOMMISSIONED)
+
+    # 'balanced_grouped_6' cluster consists of 'cdw', 'sdw1' and 'sdw2'. The names
+    # ending with '.example.com' are the other names of the same machines, and
+    # 'sdw3.example.com' is a machine, which is not a part of the cluster.
+    HOST_ADDRESSES = {
+        'cdw': '172.20.0.5',
+        'sdw1': '172.20.0.6',
+        'sdw1.example.com': '172.20.0.6',
+        'sdw2': '172.20.0.7',
+        'sdw2.example.com': '172.20.0.7',
+        'sdw3.example.com': '172.20.0.8',
+    }
+
+    @staticmethod
+    def fake_getaddrinfo(hostname, *args):
+        if hostname not in TestHostsOptions.HOST_ADDRESSES:
+            raise socket.gaierror(f'Name or service not known: {hostname}')
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', (TestHostsOptions.HOST_ADDRESSES[hostname], 0))]
+
+    def plan_hosts(self) -> Planner:
+        with patch('socket.getaddrinfo', side_effect=TestHostsOptions.fake_getaddrinfo):
+            return Planner(logger=Mock(),
+                           dburl=Mock(),
+                           gpArray=initGparrayFromFile('balanced_grouped_6'),
+                           options=self.options)
+
+    def test_remove_hosts_alias(self):
+        self.options.remove_hosts = "sdw2.example.com"
+        planner = self.plan_hosts()
+        statuses = {host.hostname: host.status for host in planner.target_hosts}
+        self.assertEqual(statuses, {'sdw1': HostStatus.ACTIVE, 'sdw2': HostStatus.DECOMMISSIONED})
+        self.assertTrue(planner.host_set_changed)
+
+    def test_target_hosts_alias(self):
+        self.options.target_hosts = "sdw1, sdw2.example.com"
+        planner = self.plan_hosts()
+        statuses = {host.hostname: host.status for host in planner.target_hosts}
+        self.assertEqual(statuses, {'sdw1': HostStatus.ACTIVE, 'sdw2': HostStatus.ACTIVE})
+        self.assertFalse(planner.host_set_changed)
+
+    def test_target_hosts_alias_and_new_host(self):
+        self.options.target_hosts = "sdw1.example.com, sdw3.example.com"
+        planner = self.plan_hosts()
+        statuses = {host.hostname: host.status for host in planner.target_hosts}
+        self.assertEqual(statuses, {'sdw1': HostStatus.ACTIVE,
+                                    'sdw2': HostStatus.DECOMMISSIONED,
+                                    'sdw3.example.com': HostStatus.NEW})
+        self.assertTrue(planner.host_set_changed)
+
+    def test_target_hosts_same_host_twice(self):
+        self.options.target_hosts = "sdw1, sdw2, sdw2.example.com"
+        with self.assertRaises(ValidationError) as ctx:
+            self.plan_hosts()
+        self.assertIn("--target-hosts: Hosts 'sdw2' and 'sdw2.example.com' refer to the same host 'sdw2'", str(ctx.exception))
+
+    def test_remove_hosts_same_host_twice(self):
+        self.options.remove_hosts = "sdw2.example.com, sdw2"
+        with self.assertRaises(ValidationError) as ctx:
+            self.plan_hosts()
+        self.assertIn("--remove-hosts: Hosts 'sdw2.example.com' and 'sdw2' refer to the same host 'sdw2'", str(ctx.exception))
+
+    def test_add_hosts_alias(self):
+        self.options.add_hosts = "sdw2.example.com"
+        with self.assertRaises(ValidationError) as ctx:
+            self.plan_hosts()
+        self.assertIn("--add-hosts: Host 'sdw2.example.com' already exists in cluster as 'sdw2'", str(ctx.exception))
 
 if __name__ == '__main__':
     run_tests()

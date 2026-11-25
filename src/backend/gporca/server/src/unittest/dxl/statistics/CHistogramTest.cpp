@@ -42,7 +42,8 @@ CHistogramTest::EresUnittest()
 		GPOS_UNITTEST_FUNC(CHistogramTest::EresUnittest_CHistogramValid),
 		GPOS_UNITTEST_FUNC(CHistogramTest::EresUnittest_MergeUnion),
 		GPOS_UNITTEST_FUNC(
-			CHistogramTest::EresUnittest_MergeUnionDoubleLessThanEpsilon)};
+			CHistogramTest::EresUnittest_MergeUnionDoubleLessThanEpsilon),
+		GPOS_UNITTEST_FUNC(CHistogramTest::EresUnittest_ContainsRange)};
 
 
 	CAutoMemoryPool amp;
@@ -430,5 +431,149 @@ CHistogramTest::EresUnittest_MergeUnionDoubleLessThanEpsilon()
 	GPOS_DELETE(result1);
 
 	return GPOS_OK;
+}
+
+// range containment has to honor open and closed bucket bounds
+GPOS_RESULT
+CHistogramTest::EresUnittest_ContainsRange()
+{
+	// create memory pool
+	CAutoMemoryPool amp;
+	CMemoryPool *mp = amp.Pmp();
+
+	// bounds of a single integer bucket
+	struct SBucketBounds
+	{
+		INT m_lower;
+		INT m_upper;
+		BOOL m_is_lower_closed;
+		BOOL m_is_upper_closed;
+	};
+
+	const ULONG max_buckets = 3;
+	struct STestCase
+	{
+		// buckets of the histogram that has to contain the other one
+		ULONG m_num_buckets;
+		SBucketBounds m_buckets[max_buckets];
+
+		// buckets of the histogram to be contained
+		ULONG m_num_other_buckets;
+		SBucketBounds m_other_buckets[max_buckets];
+
+		BOOL m_is_contained;
+	};
+
+	const STestCase test_cases[] = {
+		// same bounds
+		{1, {{1, 10, true, true}}, 1, {{1, 10, true, true}}, true},
+		{1, {{1, 10, false, false}}, 1, {{1, 10, false, false}}, true},
+		// a bound is contained only if it is included wherever other has it
+		{1, {{1, 10, false, false}}, 1, {{1, 10, true, true}}, false},
+		{1, {{1, 10, false, true}}, 1, {{1, 10, true, true}}, false},
+		{1, {{1, 10, true, false}}, 1, {{1, 10, true, true}}, false},
+		{1, {{1, 10, true, true}}, 1, {{1, 10, false, false}}, true},
+		// a wider bucket covers a closed bound in any case
+		{1, {{0, 11, false, false}}, 1, {{1, 10, true, true}}, true},
+		// adjacent buckets have to include their common bound
+		{2,
+		 {{1, 5, true, false}, {5, 10, true, true}},
+		 1,
+		 {{1, 10, true, true}},
+		 true},
+		{2,
+		 {{1, 5, true, true}, {5, 10, false, true}},
+		 1,
+		 {{1, 10, true, true}},
+		 true},
+		{2,
+		 {{1, 5, true, false}, {5, 10, false, true}},
+		 1,
+		 {{1, 10, true, true}},
+		 false},
+		{3,
+		 {{1, 5, true, false}, {5, 5, true, true}, {5, 10, false, true}},
+		 1,
+		 {{1, 10, true, true}},
+		 true},
+		// unless other does not have it either
+		{2,
+		 {{1, 5, true, false}, {5, 10, false, true}},
+		 2,
+		 {{1, 5, true, false}, {5, 10, false, true}},
+		 true},
+		// a gap is fine only where other has a gap too
+		{2,
+		 {{1, 3, true, true}, {7, 10, true, true}},
+		 2,
+		 {{1, 3, true, true}, {7, 10, true, true}},
+		 true},
+		{2,
+		 {{1, 3, true, true}, {7, 10, true, true}},
+		 1,
+		 {{1, 10, true, true}},
+		 false},
+		// a bucket ending where other starts does not reach into it
+		{1, {{0, 5, true, true}}, 1, {{5, 10, false, true}}, false},
+		{2,
+		 {{0, 5, true, true}, {5, 10, false, true}},
+		 1,
+		 {{5, 10, false, true}},
+		 true},
+		// singleton buckets
+		{1, {{1, 10, true, true}}, 1, {{5, 5, true, true}}, true},
+		{1, {{1, 5, true, true}}, 1, {{5, 5, true, true}}, true},
+		{1, {{1, 5, true, false}}, 1, {{5, 5, true, true}}, false},
+		{1, {{5, 10, false, true}}, 1, {{5, 5, true, true}}, false},
+		{1, {{5, 5, true, true}}, 1, {{5, 5, true, true}}, true},
+		{1, {{5, 5, true, true}}, 1, {{5, 10, true, true}}, false},
+	};
+
+	GPOS_RESULT eres = GPOS_OK;
+	const ULONG num_test_cases = GPOS_ARRAY_SIZE(test_cases);
+	for (ULONG ul = 0; ul < num_test_cases; ul++)
+	{
+		const STestCase &test_case = test_cases[ul];
+
+		CBucketArray *buckets = GPOS_NEW(mp) CBucketArray(mp);
+		for (ULONG ul_bucket = 0; ul_bucket < test_case.m_num_buckets;
+			 ul_bucket++)
+		{
+			const SBucketBounds &bounds = test_case.m_buckets[ul_bucket];
+			buckets->Append(CCardinalityTestUtils::PbucketInteger(
+				mp, bounds.m_lower, bounds.m_upper, bounds.m_is_lower_closed,
+				bounds.m_is_upper_closed, CDouble(0.1), CDouble(1.0)));
+		}
+		CHistogram *histogram = GPOS_NEW(mp) CHistogram(mp, buckets);
+
+		CBucketArray *other_buckets = GPOS_NEW(mp) CBucketArray(mp);
+		for (ULONG ul_bucket = 0; ul_bucket < test_case.m_num_other_buckets;
+			 ul_bucket++)
+		{
+			const SBucketBounds &bounds = test_case.m_other_buckets[ul_bucket];
+			other_buckets->Append(CCardinalityTestUtils::PbucketInteger(
+				mp, bounds.m_lower, bounds.m_upper, bounds.m_is_lower_closed,
+				bounds.m_is_upper_closed, CDouble(0.1), CDouble(1.0)));
+		}
+		CHistogram *other_histogram =
+			GPOS_NEW(mp) CHistogram(mp, other_buckets);
+
+		BOOL is_contained = histogram->ContainsRange(other_histogram);
+		if (is_contained != test_case.m_is_contained)
+		{
+			CAutoTrace at(mp);
+			at.Os() << "Test case " << ul << ": expected "
+					<< test_case.m_is_contained << ", got " << is_contained
+					<< std::endl;
+			histogram->OsPrint(at.Os());
+			other_histogram->OsPrint(at.Os());
+			eres = GPOS_FAILED;
+		}
+
+		GPOS_DELETE(histogram);
+		GPOS_DELETE(other_histogram);
+	}
+
+	return eres;
 }
 // EOF

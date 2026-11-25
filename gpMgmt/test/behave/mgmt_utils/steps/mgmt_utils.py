@@ -758,7 +758,7 @@ def impl(context):
     command = """timeout 10m
     bash -c "while sleep 0.1;
     do if ps ux | grep [g]pcreateseg ;
-    then sleep 1 && ps ux | grep [g]pcreateseg |awk '{print \$2}' | xargs kill ;
+    then sleep 1 && ps ux | grep [g]pcreateseg |awk '{print \\$2}' | xargs kill ;
     break 2; fi; done" """
     run_async_command(context, command)
 
@@ -964,7 +964,7 @@ def impl(context, command, num):
     matches = lines_matching_both(context.stdout_message, workerPool_out, command)
 
     for matched_line in matches:
-        iw_re = re.search('initialized with (\d+) workers', matched_line)
+        iw_re = re.search(r'initialized with (\d+) workers', matched_line)
         init_workers = int(iw_re.group(1))
         if init_workers > int(num):
             raise Exception("Expected Workerpool for %s to be initialized with %d workers. Found %d. \n %s"
@@ -1083,6 +1083,36 @@ def create_value_list_file_locally(context, filename, value_list, location=os.ge
 @then('there is a file "{filename}" with datadirs "{list}"')
 def impl(context, filename, list):
     create_value_list_file_locally(context, filename, list)
+
+
+def get_another_dns_name(host):
+    """
+    Returns a name, which differs from the given one, but resolves to the same
+    address (e.g. the name reverse DNS gives for the address of the host).
+    """
+    address = socket.gethostbyname(host)
+    output = subprocess.run(['getent', 'hosts', address], stdout=PIPE, universal_newlines=True).stdout
+    for line in output.splitlines():
+        for name in line.split()[1:]:
+            if name == host:
+                continue
+            try:
+                if socket.gethostbyname(name) == address:
+                    return name
+            except socket.error:
+                pass
+    raise Exception("host '%s' (%s) has no other DNS name, 'getent hosts' printed: '%s'" % (host, address, output.strip()))
+
+
+@given('there is a file "{filename}" with hosts "{list}", where "{host}" is given by its another DNS name')
+@when('there is a file "{filename}" with hosts "{list}", where "{host}" is given by its another DNS name')
+@then('there is a file "{filename}" with hosts "{list}", where "{host}" is given by its another DNS name')
+def impl(context, filename, list, host):
+    hosts = [h.strip() for h in list.split(',')]
+    if host not in hosts:
+        raise Exception("host '%s' is not in the list '%s'" % (host, list))
+    alias = get_another_dns_name(host)
+    create_value_list_file_locally(context, filename, '|'.join(alias if h == host else h for h in hosts))
 
 
 @given('the row "{row_values}" is inserted into "{table}" in "{dbname}"')
@@ -2177,7 +2207,7 @@ def impl(context, filename, some, output):
         valuesShouldExist = False
     else:
         raise Exception("only 'some' and 'no' are valid inputs")
-    regexStr = "%s%s" % ("^[\s]*", output)
+    regexStr = "%s%s" % (r"^[\s]*", output)
     pat = re.compile(regexStr)
     file_path = os.path.join(coordinator_data_dir, filename)
     with open(file_path) as fr:
@@ -2433,7 +2463,7 @@ def imp(context):
 @then('validate and run gpcheckcat repair')
 def impl(context):
     context.execute_steps('''
-        Then gpcheckcat should print "repair script\(s\) generated in dir gpcheckcat.repair.*" to stdout
+        Then gpcheckcat should print "repair script\\(s\\) generated in dir gpcheckcat.repair.*" to stdout
         Then the path "gpcheckcat.repair.*" is found in cwd "1" times
         Then run all the repair scripts in the dir "gpcheckcat.repair.*"
         And the path "gpcheckcat.repair.*" is removed from current working directory
@@ -3550,12 +3580,12 @@ def step_impl(context, options):
     elif '-Q' in options:
         for stdout_line in context.stdout_message.split('\n'):
             if 'up segments, from configuration table' in stdout_line:
-                segments_up = int(re.match(".*of up segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
+                segments_up = int(re.match(r".*of up segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
                 if segments_up <= 1:
                     raise Exception("gpstate -Q output does not match expectations of more than one segment up")
 
             if 'down segments, from configuration table' in stdout_line:
-                segments_down = int(re.match(".*of down segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
+                segments_down = int(re.match(r".*of down segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
                 if segments_down != 0:
                     raise Exception("gpstate -Q output does not match expectations of all segments up")
                 break ## down segments comes after up segments, so we can break here
@@ -4081,7 +4111,7 @@ def check_locales(database_locales, locale_names, expected):
             raise Exception("Expected %s to be %s, but it was %s" % (name, expected, locale))
 
 def get_en_utf_locale():
-    cmd = Command(name='Get installed US UTF locale', cmdStr='locale -a | grep -i "en[_-]..\.utf.*8" | head -1')
+    cmd = Command(name='Get installed US UTF locale', cmdStr=r'locale -a | grep -i "en[_-]..\.utf.*8" | head -1')
     cmd.run(validateAfter=True)
     locale = cmd.get_stdout()
     if locale == "":
@@ -4225,7 +4255,7 @@ def impl(context):
 
      # Update hostfile location
      cmd = Command(name='update coordinator hostname in config file',
-                   cmdStr= "sed 's/MACHINE_LIST_FILE=.*/MACHINE_LIST_FILE=\/tmp\/hostfile--1/g' -i /tmp/clusterConfigFile-1")
+                   cmdStr= "sed 's/MACHINE_LIST_FILE=.*/MACHINE_LIST_FILE=\\/tmp\\/hostfile--1/g' -i /tmp/clusterConfigFile-1")
      cmd.run(validateAfter=True)
 
 
@@ -4434,7 +4464,7 @@ def impl(context, command, hostname):
        'rsync')
 def impl(context):
 
-    rsync_script = """
+    rsync_script = r"""
 cat >/usr/local/bin/rsync <<EOL
 #!/usr/bin/env bash
 
