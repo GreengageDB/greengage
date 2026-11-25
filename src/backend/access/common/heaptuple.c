@@ -1479,6 +1479,24 @@ heap_freetuple(HeapTuple htup)
 }
 
 
+/* Allocate a minimal tuple, optionally with aligned, zeroed caller data. */
+static inline MinimalTuple
+minimal_tuple_alloc(Size len, Size extra, bool zero)
+{
+	char	   *allocation;
+
+	/* Check before MAXALIGN so an oversized prefix cannot wrap around. */
+	if (len > MaxAllocSize || extra > MaxAllocSize - len)
+		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				 errmsg("minimal tuple allocation is too large")));
+	extra = MAXALIGN(extra);
+	allocation = zero ? palloc0(extra + len) : palloc(extra + len);
+	if (!zero && extra > 0)
+		memset(allocation, 0, extra);
+	return (MinimalTuple) (allocation + extra);
+}
+
 /*
  * heap_form_minimal_tuple
  *		construct a MinimalTuple from the given values[] and isnull[] arrays,
@@ -1494,6 +1512,17 @@ MinimalTuple
 heap_form_minimal_tuple(TupleDesc tupleDescriptor,
 						Datum *values,
 						bool *isnull)
+{
+	return heap_form_minimal_tuple_extra(tupleDescriptor, values, isnull, 0);
+}
+
+/*
+ * Like heap_form_minimal_tuple(), with MAXALIGN(extra) zeroed bytes before
+ * the tuple.  The prefix is not included in t_len or attribute offsets.
+ */
+MinimalTuple
+heap_form_minimal_tuple_extra(TupleDesc tupleDescriptor,
+							  Datum *values, bool *isnull, Size extra)
 {
 	MinimalTuple tuple;			/* return tuple */
 	Size		len,
@@ -1538,7 +1567,7 @@ heap_form_minimal_tuple(TupleDesc tupleDescriptor,
 	/*
 	 * Allocate and zero the space needed.
 	 */
-	tuple = (MinimalTuple) palloc0(len);
+	tuple = minimal_tuple_alloc(len, extra, true);
 
 	/*
 	 * And fill in the information.
@@ -1576,9 +1605,16 @@ heap_free_minimal_tuple(MinimalTuple mtup)
 MinimalTuple
 heap_copy_minimal_tuple(MinimalTuple mtup)
 {
+	return heap_copy_minimal_tuple_extra(mtup, 0);
+}
+
+/* Copy the tuple and reserve an aligned, zeroed prefix for caller data. */
+MinimalTuple
+heap_copy_minimal_tuple_extra(MinimalTuple mtup, Size extra)
+{
 	MinimalTuple result;
 
-	result = (MinimalTuple) palloc(mtup->t_len);
+	result = minimal_tuple_alloc(mtup->t_len, extra, false);
 	memcpy(result, mtup, mtup->t_len);
 	return result;
 }
@@ -1617,12 +1653,19 @@ heap_tuple_from_minimal_tuple(MinimalTuple mtup)
 MinimalTuple
 minimal_tuple_from_heap_tuple(HeapTuple htup)
 {
+	return minimal_tuple_from_heap_tuple_extra(htup, 0);
+}
+
+/* Convert the tuple and reserve an aligned, zeroed prefix for caller data. */
+MinimalTuple
+minimal_tuple_from_heap_tuple_extra(HeapTuple htup, Size extra)
+{
 	MinimalTuple result;
 	uint32		len;
 
 	Assert(htup->t_len > MINIMAL_TUPLE_OFFSET);
 	len = htup->t_len - MINIMAL_TUPLE_OFFSET;
-	result = (MinimalTuple) palloc(len);
+	result = minimal_tuple_alloc(len, extra, false);
 	memcpy(result, (char *) htup->t_data + MINIMAL_TUPLE_OFFSET, len);
 	result->t_len = len;
 	return result;

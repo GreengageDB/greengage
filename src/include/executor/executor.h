@@ -170,6 +170,15 @@ extern TupleHashEntry FindTupleHashEntry(TupleHashTable hashtable,
 										 FmgrInfo *hashfunctions);
 extern void ResetTupleHashTable(TupleHashTable hashtable);
 
+/* Additional per-group data shares the allocation with the tuple. */
+static inline void *
+TupleHashEntryGetAdditional(TupleHashTable hashtable, TupleHashEntry entry)
+{
+	if (hashtable->additionalsize > 0)
+		return (char *) entry->firstTuple - hashtable->additionalsize;
+	return NULL;
+}
+
 /*
  * prototypes from functions in execJunk.c
  */

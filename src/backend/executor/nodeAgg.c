@@ -1756,18 +1756,13 @@ Size
 hash_agg_entry_size(int numTrans, Size tupleWidth, Size transitionSpace)
 {
 	Size    tupleChunkSize;
-	Size    pergroupChunkSize;
 	Size    transitionChunkSize;
 	Size    tupleSize	 = (MAXALIGN(SizeofMinimalTupleHeader) +
 							tupleWidth);
 	Size    pergroupSize = numTrans * sizeof(AggStatePerGroupData);
 
-	tupleChunkSize = CHUNKHDRSZ + tupleSize;
-
-	if (pergroupSize > 0)
-		pergroupChunkSize = CHUNKHDRSZ + pergroupSize;
-	else
-		pergroupChunkSize = 0;
+	/* The representative tuple and per-group states share one allocation. */
+	tupleChunkSize = CHUNKHDRSZ + tupleSize + MAXALIGN(pergroupSize);
 
 	if (transitionSpace > 0)
 		transitionChunkSize = CHUNKHDRSZ + transitionSpace;
@@ -1777,7 +1772,6 @@ hash_agg_entry_size(int numTrans, Size tupleWidth, Size transitionSpace)
 	return
 		sizeof(TupleHashEntryData) +
 		tupleChunkSize +
-		pergroupChunkSize +
 		transitionChunkSize;
 }
 
@@ -2208,11 +2202,7 @@ initialize_hash_entry(AggState *aggstate, TupleHashTable hashtable,
 	if (aggstate->numtrans == 0)
 		return;
 
-	pergroup = (AggStatePerGroup)
-		MemoryContextAlloc(hashtable->tablecxt,
-						   sizeof(AggStatePerGroupData) * aggstate->numtrans);
-
-	entry->additional = pergroup;
+	pergroup = (AggStatePerGroup) TupleHashEntryGetAdditional(hashtable, entry);
 
 	/*
 	 * Initialize aggregates for new tuple group, lookup_hash_entries()
@@ -2286,7 +2276,7 @@ lookup_hash_entries(AggState *aggstate)
 					hash_agg_enter_spill_mode(aggstate);
 #endif
 
-			pergroup[setno] = entry->additional;
+			pergroup[setno] = TupleHashEntryGetAdditional(hashtable, entry);
 		}
 		else if (!aggstate->streaming)
 		{
@@ -2872,7 +2862,8 @@ agg_refill_hash_table(AggState *aggstate)
 		{
 			if (isnew)
 				initialize_hash_entry(aggstate, perhash->hashtable, entry);
-			aggstate->hash_pergroup[batch->setno] = entry->additional;
+			aggstate->hash_pergroup[batch->setno] =
+				TupleHashEntryGetAdditional(perhash->hashtable, entry);
 			advance_aggregates(aggstate);
 		}
 		else
@@ -3092,7 +3083,8 @@ agg_retrieve_hash_table_in_memory(AggState *aggstate)
 		}
 		ExecStoreVirtualTuple(firstSlot);
 
-		pergroup = (AggStatePerGroup) entry->additional;
+		pergroup = (AggStatePerGroup)
+			TupleHashEntryGetAdditional(perhash->hashtable, entry);
 
 		/*
 		 * Use the representative input tuple for any references to
@@ -3923,10 +3915,6 @@ ExecInitAgg(Agg *node, EState *estate, int eflags)
 	 */
 	if (use_hashing)
 	{
-		Plan   *outerplan = outerPlan(node);
-		uint64	totalGroups = 0;
-		int 	i;
-
 		aggstate->hash_metacxt = AllocSetContextCreate(aggstate->ss.ps.state->es_query_cxt,
 													   "HashAgg meta context",
 													   ALLOCSET_DEFAULT_SIZES);
@@ -3938,28 +3926,7 @@ ExecInitAgg(Agg *node, EState *estate, int eflags)
 		/* this is an array of pointers, not structures */
 		aggstate->hash_pergroup = pergroups;
 
-		aggstate->hashentrysize = hash_agg_entry_size(
-			aggstate->numtrans, outerplan->plan_width, 0);
-
-		/*
-		 * Consider all of the grouping sets together when setting the limits
-		 * and estimating the number of partitions. This can be inaccurate
-		 * when there is more than one grouping set, but should still be
-		 * reasonable.
-		 */
-		for (i = 0; i < aggstate->num_hashes; i++)
-			totalGroups += aggstate->perhash[i].aggnode->numGroups;
-
-		aggstate->hash_mem_limit =
-				hash_agg_set_limits2(aggstate, aggstate->hashentrysize, totalGroups, 0,
-									PlanStateOperatorMemKB((PlanState *) aggstate) * 1024,
-									&aggstate->hash_ngroups_limit,
-									&aggstate->hash_planned_partitions);
 		find_hash_columns(aggstate);
-
-		/* Skip massive memory allocation if we are just doing EXPLAIN */
-		if (!(eflags & EXEC_FLAG_EXPLAIN_ONLY))
-			build_hash_tables(aggstate);
 
 		aggstate->table_filled = false;
 	}
@@ -4299,6 +4266,33 @@ ExecInitAgg(Agg *node, EState *estate, int eflags)
 	 */
 	aggstate->numaggs = aggno + 1;
 	aggstate->numtrans = transno + 1;
+
+	/*
+	 * Each hash entry reserves space for its transition states alongside the
+	 * representative tuple, so build the tables only after numtrans is final.
+	 */
+	if (use_hashing)
+	{
+		Plan   *outerplan = outerPlan(node);
+		uint64	totalGroups = 0;
+
+		aggstate->hashentrysize = hash_agg_entry_size(
+			aggstate->numtrans, outerplan->plan_width, 0);
+
+		/* Consider all hashed grouping sets when dividing the memory budget. */
+		for (i = 0; i < aggstate->num_hashes; i++)
+			totalGroups += aggstate->perhash[i].aggnode->numGroups;
+
+		aggstate->hash_mem_limit =
+			hash_agg_set_limits2(aggstate, aggstate->hashentrysize, totalGroups, 0,
+								 PlanStateOperatorMemKB((PlanState *) aggstate) * 1024,
+								 &aggstate->hash_ngroups_limit,
+								 &aggstate->hash_planned_partitions);
+
+		/* Skip massive memory allocation if we are just doing EXPLAIN. */
+		if (!(eflags & EXEC_FLAG_EXPLAIN_ONLY))
+			build_hash_tables(aggstate);
+	}
 
 	/*
 	 * Last, check whether any more aggregates got added onto the node while

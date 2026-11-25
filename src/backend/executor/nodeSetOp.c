@@ -134,7 +134,7 @@ build_hash_table(SetOpState *setopstate)
 												   setopstate->hashfunctions,
 												   node->dupCollations,
 												   node->numGroups,
-												   0,
+												   sizeof(SetOpStatePerGroupData),
 												   setopstate->ps.state->es_query_cxt,
 												   setopstate->tableContext,
 												   econtext->ecxt_per_tuple_memory,
@@ -365,6 +365,7 @@ setop_fill_hash_table(SetOpState *setopstate)
 		TupleTableSlot *outerslot;
 		int			flag;
 		TupleHashEntryData *entry;
+		SetOpStatePerGroup pergroup;
 		bool		isnew;
 
 		outerslot = ExecProcNode(outerPlan);
@@ -382,18 +383,15 @@ setop_fill_hash_table(SetOpState *setopstate)
 			/* Find or build hashtable entry for this tuple's group */
 			entry = LookupTupleHashEntry(setopstate->hashtable, outerslot,
 										 &isnew, NULL);
+			pergroup = (SetOpStatePerGroup)
+				TupleHashEntryGetAdditional(setopstate->hashtable, entry);
 
 			/* If new tuple group, initialize counts */
 			if (isnew)
-			{
-				entry->additional = (SetOpStatePerGroup)
-					MemoryContextAlloc(setopstate->hashtable->tablecxt,
-									   sizeof(SetOpStatePerGroupData));
-				initialize_counts((SetOpStatePerGroup) entry->additional);
-			}
+				initialize_counts(pergroup);
 
 			/* Advance the counts */
-			advance_counts((SetOpStatePerGroup) entry->additional, flag);
+			advance_counts(pergroup, flag);
 		}
 		else
 		{
@@ -406,7 +404,8 @@ setop_fill_hash_table(SetOpState *setopstate)
 
 			/* Advance the counts if entry is already present */
 			if (entry)
-				advance_counts((SetOpStatePerGroup) entry->additional, flag);
+				advance_counts((SetOpStatePerGroup)
+							   TupleHashEntryGetAdditional(setopstate->hashtable, entry), flag);
 		}
 
 		/* Must reset expression context after each hashtable lookup */
@@ -454,7 +453,8 @@ setop_retrieve_hash_table(SetOpState *setopstate)
 		 * See if we should emit any copies of this tuple, and if so return
 		 * the first copy.
 		 */
-		set_output_count(setopstate, (SetOpStatePerGroup) entry->additional);
+		set_output_count(setopstate, (SetOpStatePerGroup)
+						 TupleHashEntryGetAdditional(setopstate->hashtable, entry));
 
 		if (setopstate->numOutput > 0)
 		{

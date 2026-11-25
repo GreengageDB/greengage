@@ -144,7 +144,7 @@ execTuplesHashPrepare(int numCols,
  *	eqfunctions: equality comparison functions to use
  *	hashfunctions: datatype-specific hashing functions to use
  *	nbuckets: initial estimate of hashtable size
- *	additionalsize: size of data stored in ->additional
+ *	additionalsize: size of zeroed user data stored before each tuple
  *	metacxt: memory context for long-lived allocation, but not per-entry data
  *	tablecxt: memory context in which to store table entries
  *	tempcxt: short-lived context for evaluation hash and comparison functions
@@ -170,9 +170,17 @@ BuildTupleHashTableExt(PlanState *parent,
 					   bool use_variable_hash_iv)
 {
 	TupleHashTable hashtable;
-	Size		entrysize = sizeof(TupleHashEntryData) + additionalsize;
+	Size		entrysize;
 	MemoryContext oldcontext;
 	bool		allow_jit;
+
+	/* Keep both the additional data and the tuple suitably aligned. */
+	if (additionalsize > MaxAllocSize - (MAXIMUM_ALIGNOF - 1))
+		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				 errmsg("additional tuple hash data is too large")));
+	additionalsize = MAXALIGN(additionalsize);
+	entrysize = sizeof(TupleHashEntryData) + additionalsize;
 
 	/*
 	 * Many callers pass "long" values for nbuckets, which means that we can
@@ -198,7 +206,7 @@ BuildTupleHashTableExt(PlanState *parent,
 	hashtable->tab_collations = collations;
 	hashtable->tablecxt = tablecxt;
 	hashtable->tempcxt = tempcxt;
-	hashtable->entrysize = entrysize;
+	hashtable->additionalsize = additionalsize;
 	hashtable->tableslot = NULL;	/* will be made on first lookup */
 	hashtable->inputslot = NULL;
 	hashtable->in_hash_funcs = NULL;
@@ -527,11 +535,13 @@ LookupTupleHashEntry_internal(TupleHashTable hashtable, TupleTableSlot *slot,
 		{
 			/* created new entry */
 			*isnew = true;
-			/* zero caller data */
-			entry->additional = NULL;
 			MemoryContextSwitchTo(hashtable->tablecxt);
-			/* Copy the first tuple into the table context */
-			entry->firstTuple = ExecCopySlotMinimalTuple(slot);
+			/*
+			 * Store the tuple and zeroed caller data in one allocation.  The
+			 * caller accesses the prefix with TupleHashEntryGetAdditional().
+			 */
+			entry->firstTuple = ExecCopySlotMinimalTupleExtra(slot,
+															  hashtable->additionalsize);
 		}
 	}
 	else
