@@ -366,6 +366,22 @@ CLogicalDynamicGet::PstatsDeriveFilter(CMemoryPool *mp,
 
 	pcrsStat->Release();
 
+	// A null selected-partitions bit set means "all leaves".
+	// Otherwise we need to return only selected partitions row count.
+	CBitSet *selected_partitions = GetSelectedParts();
+	CDouble selected_partitions_rows = CStatistics::MinRows;
+	if (nullptr != selected_partitions || dyn_get->FStaticPruned())
+	{
+		selected_partitions_rows =
+			RowsSelectedPartitions(mp, selected_partitions);
+	}
+
+	if (nullptr != selected_partitions)
+	{
+		pstatsFullTable =
+			PstatsWithRows(mp, pstatsFullTable, selected_partitions_rows);
+	}
+
 	if (nullptr == pexprFilter || pexprFilter->DeriveHasSubquery())
 	{
 		return pstatsFullTable;
@@ -399,57 +415,10 @@ CLogicalDynamicGet::PstatsDeriveFilter(CMemoryPool *mp,
 		pexprFilterNew = pexprFilter;
 	}
 
-	// Derive cardinality from unpruned partitions
-	CDouble selected_partitions_rows = CStatistics::MinRows;
+	CDouble rows_filter = CStatistics::MinRows;
 	if (dyn_get->FStaticPruned())
 	{
-		// Get unpruned partitions
-		IMdIdArray *partition_mdids = GetPartitionMdids();
-		CBitSet *selected_partitions = GetSelectedParts();
-		CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
-
-		// Iterate through the unpruned partitions, and add up the rows.
-		// This is more accurate than deriving cardinality using constraints
-		// converted from predicates on partition keys through histogram
-		// bucket sampling.
-		DOUBLE unpruned_partitions_rows = 0;
-		for (ULONG ul = 0; ul < partition_mdids->Size(); ++ul)
-		{
-			if (nullptr != selected_partitions && !selected_partitions->Get(ul))
-			{
-				continue;
-			}
-			IMDId *partition_mdid = (*partition_mdids)[ul];
-			// Retrieve row count from Relation objects
-			CDouble part_rows =
-				md_accessor->RetrieveRel(partition_mdid)->Rows();
-
-			// Accessing Relation objects is significantly faster than
-			// accessing RelationStatistics objects.
-			// However, if the row count in the Relation object is -1 or 0,
-			// retrieve row count from RelationStatistics objects.
-			// This functions as a backup mechanism, given our
-			// expectation that all leaf Relations should have a
-			// non-negative row count, and negative row count just
-			// indicates the leaf stats are missing from the Relation
-			// objects, which could happen in old MDP's.
-			if (-1 == part_rows || 0.0 == part_rows)
-			{
-				partition_mdid->AddRef();
-				CMDIdRelStats *rel_stats_mdid = GPOS_NEW(mp)
-					CMDIdRelStats(CMDIdGPDB::CastMdid(partition_mdid));
-				const IMDRelStats *rel_stats =
-					md_accessor->Pmdrelstats(rel_stats_mdid);
-				if (!rel_stats->IsEmpty())
-				{
-					part_rows = rel_stats->Rows();
-				}
-				rel_stats_mdid->Release();
-			}
-			unpruned_partitions_rows += std::max(0.0, part_rows.Get());
-		}
-		selected_partitions_rows =
-			std::max(selected_partitions_rows.Get(), unpruned_partitions_rows);
+		rows_filter = selected_partitions_rows;
 	}
 
 	CStatsPred *pred_stats = CStatsPredUtils::ExtractPredStats(
@@ -458,12 +427,88 @@ CLogicalDynamicGet::PstatsDeriveFilter(CMemoryPool *mp,
 	pexprFilterNew->Release();
 
 	IStatistics *result_stats = CFilterStatsProcessor::MakeStatsFilter(
-		mp, pstatsFullTable, pred_stats, true /* do_cap_NDVs */,
-		selected_partitions_rows);
+		mp, pstatsFullTable, pred_stats, true /* do_cap_NDVs */, rows_filter);
 	pred_stats->Release();
 	pstatsFullTable->Release();
 
 	return result_stats;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CLogicalDynamicGet::RowsSelectedPartitions
+//
+//	@doc:
+//		Add up the row counts of the leaf partitions.
+//
+//---------------------------------------------------------------------------
+CDouble
+CLogicalDynamicGet::RowsSelectedPartitions(CMemoryPool *mp,
+										   CBitSet *selected_partitions) const
+{
+	IMdIdArray *partition_mdids = GetPartitionMdids();
+	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+	DOUBLE unpruned_partitions_rows = 0.0;
+
+	for (ULONG ul = 0; ul < partition_mdids->Size(); ++ul)
+	{
+		if (nullptr != selected_partitions && !selected_partitions->Get(ul))
+		{
+			continue;
+		}
+
+		IMDId *partition_mdid = (*partition_mdids)[ul];
+		// Retrieve row count from Relation objects
+		CDouble part_rows = md_accessor->RetrieveRel(partition_mdid)->Rows();
+
+		// Accessing Relation objects is significantly faster than
+		// accessing RelationStatistics objects.
+		// However, if the row count in the Relation object is -1 or 0,
+		// retrieve row count from RelationStatistics objects.
+		// This functions as a backup mechanism, given our
+		// expectation that all leaf Relations should have a
+		// non-negative row count, and negative row count just
+		// indicates the leaf stats are missing from the Relation
+		// objects, which could happen in old MDP's.
+		if (-1 == part_rows || 0.0 == part_rows)
+		{
+			partition_mdid->AddRef();
+			CMDIdRelStats *rel_stats_mdid =
+				GPOS_NEW(mp) CMDIdRelStats(CMDIdGPDB::CastMdid(partition_mdid));
+			const IMDRelStats *rel_stats =
+				md_accessor->Pmdrelstats(rel_stats_mdid);
+			if (!rel_stats->IsEmpty())
+			{
+				part_rows = rel_stats->Rows();
+			}
+			rel_stats_mdid->Release();
+		}
+
+		unpruned_partitions_rows += std::max(0.0, part_rows.Get());
+	}
+
+	return CDouble(
+		std::max(CStatistics::MinRows.Get(), unpruned_partitions_rows));
+}
+
+CStatistics *
+CLogicalDynamicGet::PstatsWithRows(CMemoryPool *mp, CStatistics *pstats,
+								   CDouble rows)
+{
+	GPOS_ASSERT(nullptr != pstats);
+
+	if (pstats->Rows() == rows)
+	{
+		return pstats;
+	}
+
+	CStatistics *result = nullptr;
+	CDouble factor = rows / CDouble(std::max(pstats->Rows().Get(),
+											 CStatistics::MinRows.Get()));
+	result = CStatistics::CastStats(pstats->ScaleStats(mp, factor));
+
+	pstats->Release();
+	return result;
 }
 
 // returns whether table contains foreign partitions

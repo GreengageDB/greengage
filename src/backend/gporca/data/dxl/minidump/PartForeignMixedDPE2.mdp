@@ -739,7 +739,7 @@ SELECT * FROM test_part_cold WHERE created=TIMESTAMP '2020-02-01 00:00:01';
     <dxl:Plan Id="0" SpaceSize="11">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1293.241742" Rows="1.000000" Width="32"/>
+          <dxl:Cost StartupCost="0" TotalCost="1293.194165" Rows="1.000000" Width="32"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="id">
@@ -759,7 +759,7 @@ SELECT * FROM test_part_cold WHERE created=TIMESTAMP '2020-02-01 00:00:01';
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="Inner">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1293.241623" Rows="1.000000" Width="32"/>
+            <dxl:Cost StartupCost="0" TotalCost="1293.194045" Rows="1.000000" Width="32"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="id">
@@ -785,7 +785,7 @@ SELECT * FROM test_part_cold WHERE created=TIMESTAMP '2020-02-01 00:00:01';
           </dxl:HashCondList>
           <dxl:Append IsTarget="false" IsZapped="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.115120" Rows="2000.000000" Width="24"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.067542" Rows="2000.000000" Width="24"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="id">
@@ -801,7 +801,7 @@ SELECT * FROM test_part_cold WHERE created=TIMESTAMP '2020-02-01 00:00:01';
             <dxl:Filter/>
             <dxl:DynamicTableScan SelectorIds="0" SelectedPartitionSet="1:11">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="431.019800" Rows="2000.000000" Width="24"/>
+                <dxl:Cost StartupCost="0" TotalCost="431.020513" Rows="2072.000000" Width="24"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="18" Alias="id">
@@ -846,7 +846,7 @@ SELECT * FROM test_part_cold WHERE created=TIMESTAMP '2020-02-01 00:00:01';
             </dxl:DynamicTableScan>
             <dxl:DynamicForeignScan SelectorIds="0" ForeignServerOid="89736" SelectedPartitionSet="0">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="431.019800" Rows="2000.000000" Width="24"/>
+                <dxl:Cost StartupCost="0" TotalCost="431.000079" Rows="8.000000" Width="24"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="28" Alias="id">

@@ -270,9 +270,27 @@ analyze part_stats;
 
 explain select * from part_stats where a in (5,10,15,20,25);
 
+-- A get must be estimated from the partitions it scans, not from the root:
+-- the heap side must not include the foreign leaf's rows and vice versa.
+-- A web external table cannot be analyzed, so its rows are missing from the
+-- root's statistics.
+create table part_web (a int, b int) distributed by (a)
+	partition by range (b) (start (0) end (30) every (10));
+insert into part_web select i, i % 20 from generate_series(1, 10000) i;
+create external web table p3_web (a int, b int)
+	execute 'seq 1 100 | awk ''{print $1","20+($1%10)}''' on coordinator format 'csv';
+alter table part_web exchange partition for (25) with table p3_web;
+analyze part_web;
+
+explain select * from part_web;
+explain select * from part_web where a = 5;
+explain select * from part_web where b >= 0;
+explain select * from part_web where b < 15;
+
 drop table if exists filter_table;
 drop table if exists part_mixed cascade;
 drop table if exists part_stats;
+drop table if exists part_web;
 drop external table if exists p_e1;
 drop external table if exists p_e2;
 drop table if exists p_0;
@@ -280,3 +298,4 @@ drop table if exists p_1;
 drop table if exists p_2;
 drop table if exists p_3;
 drop table if exists ft5;
+drop table if exists p3_web;
