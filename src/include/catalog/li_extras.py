@@ -214,8 +214,8 @@ def basic_tests(abscissa_type, ordinate_type, verbose):
     if verbose:
         lst = [
             '',
-            '\qecho',
-            '\qecho Check interpolation correctness: %s --> %s' % (abscissa_type, ordinate_type),
+            '\\qecho',
+            '\\qecho Check interpolation correctness: %s --> %s' % (abscissa_type, ordinate_type),
             ]
         prolog = []
     else:
@@ -384,7 +384,7 @@ def main():
     else:
         sys.exit(efmt % ' '.join(sys.argv[1:]))
     
-    print fn()
+    print(fn())
        
 if __name__ == '__main__':
     main()
