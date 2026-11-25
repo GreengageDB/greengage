@@ -328,8 +328,12 @@ get_bdi_from_sysfs(int maj, int min, const char *path)
  * case in containers. The returned bdi is resolved to a disk through sysfs
  * (see get_bdi_from_sysfs).
  *
- * If st_dev does not map to a block device in sysfs, fall back to resolving
- * the covering /proc/self/mounts entry (see get_bdi_from_mounts).
+ * This works as long as st_dev maps to a block device in sysfs, which is
+ * the case for block-backed filesystems (xfs, ext4, device-mapper, loop).
+ * Otherwise fall back to resolving the covering /proc/self/mounts entry
+ * (see get_bdi_from_mounts), which stats the device name, so filesystems
+ * with an anonymous st_dev (e.g. a btrfs subvolume) still need the device
+ * node; overlayfs and tmpfs fail either way and are out of scope.
  */
 bdi_t
 get_bdi_of_path(const char *ori_path)
