@@ -67,7 +67,7 @@ def parseargs():
     parser.add_option('-p', '--show-plan', dest='show_plan', metavar='<show_plan>', action='store_true', default=False,
                       help='Show rebalance plan')
     parser.add_option('-d', '--target-datadirs', dest='target_datadirs', metavar='<target_datadirs>',
-                      help='segment datadirs on new hosts')
+                      help='Target segment datadirs on new and existing hosts')
     parser.add_option('--target-hosts-file', dest='target_hosts_file', metavar='<target_hosts_file>',
                       help='Target hosts list file. One host per line')
     parser.add_option('--target-datadirs-file', dest='target_datadirs_file', metavar='<target_datadirs_file>',
@@ -103,7 +103,7 @@ def parseargs():
                       help='Allows to place primary and mirror at the same host during rebalance.')
     parser.add_option('-q', '--quiet', action='store_true', default=False,
                       help='Run in quiet mode.')
-    parser.add_option('--seed', dest="solver_seed", type="int", help='seed value for stable plan generation')
+    parser.add_option('--seed', dest="seed", type="int", help='seed value for stable plan generation')
 
     # Parse the command line arguments
     options, args = parser.parse_args()
@@ -137,14 +137,14 @@ def validate_options(options, args, parser):
             'Invalid argument.  parallel value must be >= 1 and <= %d' % MAX_PARALLEL_WORKERS)
         parser.exit(1)
     
-    if options.target_segment_count and (
+    if options.target_segment_count is not None and (
         options.target_segment_count < 1
         or options.target_segment_count > MAX_SEGMENTS):
         logger.error(
             'Invalid value of --target-segment-count. It must be >= 1 and <= %d' % MAX_SEGMENTS)
         parser.exit(1)
     
-    if options.solver_seed and options.solver_seed < 0:
+    if options.seed is not None and options.seed < 0:
         logger.error('Invalid value of --seed. Must be >= 0')
         parser.exit(1)
 
@@ -166,7 +166,8 @@ def validate_options(options, args, parser):
             'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
             'skip_resource_estimation', 'analyze', 'replay_lag', 'hba_hostnames', 'inplace_swap_roles',
             'duration', 'end',
-            'detailed_progress', 'simple_progress', 'no_progress', 'seed'
+            'detailed_progress', 'simple_progress', 'no_progress', 'seed',
+            'rollback_required'
         ]),
 
         ('rollback_required', [
@@ -186,7 +187,9 @@ def validate_options(options, args, parser):
         if not hasattr(options, opt_name):
             return False
         value = getattr(options, opt_name)
-        return value is not None and value != False
+        # Compare with False by identity: a numeric option set to 0 is equal
+        # to False, but it is still an option passed by the user.
+        return value is not None and value is not False
     
     for rule in incompatibility_rules:
         condition_opt, incompatible_opts = rule

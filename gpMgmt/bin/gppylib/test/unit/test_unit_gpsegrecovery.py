@@ -319,7 +319,7 @@ class SegRecoveryTestCase(GpTestCase):
         self.assertEqual(1, mock_pgrewind_init.call_count)
         self.assertEqual(1, mock_pgbasebackup_run.call_count)
         self.assertEqual(1, mock_pgbasebackup_init.call_count)
-        self.assertRegex(gplog.get_logfile(), '/gpsegrecovery.py_\d+\.log')
+        self.assertRegex(gplog.get_logfile(), r'/gpsegrecovery.py_\d+\.log')
 
     @patch('gppylib.commands.pg.PgRewind.__init__', return_value=None)
     @patch('gppylib.commands.pg.PgRewind.run')
@@ -347,7 +347,7 @@ class SegRecoveryTestCase(GpTestCase):
         self.assertEqual(1, mock_pgrewind_init.call_count)
         self.assertEqual(1, mock_pgbasebackup_run.call_count)
         self.assertEqual(1, mock_pgbasebackup_init.call_count)
-        self.assertRegex(gplog.get_logfile(), '/gpsegrecovery.py_\d+\.log')
+        self.assertRegex(gplog.get_logfile(), r'/gpsegrecovery.py_\d+\.log')
 
     @patch('recovery_base.gplog.setup_tool_logging')
     @patch('recovery_base.RecoveryBase.main')

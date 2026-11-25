@@ -23,7 +23,8 @@ def before_feature(context, feature):
     tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate',
                     'gpssh-exkeys', 'gpinitsystem', 'cross_subnet',
                     'ggrebalance_basics', 'ggrebalance_shrink', 'ggrebalance_rebalance',
-                    'ggrebalance_misc_options']
+                    'ggrebalance_misc_options', 'ggrebalance_rollback_mirror_move',
+                    'ggrebalance_switchover_retry_limit']
     if set(context.feature.tags).intersection(tags_to_skip):
         return
 
@@ -126,7 +127,9 @@ def before_scenario(context, scenario):
 
     tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpmovemirrors',
                     'gpconfig', 'gpssh-exkeys', 'gpstop', 'gpinitsystem', 'cross_subnet',
-                    'gplogfilter', 'ggrebalance_basics', 'ggrebalance_shrink', 'ggrebalance_rebalance', 'ggrebalance_misc_options']
+                    'gplogfilter', 'ggrebalance_basics', 'ggrebalance_shrink',
+                    'ggrebalance_rebalance', 'ggrebalance_misc_options',
+                    'ggrebalance_rollback_mirror_move', 'ggrebalance_switchover_retry_limit']
     if set(context.feature.tags).intersection(tags_to_skip):
         return
 
@@ -159,7 +162,9 @@ def after_scenario(context, scenario):
     # NOTE: gpconfig after_scenario cleanup is in the step `the gpconfig context is setup`
     tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpinitstandby',
                     'gpconfig', 'gpstop', 'gpinitsystem', 'cross_subnet',
-                    'gplogfilter', 'ggrebalance_basics', 'ggrebalance_shrink', 'ggrebalance_rebalance', 'ggrebalance_misc_options']
+                    'gplogfilter', 'ggrebalance_basics', 'ggrebalance_shrink', 
+                    'ggrebalance_rebalance', 'ggrebalance_misc_options', 
+                    'ggrebalance_rollback_mirror_move', 'ggrebalance_switchover_retry_limit']
     if set(context.feature.tags).intersection(tags_to_skip):
         return
 

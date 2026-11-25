@@ -9405,17 +9405,19 @@ ANALYZE fpagg_tab_p3;
 SET enable_partitionwise_aggregate TO false;
 EXPLAIN (COSTS OFF)
 SELECT a, sum(b), min(b), count(*) FROM pagg_tab GROUP BY a HAVING avg(b) < 22 ORDER BY 1;
-                   QUERY PLAN                    
--------------------------------------------------
- GroupAggregate
-   Group Key: fpagg_tab_p1.a
-   Filter: (avg(fpagg_tab_p1.b) < '22'::numeric)
-   ->  Append
-         ->  Foreign Scan on fpagg_tab_p1
-         ->  Foreign Scan on fpagg_tab_p2
-         ->  Foreign Scan on fpagg_tab_p3
- Optimizer: Postgres query optimizer
-(8 rows)
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Sort
+   Sort Key: fpagg_tab_p1.a
+   ->  HashAggregate
+         Group Key: fpagg_tab_p1.a
+         Filter: (avg(fpagg_tab_p1.b) < '22'::numeric)
+         ->  Append
+               ->  Foreign Scan on fpagg_tab_p1
+               ->  Foreign Scan on fpagg_tab_p2
+               ->  Foreign Scan on fpagg_tab_p3
+ Optimizer: Postgres-based planner
+(10 rows)
 
 -- Plan with partitionwise aggregates is enabled
 SET enable_partitionwise_aggregate TO true;
@@ -9495,24 +9497,25 @@ SELECT a, count(t1) FROM pagg_tab t1 GROUP BY a HAVING avg(b) < 22 ORDER BY 1;
 -- When GROUP BY clause does not match with PARTITION KEY.
 EXPLAIN (COSTS OFF)
 SELECT b, avg(a), max(a), count(*) FROM pagg_tab GROUP BY b HAVING sum(a) < 700 ORDER BY 1;
-                   QUERY PLAN                   
-------------------------------------------------
- Finalize GroupAggregate
-   Group Key: fpagg_tab_p1.b
-   Filter: (sum(fpagg_tab_p1.a) < 700)
-   ->  Merge Append
-         Sort Key: fpagg_tab_p1.b
-         ->  Partial GroupAggregate
-               Group Key: fpagg_tab_p1.b
-               ->  Foreign Scan on fpagg_tab_p1
-         ->  Partial GroupAggregate
-               Group Key: fpagg_tab_p2.b
-               ->  Foreign Scan on fpagg_tab_p2
-         ->  Partial GroupAggregate
-               Group Key: fpagg_tab_p3.b
-               ->  Foreign Scan on fpagg_tab_p3
- Optimizer: Postgres query optimizer
-(15 rows)
+                      QUERY PLAN                      
+------------------------------------------------------
+ Sort
+   Sort Key: fpagg_tab_p1.b
+   ->  Finalize HashAggregate
+         Group Key: fpagg_tab_p1.b
+         Filter: (sum(fpagg_tab_p1.a) < 700)
+         ->  Append
+               ->  Partial HashAggregate
+                     Group Key: fpagg_tab_p1.b
+                     ->  Foreign Scan on fpagg_tab_p1
+               ->  Partial HashAggregate
+                     Group Key: fpagg_tab_p2.b
+                     ->  Foreign Scan on fpagg_tab_p2
+               ->  Partial HashAggregate
+                     Group Key: fpagg_tab_p3.b
+                     ->  Foreign Scan on fpagg_tab_p3
+ Optimizer: Postgres-based planner
+(16 rows)
 
 SELECT b, avg(a), max(a), count(*) FROM pagg_tab GROUP BY b HAVING sum(a) < 700 ORDER BY 1;
  b  |         avg         | max | count 

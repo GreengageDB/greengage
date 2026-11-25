@@ -48,6 +48,18 @@ class GGRebalanceMainSM:
         'STATE_REBALANCE_DONE',
     ]
 
+    # States, in which the current run has neither created the rebalance schema
+    # and saved the plan there, nor started any of the sub-state machines. There
+    # is nothing to finish or to continue later, so the shutdown request is
+    # served immediately.
+    states_interruptible = [
+        'STATE_START',
+        'STATE_OPTIONS_VALIDATION',
+        'STATE_PLANNING_STARTED',
+        'STATE_PLANNING_DONE',
+        'STATE_CHECK_PREVIOUS_RUN',
+    ]
+
     transitions = [
         {
             'trigger': 'start',
@@ -175,23 +187,21 @@ class GGRebalanceMainSM:
         self.hard_shutdown = hard_shutdown
 
     def shutdown(self) -> None:
+        if self.state in self.states_interruptible:
+            # The sub-state machines haven't been started yet, so there is nobody
+            # to check their shutdown flags. Without the exit here the planning
+            # would run to the end, and the plan would be saved to the rebalance
+            # schema before the interruption is noticed.
+            self.logger.info(f'shutdown requested in state "{self.state}", no shrink/expand/rebalance operation was started yet. Exiting...')
+            sys.exit(1)
+
         if self.hard_shutdown:
             self.logger.info('hard shutdown')
         else:
             self.logger.info('soft shutdown, waiting for critical operations to finish...')
 
-        need_exit = True
-
-        if self.gg_shrink is not None:
-            self.gg_shrink.shutdown()
-            need_exit = False
-
-        if self.gg_rebalance is not None:
-            self.gg_rebalance.shutdown(self.hard_shutdown)
-            need_exit = False
-
-        if need_exit:
-            sys.exit(1)
+        self.gg_shrink.shutdown()
+        self.gg_rebalance.shutdown(self.hard_shutdown)
 
     def is_shrink_planned(self) -> bool:
         return isinstance(self.plan, ShrinkPlan)
@@ -339,11 +349,6 @@ class GGRebalanceMainSM:
     def on_enter_STATE_PLANNING_STARTED(self) -> None:
         if self.options.target_segment_count != None:
             self.plan = Planner(self.logger, self.dburl, self.gparray, self.options).plan()
-            self.logger.info(f"Final plan:\n{self.plan}")
-
-            if self.options.show_plan:
-                self.trigger('move_to_STATE_END')
-                return
 
         self.trigger('move_to_STATE_PLANNING_DONE')
 
@@ -353,6 +358,8 @@ class GGRebalanceMainSM:
 
     @wrap_func_with_faults
     def on_enter_STATE_CHECK_PREVIOUS_RUN(self) -> None:
+        next_state_move = 'move_to_STATE_SETUP_SCHEMA_STARTED'
+        print_plan = self.options.show_plan
         if not self.rebalance_schema.schemaExists():
             if self.plan == None:
                 self.logger.error("Rebalance schema doesn't exists and no shrink plan is supplied. Please specify shrink plan.")
@@ -364,21 +371,32 @@ class GGRebalanceMainSM:
                               % (self.plan.target_segment_count, self.gparray.get_segment_count()))
                 self.trigger('move_to_STATE_ERROR')
                 return
-            self.trigger('move_to_STATE_SETUP_SCHEMA_STARTED')
+            print_plan = True
         else:
             # Schema already exists from the previous run.
             # In this case we already have a plan saved in the schema,
             # and we'll continue (or rollback) according to it.
-            if self.plan != None:
+            # Note: but we still allow to show even a new plan if the '--show-plan' is supplied.
+            if self.plan != None and not self.options.show_plan:
                 self.logger.error("Can't start a new operation, because the previous one was interrupted. "
                                   "Please try to launch again without a plan to continue from the interrupted state, "
                                   "or use '--rollback' or '--clean' options.")
                 self.trigger('move_to_STATE_ERROR')
                 return
 
-            self.plan = self.rebalance_schema.retrieveSavedPlan()
+            if self.plan == None:
+                self.logger.info(f"Retrieving saved plan...")
+                self.plan = self.rebalance_schema.retrieveSavedPlan()
 
-            self.trigger('move_to_STATE_EXECUTOR_STARTED')
+            next_state_move = 'move_to_STATE_EXECUTOR_STARTED'
+
+        if print_plan:
+            self.logger.info(f"Plan:\n{self.plan}")
+
+        if self.options.show_plan:
+            next_state_move = 'move_to_STATE_END'
+
+        self.trigger(next_state_move)
 
     @wrap_func_with_faults
     def on_enter_STATE_SETUP_SCHEMA_STARTED(self) -> None:
