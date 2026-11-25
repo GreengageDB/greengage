@@ -81,7 +81,7 @@ cleanup_loop_devices() {
         dir="$ISOLATION2_TESTTABLESPACE/rg_io_limit_loop_$i"
         img="$ISOLATION2_TESTTABLESPACE/io_limit_fs_$i.img"
         mountpoint -q "$dir" && umount "$dir"
-        loop=$(losetup -j "$img" -o NAME --noheadings 2>/dev/null | head -n1 || true)
+        loop=$(losetup -j "$img" -o NAME --noheadings 2>/dev/null | tr -d '[:space:]' | head -n1 || true)
         [ -n "$loop" ] && losetup -d "$loop"
     done
 }
@@ -105,7 +105,8 @@ setup_loop_devices() {
             truncate -s 64M "$img"
             mkfs.ext4 -q -F "$img"
             loop=$(losetup --find --show "$img")
-            majmin=$(losetup --noheadings --output MAJ:MIN "$loop")
+            # --noheadings still pads columns to the header width
+            majmin=$(losetup --noheadings --output MAJ:MIN "$loop" | tr -d '[:space:]')
             mknod "$alias" b "${majmin%%:*}" "${majmin##*:}"
             if [ ! -b "$alias" ]; then
                 fatal "$alias: failed to create block device alias node"
@@ -115,7 +116,7 @@ setup_loop_devices() {
         fi
         chown gpadmin:gpadmin "$dir"
 
-        majmin=$(findmnt -no MAJ:MIN "$dir" || true)
+        majmin=$({ findmnt -no MAJ:MIN "$dir" 2>/dev/null || true; } | tr -d '[:space:]')
         if [ -z "$majmin" ] || [ ! -d "/sys/dev/block/${majmin%%:*}:${majmin##*:}" ]; then
             fatal "$dir: mount device '$majmin' is not a block device in sysfs"
         fi
