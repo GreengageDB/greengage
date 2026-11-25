@@ -132,6 +132,8 @@ typedef struct
 	int			current;		/* next array index to read */
 	int			file;			/* temp file# */
 	off_t		offset;			/* byte offset in file */
+	MinimalTuple read_buffer;	/* reusable tuple for the shared-reader API */
+	Size		read_buffer_size;	/* allocated capacity, not current tuple length */
 } TSReadPointer;
 
 typedef enum
@@ -372,6 +374,11 @@ static unsigned int getlen(Tuplestorestate *state, bool eofOK);
 static void *copytup_heap(Tuplestorestate *state, void *tup);
 static void writetup_heap(Tuplestorestate *state, void *tup);
 static void *readtup_heap(Tuplestorestate *state, unsigned int len);
+static void readtup_heap_data(Tuplestorestate *state, unsigned int len,
+							 MinimalTuple tuple);
+static void *readtup_heap_shared(Tuplestorestate *state, unsigned int len,
+								bool *should_free);
+static void free_read_buffers(Tuplestorestate *state);
 static SharedFileSet *attach_shareinput_fileset(dsm_handle handle);
 static SharedFileSet *create_shareinput_fileset(dsm_handle *handle_out);
 
@@ -430,6 +437,8 @@ tuplestore_begin_common(int eflags, bool interXact, int maxKBytes)
 	state->readptrs[0].eflags = eflags;
 	state->readptrs[0].eof_reached = false;
 	state->readptrs[0].current = 0;
+	state->readptrs[0].read_buffer = NULL;
+	state->readptrs[0].read_buffer_size = 0;
 
 	return state;
 }
@@ -541,10 +550,33 @@ tuplestore_alloc_read_pointer(Tuplestorestate *state, int eflags)
 	/* And set it up */
 	state->readptrs[state->readptrcount] = state->readptrs[0];
 	state->readptrs[state->readptrcount].eflags = eflags;
+	/* Copy the position, but each reader must own a separate tuple buffer. */
+	state->readptrs[state->readptrcount].read_buffer = NULL;
+	state->readptrs[state->readptrcount].read_buffer_size = 0;
 
 	state->eflags |= eflags;
 
 	return state->readptrcount++;
+}
+
+/* Release per-reader scratch tuples, which are charged once when allocated. */
+static void
+free_read_buffers(Tuplestorestate *state)
+{
+	int			i;
+
+	for (i = 0; i < state->readptrcount; i++)
+	{
+		TSReadPointer *readptr = &state->readptrs[i];
+
+		if (readptr->read_buffer != NULL)
+		{
+			FREEMEM(state, GetMemoryChunkSpace(readptr->read_buffer));
+			pfree(readptr->read_buffer);
+			readptr->read_buffer = NULL;
+			readptr->read_buffer_size = 0;
+		}
+	}
 }
 
 /*
@@ -558,6 +590,8 @@ tuplestore_clear(Tuplestorestate *state)
 {
 	int			i;
 	TSReadPointer *readptr;
+
+	free_read_buffers(state);
 
 	if (state->myfile)
 		BufFileClose(state->myfile);
@@ -739,6 +773,7 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 			pfree(state->memtuples[i]);
 		pfree(state->memtuples);
 	}
+	free_read_buffers(state);
 	pfree(state->readptrs);
 	pfree(state);
 }
@@ -1195,7 +1230,7 @@ tuplestore_puttuple_common(Tuplestorestate *state, void *tuple)
  */
 static void *
 tuplestore_gettuple(Tuplestorestate *state, bool forward,
-					bool *should_free)
+					bool *should_free, bool reuse)
 {
 	TSReadPointer *readptr = &state->readptrs[state->activeptr];
 	unsigned int tuplen;
@@ -1274,7 +1309,8 @@ tuplestore_gettuple(Tuplestorestate *state, bool forward,
 			{
 				if ((tuplen = getlen(state, true)) != 0)
 				{
-					tup = READTUP(state, tuplen);
+					tup = reuse ? readtup_heap_shared(state, tuplen, should_free) :
+						READTUP(state, tuplen);
 
 					/* CDB XXX XXX XXX XXX */
 					/* MPP-1347: EXPLAIN ANALYZE shows runaway memory usage.
@@ -1285,7 +1321,8 @@ tuplestore_gettuple(Tuplestorestate *state, bool forward,
 					 * heap for actual memory usage than use this
 					 * homemade accounting.
 					 */
-					FREEMEM(state, GetMemoryChunkSpace(tup));
+					if (*should_free)
+						FREEMEM(state, GetMemoryChunkSpace(tup));
 					/* CDB XXX XXX XXX XXX */
 					return tup;
 				}
@@ -1358,7 +1395,10 @@ tuplestore_gettuple(Tuplestorestate *state, bool forward,
 				ereport(ERROR,
 						(errcode_for_file_access(),
 						 errmsg("could not seek in tuplestore temporary file")));
-			tup = READTUP(state, tuplen);
+			tup = reuse ? readtup_heap_shared(state, tuplen, should_free) :
+				READTUP(state, tuplen);
+			if (reuse && *should_free)
+				FREEMEM(state, GetMemoryChunkSpace(tup));
 			return tup;
 
 		default:
@@ -1380,14 +1420,14 @@ tuplestore_gettuple(Tuplestorestate *state, bool forward,
  * efficient but the slot contents may be corrupted if additional writes to
  * the tuplestore occur.  (If using tuplestore_trim, see comments therein.)
  */
-bool
-tuplestore_gettupleslot(Tuplestorestate *state, bool forward,
-						bool copy, TupleTableSlot *slot)
+static bool
+tuplestore_gettupleslot_common(Tuplestorestate *state, bool forward,
+							  bool copy, TupleTableSlot *slot, bool reuse)
 {
 	MinimalTuple tuple;
 	bool		should_free;
 
-	tuple = (MinimalTuple) tuplestore_gettuple(state, forward, &should_free);
+	tuple = (MinimalTuple) tuplestore_gettuple(state, forward, &should_free, reuse);
 
 	if (tuple)
 	{
@@ -1406,6 +1446,31 @@ tuplestore_gettupleslot(Tuplestorestate *state, bool forward,
 	}
 }
 
+bool
+tuplestore_gettupleslot(Tuplestorestate *state, bool forward,
+						bool copy, TupleTableSlot *slot)
+{
+	return tuplestore_gettupleslot_common(state, forward, copy, slot, false);
+}
+
+/*
+ * Fetch from a materialized shared store using a per-read-pointer buffer.
+ * Unlike tuplestore_gettupleslot(), the slot may borrow a disk-read tuple.
+ * Its contents remain valid until the next fetch using this read pointer,
+ * or until the store is cleared or destroyed. Other read pointers have
+ * independent buffers. Callers that need longer ownership must materialize
+ * or copy the slot before advancing this reader.
+ */
+bool
+tuplestore_gettupleslot_shared(Tuplestorestate *state, bool forward,
+							 TupleTableSlot *slot)
+{
+	Assert(state->share_status != TSHARE_NOT_SHARED);
+	Assert(state->share_status == TSHARE_READER || state->frozen);
+
+	return tuplestore_gettupleslot_common(state, forward, false, slot, true);
+}
+
 /*
  * tuplestore_advance - exported function to adjust position without fetching
  *
@@ -1418,7 +1483,7 @@ tuplestore_advance(Tuplestorestate *state, bool forward)
 	void	   *tuple;
 	bool		should_free;
 
-	tuple = tuplestore_gettuple(state, forward, &should_free);
+	tuple = tuplestore_gettuple(state, forward, &should_free, false);
 
 	if (tuple)
 	{
@@ -1489,7 +1554,7 @@ tuplestore_skiptuples(Tuplestorestate *state, int64 ntuples, bool forward)
 				void	   *tuple;
 				bool		should_free;
 
-				tuple = tuplestore_gettuple(state, forward, &should_free);
+				tuple = tuplestore_gettuple(state, forward, &should_free, false);
 
 				if (tuple == NULL)
 					return false;
@@ -1576,6 +1641,8 @@ tuplestore_copy_read_pointer(Tuplestorestate *state,
 {
 	TSReadPointer *sptr = &state->readptrs[srcptr];
 	TSReadPointer *dptr = &state->readptrs[destptr];
+	MinimalTuple read_buffer = dptr->read_buffer;
+	Size		read_buffer_size = dptr->read_buffer_size;
 
 	Assert(srcptr >= 0 && srcptr < state->readptrcount);
 	Assert(destptr >= 0 && destptr < state->readptrcount);
@@ -1598,6 +1665,10 @@ tuplestore_copy_read_pointer(Tuplestorestate *state,
 	}
 	else
 		*dptr = *sptr;
+
+	/* Copy scan position and flags, without sharing the tuple storage. */
+	dptr->read_buffer = read_buffer;
+	dptr->read_buffer_size = read_buffer_size;
 
 	switch (state->status)
 	{
@@ -1776,7 +1847,16 @@ static unsigned int
 getlen(Tuplestorestate *state, bool eofOK)
 {
 	unsigned int len;
+	void	   *buffer;
 	size_t		nbytes;
+
+	/* The length word need not be aligned in the file buffer. */
+	buffer = BufFileReadFromBuffer(state->myfile, sizeof(len));
+	if (buffer != NULL)
+	{
+		memcpy(&len, buffer, sizeof(len));
+		return len;
+	}
 
 	nbytes = BufFileRead(state->myfile, (void *) &len, sizeof(len));
 	if (nbytes == sizeof(len))
@@ -1839,12 +1919,83 @@ readtup_heap(Tuplestorestate *state, unsigned int len)
 	unsigned int tupbodylen = len - sizeof(int);
 	unsigned int tuplen = tupbodylen + MINIMAL_TUPLE_DATA_OFFSET;
 	MinimalTuple tuple = (MinimalTuple) palloc(tuplen);
-	char	   *tupbody = (char *) tuple + MINIMAL_TUPLE_DATA_OFFSET;
-	size_t		nread;
 
 	USEMEM(state, GetMemoryChunkSpace(tuple));
+	readtup_heap_data(state, len, tuple);
+	return (void *) tuple;
+}
+
+/*
+ * Shared readers can borrow a tuple buffer from their read pointer. Keep
+ * the ordinary owned-tuple path for large rows, so a single wide row does
+ * not leave a large allocation attached to every reader for the whole query.
+ */
+static void *
+readtup_heap_shared(Tuplestorestate *state, unsigned int len, bool *should_free)
+{
+	TSReadPointer *readptr = &state->readptrs[state->activeptr];
+	Size		tuplen = (Size) len - sizeof(int) + MINIMAL_TUPLE_DATA_OFFSET;
+
+	if (tuplen > BLCKSZ || state->readtup != readtup_heap)
+	{
+		*should_free = true;
+		return READTUP(state, len);
+	}
+
+	if (readptr->read_buffer_size < tuplen)
+	{
+		Size		newsize = Max(readptr->read_buffer_size, (Size) 128);
+
+		while (newsize < tuplen)
+			newsize *= 2;
+		newsize = Min(newsize, (Size) BLCKSZ);
+
+		if (readptr->read_buffer == NULL)
+			readptr->read_buffer = (MinimalTuple)
+				MemoryContextAlloc(state->context, newsize);
+		else
+		{
+			FREEMEM(state, GetMemoryChunkSpace(readptr->read_buffer));
+			readptr->read_buffer = (MinimalTuple)
+				repalloc(readptr->read_buffer, newsize);
+		}
+		readptr->read_buffer_size = newsize;
+		USEMEM(state, GetMemoryChunkSpace(readptr->read_buffer));
+	}
+
+	readtup_heap_data(state, len, readptr->read_buffer);
+	*should_free = false;
+	return (void *) readptr->read_buffer;
+}
+
+/* Read tuple bytes into storage supplied by either allocation policy. */
+static void
+readtup_heap_data(Tuplestorestate *state, unsigned int len, MinimalTuple tuple)
+{
+	unsigned int tupbodylen = len - sizeof(int);
+	char	   *tupbody = (char *) tuple + MINIMAL_TUPLE_DATA_OFFSET;
+	void	   *buffer;
+	size_t		readlen = tupbodylen;
+	size_t		nread;
+
+	tuple->t_len = tupbodylen + MINIMAL_TUPLE_DATA_OFFSET;
+
+	/*
+	 * Usually the tuple body and trailing length word are already buffered.
+	 * Consume both together, copying only the body into the allocated tuple.
+	 * Keep the normal reads for tuples that cross a buffer boundary, and for
+	 * compressed files, where BufFileReadFromBuffer cannot supply the data.
+	 */
+	if (state->backward)
+		readlen += sizeof(unsigned int);
+	buffer = BufFileReadFromBuffer(state->myfile, readlen);
+	if (buffer != NULL)
+	{
+		memcpy(tupbody, buffer, tupbodylen);
+		return;
+	}
+
 	/* read in the tuple proper */
-	tuple->t_len = tuplen;
 	nread = BufFileRead(state->myfile, (void *) tupbody, tupbodylen);
 	if (nread != (size_t) tupbodylen)
 		ereport(ERROR,
@@ -1853,14 +2004,15 @@ readtup_heap(Tuplestorestate *state, unsigned int len)
 						nread, (size_t) tupbodylen)));
 	if (state->backward)		/* need trailing length word? */
 	{
-		nread = BufFileRead(state->myfile, (void *) &tuplen, sizeof(tuplen));
-		if (nread != sizeof(tuplen))
+		unsigned int trailinglen;
+
+		nread = BufFileRead(state->myfile, (void *) &trailinglen, sizeof(trailinglen));
+		if (nread != sizeof(trailinglen))
 			ereport(ERROR,
 					(errcode_for_file_access(),
 					 errmsg("could not read from tuplestore temporary file: read only %zu of %zu bytes",
-							nread, sizeof(tuplen))));
+							nread, sizeof(trailinglen))));
 	}
-	return (void *) tuple;
 }
 
 /*

@@ -285,7 +285,10 @@ ExecShareInputScan(PlanState *pstate)
 	{
 		bool		gotOK;
 
-		gotOK = tuplestore_gettupleslot(node->ts_state, forward, false, slot);
+		if (sisc->cross_slice)
+			gotOK = tuplestore_gettupleslot_shared(node->ts_state, forward, slot);
+		else
+			gotOK = tuplestore_gettupleslot(node->ts_state, forward, false, slot);
 
 		if (!gotOK)
 			return NULL;
