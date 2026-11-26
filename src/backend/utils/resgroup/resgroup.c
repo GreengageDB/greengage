@@ -3768,10 +3768,7 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 		clean = false;
 		ResGroupMoveCheckTargetCompletion(sessionId, &clean, &res);
 		if (res && !clean)
-		{
 			SIMPLE_FAULT_INJECTOR("resource_group_give_away_after_handoff");
-			ResGroupMoveCheckTargetCompletion(sessionId, &clean, &res);
-		}
 		if (clean)
 			break;
 
@@ -3779,6 +3776,15 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 		{
 			clean = true;
 			ResGroupMoveCheckTargetReady(sessionId, &clean, &res);
+			if (res && clean)
+			{
+				/*
+				 * The move got completed despite the timeout: the target
+				 * has published the new session slot. Report success by
+				 * the fresh state, not by the result of the stale check.
+				 */
+				break;
+			}
 			if (res)
 				*slot = NULL;
 			res = false;

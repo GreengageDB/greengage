@@ -5424,7 +5424,10 @@ resGroupMoveCheckTargetReady(int sessionId, bool *clean, bool *result,
 				if (*result && waitForCompletion)
 					*clean = false;
 				else if (*result && *clean)
+				{
 					abandon = true;
+					*clean = false;
+				}
 				else
 					*clean = true;
 			}
