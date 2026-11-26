@@ -82,7 +82,7 @@ cleanup_loop_devices() {
         img="$ISOLATION2_TESTTABLESPACE/io_limit_fs_$i.img"
         rm -f "$ISOLATION2_TESTTABLESPACE/io_limit_dev_$i"
         mountpoint -q "$dir" && umount "$dir"
-        loop=$(losetup -j "$img" -o NAME --noheadings 2>/dev/null | tr -d '[:space:]' | head -n1 || true)
+        loop=$(losetup -j "$img" -O NAME --noheadings 2>/dev/null | tr -d '[:space:]' | head -n1 || true)
         [ -n "$loop" ] && losetup -d "$loop"
     done
 }
