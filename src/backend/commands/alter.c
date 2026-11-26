@@ -16,6 +16,7 @@
 
 #include "access/htup_details.h"
 #include "access/sysattr.h"
+#include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
@@ -65,6 +66,7 @@
 
 #include "cdb/cdbvars.h"
 #include "cdb/cdbdisp_query.h"
+#include "cdb/cdbpartition.h"
 
 
 static Oid	AlterObjectNamespace_internal(Relation rel, Oid objid, Oid nspOid);
@@ -410,6 +412,36 @@ ExecRenameStmt(RenameStmt *stmt)
 									DF_NEED_TWO_PHASE,
 									NIL,
 									NULL);
+
+		/*
+		 * ALTER INDEX RENAME can also target a table. Generated child
+		 * renames set bAllowPartn to skip this traversal.
+		 */
+		if ((stmt->renameType == OBJECT_TABLE || stmt->renameType == OBJECT_INDEX) &&
+			OidIsValid(result) && !stmt->bAllowPartn &&
+			!rel_is_child_partition(result))
+		{
+			PartitionNode *pNode = RelationBuildPartitionDescByOid(result, false);
+
+			if (pNode)
+			{
+				int			skipped = 0;
+				int			renamed = 0;
+
+				/*
+				 * The segments have renamed the root. Make its old name
+				 * available to the child name chooser on the coordinator.
+				 */
+				CommandCounterIncrement();
+				RenamePartitionChildren(pNode, stmt->relation->relname, stmt->newname,
+										PROCESS_UTILITY_QUERY, &renamed, &skipped);
+				if (renamed && skipped)
+					ereport(WARNING,
+							(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							 errmsg("renamed %d partitions, skipped %d child partitions with custom names",
+									renamed, skipped)));
+			}
+		}
 	}
 
 	return result;

@@ -192,10 +192,6 @@ static int atpxPart_validate_spec(
 
 static void atpxSkipper(PartitionNode *pNode, int *skipped);
 
-static List *build_rename_part_recurse(PartitionRule *rule, const char *old_parentname,
-						  const char *new_parentname,
-						  int *skipped);
-
 static PgPartRule *get_pprule_from_ATC(Relation rel, AlterTableCmd *cmd);
 
 static List *get_partition_rules(PartitionNode *pn);
@@ -7583,116 +7579,118 @@ atpxSkipper(PartitionNode *pNode, int *skipped)
 	}
 }								/* end atpxSkipper */
 
-static List *
-build_rename_part_recurse(PartitionRule *rule, const char *old_parentname,
-						  const char *new_parentname,
-						  int *skipped)
+/*
+ * Recover CREATE's label from the physical name. Anonymous partitions have
+ * no catalog name: the numeric (or ADD PARTITION's r-prefixed) identifier
+ * survives in the label even when the parent prefix has been shortened.
+ */
+static char *
+partition_rename_label(const char *parent, const char *depth,
+					   const char *relname, const char *parname)
 {
+	const char *marker;
 
-	RangeVar   *rv;
-	Relation	rel;
-	char	   *relname = NULL;
-	char		newRelNameBuf[(NAMEDATALEN * 2)];
-	List	   *l1 = NIL;
-
-	rel = heap_open(rule->parchildrelid, AccessShareLock);
-
-	relname = pstrdup(RelationGetRelationName(rel));
-
-	rv = makeRangeVar(get_namespace_name(RelationGetNamespace(rel)),
-					  relname, -1);
-
-	/* unlock, because we have a lock on the master */
-	heap_close(rel, AccessShareLock);
-
-	/*
-	 * The child name should contain the old parent name as a prefix - check
-	 * the length and compare to make sure.
-	 *
-	 * To build the new child name, just use the new name as a prefix, and use
-	 * the remainder of the child name (the part after the old parent name
-	 * prefix) as the suffix.
-	 */
-	if (strlen(old_parentname) > strlen(relname))
+	for (marker = relname; (marker = strstr(marker, "_prt_")) != NULL; marker++)
 	{
-		if (skipped)
-			*skipped += 1;
+		const char *label = marker + 1;
+		const char *suffix = marker + 5;
+		char	   *expected;
+		bool		matches;
 
-		atpxSkipper(rule->children, skipped);
-	}
-	else
-	{
-		if (0 != (strncmp(old_parentname, relname, strlen(old_parentname))))
+		if (parname && *parname)
 		{
-			if (skipped)
-				*skipped += 1;
-			atpxSkipper(rule->children, skipped);
+			size_t len = strlen(parname);
+
+			if (strncmp(suffix, parname, len) != 0)
+				continue;
+			suffix += len;
+			/* ChooseRelationName may append a positive collision counter. */
+			if (*suffix == '0')
+				continue;
 		}
 		else
 		{
-			snprintf(newRelNameBuf, sizeof(newRelNameBuf), "%s%s",
-					 new_parentname, relname + strlen(old_parentname));
-
-			if (strlen(newRelNameBuf) > NAMEDATALEN)
-				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-						 errmsg("relation name \"%s\" for child partition is too long",
-								newRelNameBuf)));
-
-			l1 = lappend(l1, list_make2(rv, pstrdup(newRelNameBuf)));
-
-			/* add the child lists next (not first) */
-			{
-				List	   *l2 = NIL;
-
-				if (rule->children)
-					l2 = atpxRenameList(rule->children,
-										relname, newRelNameBuf, skipped);
-
-				if (l2)
-					l1 = list_concat(l1, l2);
-			}
+			if (*suffix == 'r')
+				suffix++;
+			if (!*suffix)
+				continue;
 		}
+
+		if (suffix[strspn(suffix, "0123456789")] != '\0' ||
+			strlen(label) > NAMEDATALEN - 4)
+			continue;
+
+		expected = makeObjectName(parent, depth, label);
+		matches = strcmp(expected, relname) == 0;
+		pfree(expected);
+		if (matches)
+			return parname && *parname ? psprintf("prt_%s", parname) : pstrdup(label);
 	}
-	return l1;
+
+	return NULL;
 }
 
-List *
-atpxRenameList(PartitionNode *pNode,
-			   char *old_parentname, const char *new_parentname, int *skipped)
+static void
+rename_partition_rule(PartitionRule *rule, const char *depth,
+					  const char *old_parent, const char *new_parent,
+					  ProcessUtilityContext context,
+					  int *renamed, int *skipped)
 {
-	List	   *l1 = NIL;
+	Oid			relid = rule->parchildrelid;
+	Oid			namespaceid = get_rel_namespace(relid);
+	char	   *oldname = get_rel_name(relid);
+	char	   *label;
+	char	   *newname;
+
+	if (!oldname)
+		elog(ERROR, "cache lookup failed for relation %u", relid);
+
+	label = partition_rename_label(old_parent, depth, oldname, rule->parname);
+	if (!label)
+	{
+		(*skipped)++;
+		atpxSkipper(rule->children, skipped);
+		return;
+	}
+
+	newname = ChooseRelationNameForRename(new_parent, depth, label,
+										  namespaceid, relid);
+	if (strcmp(newname, oldname) != 0)
+	{
+		RenameStmt *stmt = makeNode(RenameStmt);
+
+		stmt->renameType = OBJECT_TABLE;
+		stmt->relation = makeRangeVar(get_namespace_name(namespaceid), oldname, -1);
+		stmt->newname = newname;
+		stmt->bAllowPartn = true;
+		ProcessUtility((Node *) stmt, synthetic_sql, context,
+					   NULL, None_Receiver, NULL);
+		(*renamed)++;
+	}
+
+	RenamePartitionChildren(rule->children, oldname, newname, context, renamed, skipped);
+}
+
+/* Rename each child before choosing the next name so collisions are visible. */
+void
+RenamePartitionChildren(PartitionNode *pNode, const char *old_parent,
+						const char *new_parent, ProcessUtilityContext context,
+						int *renamed, int *skipped)
+{
+	char		depth[NAMEDATALEN];
 	ListCell   *lc;
 
 	if (!pNode)
-		return l1;
+		return;
 
-	/* add entries for rules at current level */
+	snprintf(depth, sizeof(depth), "%d", pNode->part->parlevel + 1);
 	foreach(lc, pNode->rules)
-	{
-		PartitionRule *rule = lfirst(lc);
-
-		l1 = list_concat(l1,
-						 build_rename_part_recurse(rule,
-												   old_parentname,
-												   new_parentname,
-												   skipped));
-	}							/* end foreach */
-
-	/* and the default partition */
+		rename_partition_rule(lfirst(lc), depth, old_parent, new_parent, context,
+							  renamed, skipped);
 	if (pNode->default_part)
-	{
-		PartitionRule *rule = pNode->default_part;
-
-		l1 = list_concat(l1,
-						 build_rename_part_recurse(rule,
-												   old_parentname,
-												   new_parentname,
-												   skipped));
-	}
-
-	return l1;
-}								/* end atpxRenameList */
+		rename_partition_rule(pNode->default_part, depth, old_parent, new_parent, context,
+							  renamed, skipped);
+}
 
 /* Construct the PgPartRule for a branch of a partitioning hierarchy.
  *

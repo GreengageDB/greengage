@@ -371,11 +371,121 @@ subpartition by range (x) subpartition template ( start (1) end (2) every (1))
 subpartition by range (y) subpartition template ( start (1) end (2) every (1))
 subpartition by range (z) subpartition template ( start (1) end (2) every (1))
 ( start (1) end (2) every (1));
+create temp table original_deep_names as
+select partitionlevel, partitiontablename from pg_partitions
+where schemaname = 'partition_ddl2' and tablename = 'multi_part2'
+distributed by (partitionlevel);
 alter table multi_part2 rename to multi_part2_0000000;
-alter table multi_part2 rename to m_0000000;
+alter table multi_part2_0000000 rename to m_0000000;
 select tablename, partitionlevel, partitiontablename, partitionname, partitionrank, partitionboundary from pg_partitions where tablename like 'm_000%' order by tablename;
 
-drop table m_0000000;
+\pset format unaligned
+-- Returning to the CREATE name must reproduce the original names at all levels.
+alter table m_0000000 rename to multi_part2;
+select count(*) as matching_levels from original_deep_names
+join pg_partitions using (partitionlevel, partitiontablename)
+where schemaname = 'partition_ddl2' and tablename = 'multi_part2';
+drop table multi_part2;
+drop table original_deep_names;
+
+-- Compare direct creation and both rename paths in independent transactions.
+begin;
+create table _bak_tbl_cross_sales_analytics_hash_attr_g_20260908145430 (id int)
+distributed by (id) partition by range (id)
+(partition p_2012 start (2012) end (2013) every (1));
+select partitiontablename from pg_partitions where schemaname = 'partition_ddl2'
+and tablename = '_bak_tbl_cross_sales_analytics_hash_attr_g_20260908145430';
+rollback;
+
+begin;
+create table _23456789012345678901234567890123456789012345678901234567890129 (id int)
+distributed by (id) partition by range (id)
+(partition p_2012 start (2012) end (2013) every (1));
+select partitiontablename from pg_partitions where schemaname = 'partition_ddl2'
+and tablename = '_23456789012345678901234567890123456789012345678901234567890129';
+alter table _23456789012345678901234567890123456789012345678901234567890129
+rename to _bak_tbl_cross_sales_analytics_hash_attr_g_20260908145430;
+select partitiontablename from pg_partitions where schemaname = 'partition_ddl2'
+and tablename = '_bak_tbl_cross_sales_analytics_hash_attr_g_20260908145430';
+rollback;
+
+begin;
+create table tbl_cross_sales_analytics_hash_attr_g (id int)
+distributed by (id) partition by range (id)
+(partition p_2012 start (2012) end (2013) every (1));
+select partitiontablename from pg_partitions where schemaname = 'partition_ddl2'
+and tablename = 'tbl_cross_sales_analytics_hash_attr_g';
+alter table tbl_cross_sales_analytics_hash_attr_g
+rename to _bak_tbl_cross_sales_analytics_hash_attr_g_20260908145430;
+select partitiontablename from pg_partitions where schemaname = 'partition_ddl2'
+and tablename = '_bak_tbl_cross_sales_analytics_hash_attr_g_20260908145430';
+rollback;
+
+-- The suffix _1_prt_p fills 8 bytes. Growing the parent from 55 to
+-- 56 bytes must leave the existing 63-byte child name in place.
+begin;
+create table boundary_test (id int) distributed by (id) partition by list (id)
+(partition p values (1));
+alter table boundary_test rename to b123456789012345678901234567890123456789012345678901234;
+alter table b123456789012345678901234567890123456789012345678901234
+rename to b1234567890123456789012345678901234567890123456789012345;
+select partitiontablename from pg_partitions where schemaname = 'partition_ddl2'
+and tablename = 'b1234567890123456789012345678901234567890123456789012345';
+-- The last character straddles the byte cutoff in UTF-8.
+alter table b1234567890123456789012345678901234567890123456789012345
+rename to "b12345678901234567890123456789012345678901234567890123é";
+select partitiontablename from pg_partitions where schemaname = 'partition_ddl2'
+and tablename = 'b12345678901234567890123456789012345678901234567890123é';
+rollback;
+
+-- A shortened child name can reuse the root's former name.
+BEGIN;
+CREATE TABLE dst_01234567890123456789012345678901234567890123456789_1_prt_p
+    (id int) DISTRIBUTED BY (id)
+PARTITION BY RANGE (id) (
+    PARTITION q START (0) END (1),
+    PARTITION p START (1) END (2)
+);
+
+ALTER TABLE dst_01234567890123456789012345678901234567890123456789_1_prt_p
+    RENAME TO dst_01234567890123456789012345678901234567890123456789;
+select partitiontablename from pg_partitions
+where schemaname = 'partition_ddl2' and partitionname = 'p'
+and tablename = 'dst_01234567890123456789012345678901234567890123456789';
+select count(distinct gp_segment_id) =
+    (select count(*) from gp_segment_configuration where content >= 0 and role = 'p')
+    as on_all_primary_segments
+from gp_dist_random('pg_class')
+where oid = 'partition_ddl2.dst_01234567890123456789012345678901234567890123456789_1_prt_p'::regclass
+and relname = 'dst_01234567890123456789012345678901234567890123456789_1_prt_p';
+ROLLBACK;
+
+-- Both subpartitions need the same shortened name under the new root.
+begin;
+create table nested_source (id int, n int) distributed by (id)
+partition by list (id) subpartition by list (n)
+subpartition template (subpartition leaf values (1))
+(partition part_a values (1), partition part_b values (2));
+alter table nested_source rename to _bak_tbl_cross_sales_analytics_hash_attr_g_20260908145430;
+select partitiontablename from pg_partitions where schemaname = 'partition_ddl2'
+and tablename = '_bak_tbl_cross_sales_analytics_hash_attr_g_20260908145430'
+and partitionlevel = 1 order by partitiontablename;
+rollback;
+
+-- Resolve a namespace collision and preserve an unrelated restore-time name.
+begin;
+create table taken_1_prt_p (id int) distributed by (id);
+create table rename_source (id int) distributed by (id) partition by list (id)
+(partition p values (1), default partition other with (tablename='custom_child'));
+alter table rename_source rename to taken;
+select partitionname, partitiontablename from pg_partitions
+where schemaname = 'partition_ddl2' and tablename = 'taken' order by partitionname;
+alter table taken rename to available;
+select partitionname, partitiontablename from pg_partitions
+where schemaname = 'partition_ddl2' and tablename = 'available' order by partitionname;
+rollback;
+\pset format aligned
+
 
 drop  TABLE IF EXISTS INT_P1A CASCADE;
 CREATE TABLE INT_P1A ( num1    INTEGER NOT NULL,
