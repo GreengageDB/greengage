@@ -317,6 +317,8 @@ CJoinStatsProcessor::SetResultingJoinStats(
 		GPOS_NEW(mp) CScaleFactorUtils::SJoinConditionArray(mp);
 	const ULONG num_join_conds = join_pred_stats_info->Size();
 
+	const BOOL is_input_empty =
+		CStatistics::IsEmptyJoin(outer_stats, inner_side_stats, IsLASJ);
 	BOOL output_is_empty = false;
 	// A single AND-ed predicate with surviving buckets is enough on its own
 	// to keep the LASJ non-empty, so predicates must be combined with AND
@@ -339,8 +341,6 @@ CJoinStatsProcessor::SetResultingJoinStats(
 		GPOS_ASSERT(colid1 != colid2);
 		const CHistogram *outer_histogram = nullptr;
 		const CHistogram *inner_histogram = nullptr;
-		BOOL is_input_empty =
-			CStatistics::IsEmptyJoin(outer_stats, inner_side_stats, IsLASJ);
 		CDouble local_scale_factor(1.0);
 		CHistogram *outer_histogram_after = nullptr;
 		CHistogram *inner_histogram_after = nullptr;
@@ -444,7 +444,7 @@ CJoinStatsProcessor::SetResultingJoinStats(
 	}
 
 
-	output_is_empty = outer_stats->IsEmpty() ||
+	output_is_empty = is_input_empty ||
 					  (IsLASJ ? lasj_all_preds_fully_covered : output_is_empty);
 
 	num_join_rows = CStatistics::MinRows;

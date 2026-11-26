@@ -902,7 +902,8 @@ CHistogram::MakeLASJHistogram(CStatsPred::EStatsCmpType stats_cmp_type,
 	const ULONG buckets1 = GetNumBuckets();
 	const ULONG buckets2 = histogram->GetNumBuckets();
 
-	while (idx1 < buckets1 && idx2 < buckets2)
+	while ((idx1 < buckets1 || nullptr != upper_split_bucket) &&
+		   idx2 < buckets2)
 	{
 		// bucket from other histogram
 		CBucket *bucket2 = (*histogram->m_histogram_buckets)[idx2];
@@ -2298,9 +2299,9 @@ CHistogram::ComputeSkew()
 	GPOS_DELETE_ARRAY(sample_rate);
 
 	// second moment: variance
-	DOUBLE moment2 = (DOUBLE)(num2 / GPOPT_SKEW_SAMPLE_SIZE);
+	DOUBLE moment2 = (DOUBLE) (num2 / GPOPT_SKEW_SAMPLE_SIZE);
 	// third moment: a/symmetry
-	DOUBLE moment3 = (DOUBLE)(num3 / GPOPT_SKEW_SAMPLE_SIZE);
+	DOUBLE moment3 = (DOUBLE) (num3 / GPOPT_SKEW_SAMPLE_SIZE);
 
 	if (moment2 == 0)
 	{
