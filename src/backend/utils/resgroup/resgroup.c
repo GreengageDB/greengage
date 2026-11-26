@@ -3732,14 +3732,13 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 				CHECK_FOR_INTERRUPTS();
 
 				latchRes = WaitLatch(&MyProc->procLatch,
-									 WL_LATCH_SET | WL_TIMEOUT |
-									 WL_POSTMASTER_DEATH,
-									 timeout,
-									 PG_WAIT_RESOURCE_GROUP);
+				   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+				   timeout,
+				   PG_WAIT_RESOURCE_GROUP);
 
 				if (latchRes & WL_POSTMASTER_DEATH)
 					elog(ERROR,
-						 "got WL_POSTMASTER_DEATH waiting on latch; exiting...");
+					 "got WL_POSTMASTER_DEATH waiting on latch; exiting...");
 			}
 			PG_CATCH();
 			{
