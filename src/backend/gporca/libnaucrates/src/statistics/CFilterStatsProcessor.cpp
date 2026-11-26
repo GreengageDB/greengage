@@ -634,6 +634,12 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 	// then skipped
 	CBitSet *unsupported_group_contributed = GPOS_NEW(mp) CBitSet(mp);
 
+	// columns some branch's own, unmarked histogram still spans the whole
+	// input range of - that branch lets every value of the column through
+	// by itself, so no unsupported branch can make the disjunction's
+	// result for that column any less reliable
+	CBitSet *covered_colids = GPOS_NEW(mp) CBitSet(mp);
+
 	CHistogram *previous_histogram = nullptr;
 	ULONG previous_colid = gpos::ulong_max;
 	// This is set to input_rows since SF = 1 / selectivity. So if SF is large, then we are less selective.
@@ -765,6 +771,16 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 			// e.g. (a <= 5 AND a >= 1), a in (5, 1)
 			GPOS_ASSERT(nullptr != disjunctive_child_col_histogram);
 
+			const CHistogram *input_col_histogram =
+				input_histograms->Find(&colid);
+			if (nullptr != input_col_histogram &&
+				!disjunctive_child_col_histogram->IsUnsupportedPredDerived() &&
+				disjunctive_child_col_histogram->ContainsRange(
+					input_col_histogram))
+			{
+				(void) covered_colids->ExchangeSet(colid);
+			}
+
 			if (nullptr == previous_histogram)
 			{
 				previous_histogram = disjunctive_child_col_histogram;
@@ -840,11 +856,16 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 
 	// every column is now guaranteed to have an entry (backfilled above from
 	// a copy of the input histogram where no disjunct touched it directly),
-	// so mark the ones touched by an unsupported multi-column predicate
+	// so mark the ones touched by an unsupported predicate, except those
+	// a supported branch was found to cover by itself above
 	CBitSetIter used_colid_iter(*unsupported_pred_used_colids);
 	while (used_colid_iter.Advance())
 	{
 		ULONG used_colid = used_colid_iter.Bit();
+		if (covered_colids->Get(used_colid))
+		{
+			continue;
+		}
 		CHistogram *used_col_histogram =
 			disjunctive_result_histograms->Find(&used_colid);
 		if (nullptr != used_col_histogram)
@@ -852,6 +873,7 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 			used_col_histogram->SetUnsupportedPredDerived();
 		}
 	}
+	covered_colids->Release();
 	unsupported_pred_used_colids->Release();
 	direct_child_real_colids->Release();
 	combined_unsupported_sf_by_colid->Release();
