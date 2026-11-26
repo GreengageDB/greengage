@@ -80,6 +80,7 @@ cleanup_loop_devices() {
     for i in 1 2; do
         dir="$ISOLATION2_TESTTABLESPACE/rg_io_limit_loop_$i"
         img="$ISOLATION2_TESTTABLESPACE/io_limit_fs_$i.img"
+        rm -f "$ISOLATION2_TESTTABLESPACE/io_limit_dev_$i"
         mountpoint -q "$dir" && umount "$dir"
         loop=$(losetup -j "$img" -o NAME --noheadings 2>/dev/null | tr -d '[:space:]' | head -n1 || true)
         [ -n "$loop" ] && losetup -d "$loop"
@@ -94,6 +95,11 @@ cleanup_loop_devices() {
 # every runner.
 setup_loop_devices() {
     local i dir img alias loop majmin prev=""
+
+    # Register the cleanup before allocating anything: a failure after the
+    # first losetup must still detach the loop and drop a leftover alias.
+    exit_handlers+=(cleanup_loop_devices)
+
     for i in 1 2; do
         dir="$ISOLATION2_TESTTABLESPACE/rg_io_limit_loop_$i"
         img="$ISOLATION2_TESTTABLESPACE/io_limit_fs_$i.img"
@@ -125,8 +131,6 @@ setup_loop_devices() {
         fi
         prev=$majmin
     done
-
-    exit_handlers+=(cleanup_loop_devices)
 }
 
 gen_env() {
