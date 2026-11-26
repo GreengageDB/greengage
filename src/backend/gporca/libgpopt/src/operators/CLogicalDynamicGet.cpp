@@ -458,8 +458,9 @@ CLogicalDynamicGet::RowsSelectedPartitions(CMemoryPool *mp,
 		}
 
 		IMDId *partition_mdid = (*partition_mdids)[ul];
+		const IMDRelation *part_rel = md_accessor->RetrieveRel(partition_mdid);
 		// Retrieve row count from Relation objects
-		CDouble part_rows = md_accessor->RetrieveRel(partition_mdid)->Rows();
+		CDouble part_rows = part_rel->Rows();
 
 		// Accessing Relation objects is significantly faster than
 		// accessing RelationStatistics objects.
@@ -467,20 +468,19 @@ CLogicalDynamicGet::RowsSelectedPartitions(CMemoryPool *mp,
 		// retrieve row count from RelationStatistics objects.
 		// This functions as a backup mechanism, given our
 		// expectation that all leaf Relations should have a
-		// non-negative row count, and negative row count just
+		// positive row count, and non-positive row count just
 		// indicates the leaf stats are missing from the Relation
-		// objects, which could happen in old MDP's.
-		if (-1 == part_rows || 0.0 == part_rows)
+		// objects.
+		if (-1 == part_rows ||
+			(0.0 == part_rows && IMDRelation::ErelstorageForeign ==
+									 part_rel->RetrieveRelStorageType()))
 		{
 			partition_mdid->AddRef();
 			CMDIdRelStats *rel_stats_mdid =
 				GPOS_NEW(mp) CMDIdRelStats(CMDIdGPDB::CastMdid(partition_mdid));
 			const IMDRelStats *rel_stats =
 				md_accessor->Pmdrelstats(rel_stats_mdid);
-			if (!rel_stats->IsEmpty())
-			{
-				part_rows = rel_stats->Rows();
-			}
+			part_rows = rel_stats->Rows();
 			rel_stats_mdid->Release();
 		}
 

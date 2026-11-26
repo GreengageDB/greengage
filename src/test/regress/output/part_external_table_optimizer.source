@@ -23,9 +23,6 @@
 -- m/DETAIL:  Found \d+ URLs and \d+ primary segments./
 -- s/Found.+//
 --
--- m/\(cost=.*\)/
--- s/\(cost=.*\)//
---
 -- end_matchsubs
 set optimizer_trace_fallback=on;
 create schema part_external_table;
@@ -42,11 +39,11 @@ NOTICE:  partition constraints are not validated when attaching a readable exter
 analyze part;
 WARNING:  skipping "p2_e" --- cannot analyze this foreign table
 WARNING:  skipping "p1_e" --- cannot analyze this foreign table
-explain select * from part;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..514.48 rows=2000000 width=8)
-   ->  Dynamic Foreign Scan on part  (cost=0.00..444.93 rows=666667 width=8)
+explain (costs off) select * from part;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Dynamic Foreign Scan on part
          Number of partitions to scan: 2 (out of 2)
  Optimizer: Pivotal Optimizer (GPORCA)
 (4 rows)
@@ -65,11 +62,11 @@ select * from part;
 (8 rows)
 
 -- test SPE
-explain select * from part where b>10 and a>0;
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..462.03 rows=227556 width=8)
-   ->  Dynamic Foreign Scan on part  (cost=0.00..455.25 rows=75852 width=8)
+explain (costs off) select * from part where b>10 and a>0;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Dynamic Foreign Scan on part
          Filter: ((b > 10) AND (a > 0))
          Number of partitions to scan: 1 (out of 2)
  Optimizer: Pivotal Optimizer (GPORCA)
@@ -87,29 +84,20 @@ select * from part where b>10 and a>0;
 create table non_part (a int, b int) distributed by (a);
 insert into non_part values (15,15);
 -- mixed partitions with DPE with multiple dynamic scans, select one partition
-explain analyze select * from part, non_part where part.b=non_part.b;
-                                                                    QUERY PLAN                                                                     
----------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=16) (actual time=6.491..6.492 rows=1 loops=1)
-   ->  Hash Join  (cost=0.00..862.00 rows=1 width=16) (actual time=4.937..6.264 rows=1 loops=1)
+explain (costs off) select * from part, non_part where part.b=non_part.b;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
          Hash Cond: (b = non_part.b)
-         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 524288 buckets.
-         ->  Dynamic Foreign Scan on part  (cost=0.00..431.00 rows=1 width=8) (actual time=0.982..1.012 rows=4 loops=1)
+         ->  Dynamic Foreign Scan on part
                Number of partitions to scan: 2 (out of 2)
-               Partitions scanned:  Avg 1.0 x 3 workers.  Max 1 parts (seg0).
-         ->  Hash  (cost=431.00..431.00 rows=1 width=8) (actual time=0.055..0.055 rows=1 loops=1)
-               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
-               ->  Partition Selector (selector id: $0)  (cost=0.00..431.00 rows=1 width=8) (actual time=0.034..0.048 rows=1 loops=1)
-                     ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8) (actual time=0.025..0.037 rows=1 loops=1)
-                           ->  Seq Scan on non_part  (cost=0.00..431.00 rows=1 width=8) (actual time=0.683..0.684 rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
- Planning Time: 17.740 ms
-   (slice0)    Executor memory: 49K bytes.
-   (slice1)    Executor memory: 4253K bytes avg x 3 workers, 4297K bytes max (seg0).  Work_mem: 4097K bytes max.
-   (slice2)    Executor memory: 37K bytes avg x 3 workers, 37K bytes max (seg0).
- Memory used:  128000kB
- Execution Time: 26.191 ms
-(19 rows)
+         ->  Hash
+               ->  Partition Selector (selector id: $0)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on non_part
+ Optimizer: GPORCA
+(10 rows)
 
 select * from part, non_part where part.b=non_part.b;
  a  | b  | a  | b  
@@ -119,29 +107,20 @@ select * from part, non_part where part.b=non_part.b;
 
 insert into non_part values (5,5);
 -- mixed partitions with DPE with multiple dynamic scans, select both partition
-explain analyze select * from part, non_part where part.b=non_part.b;
-                                                                    QUERY PLAN                                                                     
----------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=16) (actual time=10.232..10.233 rows=2 loops=1)
-   ->  Hash Join  (cost=0.00..862.00 rows=1 width=16) (actual time=4.907..8.663 rows=2 loops=1)
+explain (costs off) select * from part, non_part where part.b=non_part.b;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
          Hash Cond: (b = non_part.b)
-         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 2 of 524288 buckets.
-         ->  Dynamic Foreign Scan on part  (cost=0.00..431.00 rows=1 width=8) (actual time=1.333..3.680 rows=8 loops=1)
+         ->  Dynamic Foreign Scan on part
                Number of partitions to scan: 2 (out of 2)
-               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
-         ->  Hash  (cost=431.00..431.00 rows=1 width=8) (actual time=1.485..1.485 rows=2 loops=1)
-               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
-               ->  Partition Selector (selector id: $0)  (cost=0.00..431.00 rows=1 width=8) (actual time=0.686..1.457 rows=2 loops=1)
-                     ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8) (actual time=0.649..1.415 rows=2 loops=1)
-                           ->  Seq Scan on non_part  (cost=0.00..431.00 rows=1 width=8) (actual time=1.137..1.138 rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
- Planning Time: 12.815 ms
-   (slice0)    Executor memory: 49K bytes.
-   (slice1)    Executor memory: 4325K bytes avg x 3 workers, 4373K bytes max (seg0).  Work_mem: 4097K bytes max.
-   (slice2)    Executor memory: 36K bytes avg x 3 workers, 36K bytes max (seg0).
- Memory used:  128000kB
- Execution Time: 11.767 ms
-(19 rows)
+         ->  Hash
+               ->  Partition Selector (selector id: $0)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on non_part
+ Optimizer: GPORCA
+(10 rows)
 
 select * from part, non_part where part.b=non_part.b;
  a  | b  | a  | b  
@@ -162,14 +141,14 @@ WARNING:  skipping "p2_e" --- cannot analyze this foreign table
 WARNING:  skipping "p1_e" --- cannot analyze this foreign table
 insert into non_part values (32,32);
 -- mixed partitions
-explain select * from part;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..974.67 rows=2000000 width=8)
-   ->  Append  (cost=0.00..915.04 rows=666667 width=8)
-         ->  Dynamic Seq Scan on part  (cost=0.00..444.93 rows=666667 width=8)
+explain (costs off) select * from part;
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Dynamic Seq Scan on part
                Number of partitions to scan: 2 (out of 4)
-         ->  Dynamic Foreign Scan on part  (cost=0.00..444.93 rows=666667 width=8)
+         ->  Dynamic Foreign Scan on part
                Number of partitions to scan: 2 (out of 4)
  Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
@@ -199,16 +178,16 @@ select * from part;
 (19 rows)
 
 --mixed partitions with SPE
-explain select * from part where b>10 and b<25;
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..909.71 rows=1 width=8)
-   ->  Result  (cost=0.00..909.71 rows=1 width=8)
+explain (costs off) select * from part where b>10 and b<25;
+                           QUERY PLAN                           
+----------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
          Filter: ((part.b > 10) AND (part.b < 25))
-         ->  Append  (cost=0.00..909.71 rows=1 width=8)
-               ->  Dynamic Seq Scan on part  (cost=0.00..444.93 rows=666667 width=8)
+         ->  Append
+               ->  Dynamic Seq Scan on part
                      Number of partitions to scan: 1 (out of 4)
-               ->  Dynamic Foreign Scan on part  (cost=0.00..444.93 rows=666667 width=8)
+               ->  Dynamic Foreign Scan on part
                      Number of partitions to scan: 1 (out of 4)
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
@@ -223,11 +202,11 @@ select * from part where b>10 and b<25 and a > 2;
 (4 rows)
 
 --mixed partitions with SPE, only do seq scans
-explain select * from part where b>25;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..529.46 rows=1800010 width=8)
-   ->  Dynamic Seq Scan on part  (cost=0.00..475.79 rows=600004 width=8)
+explain (costs off) select * from part where b>25;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Dynamic Seq Scan on part
          Number of partitions to scan: 2 (out of 4)
          Filter: (b > 25)
  Optimizer: Pivotal Optimizer (GPORCA)
@@ -249,11 +228,11 @@ select * from part where b>25;
 (10 rows)
 
 --mixed partitions with SPE, only do foreign scans
-explain select a from part where b<18;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
-   ->  Dynamic Foreign Scan on part  (cost=0.00..431.00 rows=1 width=8)
+explain (costs off) select a from part where b<18;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Dynamic Foreign Scan on part
          Filter: (b < 18)
          Number of partitions to scan: 2 (out of 4)
  Optimizer: Pivotal Optimizer (GPORCA)
@@ -273,30 +252,23 @@ select a from part where b<18;
 
 truncate non_part;
 -- mixed partitions with DPE with multiple dynamic scans, select no partitions
-explain analyze select * from part, non_part where part.b=non_part.b;
-                                                                    QUERY PLAN                                                                     
----------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1465.16 rows=1 width=16) (actual time=4.028..4.028 rows=0 loops=1)
-   ->  Hash Join  (cost=0.00..1465.16 rows=1 width=16) (actual time=0.000..3.376 rows=0 loops=1)
+explain (costs off) select * from part, non_part where part.b=non_part.b;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
          Hash Cond: (part.b = non_part.b)
-         ->  Append  (cost=0.00..915.04 rows=666671 width=8) (never executed)
-               ->  Dynamic Seq Scan on part  (cost=0.00..444.93 rows=666671 width=8) (never executed)
+         ->  Append
+               ->  Dynamic Seq Scan on part
                      Number of partitions to scan: 2 (out of 4)
-               ->  Dynamic Foreign Scan on part  (cost=0.00..444.93 rows=666671 width=8) (never executed)
+               ->  Dynamic Foreign Scan on part
                      Number of partitions to scan: 2 (out of 4)
-         ->  Hash  (cost=431.00..431.00 rows=1 width=8) (actual time=0.000..0.033 rows=0 loops=1)
-               Buckets: 524288  Batches: 1  Memory Usage: 4096kB
-               ->  Partition Selector (selector id: $0)  (cost=0.00..431.00 rows=1 width=8) (actual time=0.000..0.032 rows=0 loops=1)
-                     ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8) (actual time=0.000..0.031 rows=0 loops=1)
-                           ->  Seq Scan on non_part  (cost=0.00..431.00 rows=1 width=8) (actual time=0.000..0.220 rows=0 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
- Planning Time: 24.170 ms
-   (slice0)    Executor memory: 50K bytes.
-   (slice1)    Executor memory: 4128K bytes avg x 3 workers, 4128K bytes max (seg0).  Work_mem: 4096K bytes max.
-   (slice2)    Executor memory: 44K bytes avg x 3 workers, 44K bytes max (seg0).
- Memory used:  128000kB
- Execution Time: 17.484 ms
-(20 rows)
+         ->  Hash
+               ->  Partition Selector (selector id: $0)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on non_part
+ Optimizer: GPORCA
+(13 rows)
 
 select * from part, non_part where part.b=non_part.b;
  a | b | a | b 
@@ -305,33 +277,23 @@ select * from part, non_part where part.b=non_part.b;
 
 insert into non_part values (15,15), (32,32);
 -- mixed partitions with DPE with multiple dynamic scans, select one partition from each dynamic scan
-explain analyze select * from part, non_part where part.b=non_part.b;
-                                                                    QUERY PLAN                                                                     
----------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1465.16 rows=1 width=16) (actual time=6.871..8.050 rows=2 loops=1)
-   ->  Hash Join  (cost=0.00..1465.16 rows=1 width=16) (actual time=4.864..6.408 rows=1 loops=1)
+explain (costs off) select * from part, non_part where part.b=non_part.b;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
          Hash Cond: (part.b = non_part.b)
-         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 2 of 524288 buckets.
-         ->  Append  (cost=0.00..915.04 rows=666667 width=8) (actual time=0.556..1.762 rows=5 loops=1)
-               ->  Dynamic Seq Scan on part  (cost=0.00..444.93 rows=666667 width=8) (actual time=0.343..0.414 rows=3 loops=1)
+         ->  Append
+               ->  Dynamic Seq Scan on part
                      Number of partitions to scan: 2 (out of 4)
-                     Partitions scanned:  Avg 1.0 x 3 workers.  Max 1 parts (seg0).
-               ->  Dynamic Foreign Scan on part  (cost=0.00..444.93 rows=666667 width=8) (actual time=1.139..1.167 rows=4 loops=1)
+               ->  Dynamic Foreign Scan on part
                      Number of partitions to scan: 2 (out of 4)
-                     Partitions scanned:  Avg 1.0 x 3 workers.  Max 1 parts (seg0).
-         ->  Hash  (cost=431.00..431.00 rows=1 width=8) (actual time=1.468..1.469 rows=2 loops=1)
-               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
-               ->  Partition Selector (selector id: $0)  (cost=0.00..431.00 rows=1 width=8) (actual time=0.540..1.464 rows=2 loops=1)
-                     ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8) (actual time=0.534..1.453 rows=2 loops=1)
-                           ->  Seq Scan on non_part  (cost=0.00..431.00 rows=1 width=8) (actual time=0.855..0.856 rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
- Planning Time: 15.867 ms
-   (slice0)    Executor memory: 50K bytes.
-   (slice1)    Executor memory: 4257K bytes avg x 3 workers, 4301K bytes max (seg0).  Work_mem: 4097K bytes max.
-   (slice2)    Executor memory: 36K bytes avg x 3 workers, 36K bytes max (seg0).
- Memory used:  128000kB
- Execution Time: 9.566 ms
-(23 rows)
+         ->  Hash
+               ->  Partition Selector (selector id: $0)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on non_part
+ Optimizer: GPORCA
+(13 rows)
 
 select * from part, non_part where part.b=non_part.b;
  a  | b  | a  | b  
@@ -360,51 +322,51 @@ alter table part attach partition ft2 for values from (50) to (60);
 analyze part;
 ERROR:  could not stat file "/does/not/exist.csv": No such file or directory
 -- should have multiple dynamic scans
-explain select * from part;
-                                        QUERY PLAN                                        
-------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2062.88 rows=2000011 width=8)
-   ->  Append  (cost=0.00..2003.25 rows=666671 width=8)
-         ->  Dynamic Seq Scan on part  (cost=0.00..444.93 rows=666671 width=8)
+explain (costs off) select * from part;
+                           QUERY PLAN                           
+----------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Dynamic Seq Scan on part
                Number of partitions to scan: 2 (out of 6)
-         ->  Dynamic Foreign Scan on part  (cost=0.00..444.93 rows=666671 width=8)
+         ->  Dynamic Foreign Scan on part
                Number of partitions to scan: 2 (out of 6)
-         ->  Redistribute Motion 1:3  (slice2)  (cost=0.00..544.11 rows=666671 width=8)
-               ->  Dynamic Foreign Scan on part  (cost=0.00..472.80 rows=2000011 width=8)
+         ->  Redistribute Motion 1:3  (slice2)
+               ->  Dynamic Foreign Scan on part
                      Number of partitions to scan: 1 (out of 6)
-         ->  Redistribute Motion 1:3  (slice3)  (cost=0.00..544.11 rows=666671 width=8)
-               ->  Dynamic Foreign Scan on part  (cost=0.00..472.80 rows=2000011 width=8)
+         ->  Redistribute Motion 1:3  (slice3)
+               ->  Dynamic Foreign Scan on part
                      Number of partitions to scan: 1 (out of 6)
- Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+ Optimizer: GPORCA
+(13 rows)
 
 -- eliminate unnecessary dynamic scans and foreign sans
-explain select * from part where b = 53;
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Dynamic Foreign Scan on part  (cost=0.00..431.00 rows=1 width=8)
+explain (costs off) select * from part where b = 53;
+                  QUERY PLAN                  
+----------------------------------------------
+ Dynamic Foreign Scan on part
    Filter: (b = 53)
    Number of partitions to scan: 1 (out of 6)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (4 rows)
 
 -- only select foreign scans
-explain select * from part where b > 22;
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1629.96 rows=2000011 width=8)
-   ->  Result  (cost=0.00..1570.33 rows=666671 width=8)
+explain (costs off) select * from part where b > 22;
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
          Filter: (part.b > 22)
-         ->  Append  (cost=0.00..1548.40 rows=666671 width=8)
-               ->  Dynamic Seq Scan on part  (cost=0.00..444.93 rows=666671 width=8)
+         ->  Append
+               ->  Dynamic Seq Scan on part
                      Number of partitions to scan: 2 (out of 6)
-               ->  Redistribute Motion 1:3  (slice2)  (cost=0.00..544.11 rows=666671 width=8)
-                     ->  Dynamic Foreign Scan on part  (cost=0.00..472.80 rows=2000011 width=8)
+               ->  Redistribute Motion 1:3  (slice2)
+                     ->  Dynamic Foreign Scan on part
                            Number of partitions to scan: 1 (out of 6)
-               ->  Redistribute Motion 1:3  (slice3)  (cost=0.00..544.11 rows=666671 width=8)
-                     ->  Dynamic Foreign Scan on part  (cost=0.00..472.80 rows=2000011 width=8)
+               ->  Redistribute Motion 1:3  (slice3)
+                     ->  Dynamic Foreign Scan on part
                            Number of partitions to scan: 1 (out of 6)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (13 rows)
 
 --
@@ -467,21 +429,21 @@ analyse part_mixed;
 WARNING:  skipping "p_e1" --- cannot analyze this foreign table
 create table filter_table (a int) distributed by (a);
 insert into filter_table values (15);
-explain select * from part_mixed pm join filter_table ft on pm.b = ft.a;
-                                               QUERY PLAN                                                
----------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1379.08 rows=1 width=12)
-   ->  Hash Join  (cost=0.00..1379.08 rows=1 width=12)
+explain (costs off) select * from part_mixed pm join filter_table ft on pm.b = ft.a;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
          Hash Cond: (pm.b = ft.a)
-         ->  Append  (cost=0.00..888.52 rows=333334 width=8)
-               ->  Dynamic Seq Scan on part_mixed pm  (cost=0.00..437.97 rows=333334 width=8)
+         ->  Append
+               ->  Dynamic Seq Scan on part_mixed pm
                      Number of partitions to scan: 2 (out of 3)
-               ->  Dynamic Foreign Scan on part_mixed pm  (cost=0.00..437.97 rows=333334 width=8)
+               ->  Dynamic Foreign Scan on part_mixed pm
                      Number of partitions to scan: 1 (out of 3)
-         ->  Hash  (cost=431.00..431.00 rows=1 width=4)
-               ->  Partition Selector (selector id: $0)  (cost=0.00..431.00 rows=1 width=4)
-                     ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
-                           ->  Seq Scan on filter_table ft  (cost=0.00..431.00 rows=1 width=4)
+         ->  Hash
+               ->  Partition Selector (selector id: $0)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on filter_table ft
  Optimizer: GPORCA
 (13 rows)
 
@@ -624,12 +586,12 @@ WARNING:  skipping "part_web_1_prt_3" --- cannot analyze this foreign table
 explain select * from part_web;
                                           QUERY PLAN                                          
 ----------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..952.04 rows=1010000 width=8)
-   ->  Append  (cost=0.00..921.93 rows=336667 width=8)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..951.48 rows=1010000 width=8)
+   ->  Append  (cost=0.00..921.37 rows=336667 width=8)
          ->  Dynamic Seq Scan on part_web  (cost=0.00..431.07 rows=3334 width=8)
                Number of partitions to scan: 2 (out of 3)
-         ->  Redistribute Motion 1:3  (slice2)  (cost=0.00..488.12 rows=336667 width=8)
-               ->  Dynamic Foreign Scan on part_web  (cost=0.00..452.11 rows=1010000 width=8)
+         ->  Redistribute Motion 1:3  (slice2)  (cost=0.00..487.55 rows=333334 width=8)
+               ->  Dynamic Foreign Scan on part_web  (cost=0.00..451.90 rows=1000000 width=8)
                      Number of partitions to scan: 1 (out of 3)
  Optimizer: GPORCA
 (8 rows)

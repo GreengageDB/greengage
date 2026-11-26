@@ -1,11 +1,6 @@
 --
 -- Test foreign-data wrapper file_fdw. Greengage MPP specific
 --
---
--- start_matchsubs
--- m/\(cost=.*\)/
--- s/\(cost=.*\)//
--- end_matchsubs
 
 -- Clean up in case a prior regression run failed
 SET client_min_messages TO 'error';
@@ -37,7 +32,7 @@ CREATE FOREIGN TABLE text_csv_all (
     word1 text, word2 text
 ) SERVER file_server
 OPTIONS (format 'csv', filename '@abs_srcdir@/data/text<SEGID>.csv', mpp_execute 'all segments');
-EXPLAIN SELECT * FROM text_csv_all ORDER BY word1;
+EXPLAIN (COSTS OFF) SELECT * FROM text_csv_all ORDER BY word1;
 SELECT * FROM text_csv_all ORDER BY word1;
 -- Analyze 'all segments' option table when filename is like "text<SEGID>.csv"
 Analyze text_csv_all;
@@ -53,20 +48,48 @@ OPTIONS (format 'csv', filename '@abs_srcdir@/data/text.csv', mpp_execute 'coord
 
 -- Test append works both ways and generates valid plans. Should be able to execute
 -- coordinator fdw on coordinator under redistribute
-explain select word1 from text_csv_coordinator union all select word1 from text_csv_all;
+explain (costs off) select word1 from text_csv_coordinator union all select word1 from text_csv_all;
 select word1 from text_csv_coordinator union all select word1 from text_csv_all;
 
-explain select word1 from text_csv_all union all select word1 from text_csv_coordinator;
+explain (costs off) select word1 from text_csv_all union all select word1 from text_csv_coordinator;
 select word1 from text_csv_all union all select word1 from text_csv_coordinator;
 
 -- Test join with foreign scan under redistribute on coordinator works and doesn't hang
 create table bar (a text);
 insert into bar values ('AAA'),('XYZ'),('hji');
 analyze bar;
-explain  select word1 from text_csv_coordinator ft1, bar where ft1.word1 = bar.a;
+explain (costs off) select word1 from text_csv_coordinator ft1, bar where ft1.word1 = bar.a;
 select word1 from text_csv_coordinator ft1, bar where ft1.word1 = bar.a;
 
+-- Two foreign servers in one partitioned table, so this produces a
+-- CLogicalUnionAll with three children.
+-- That is the only shape that reaches the second merge in
+-- where the accumulated stats are already keyed by the output colids
+-- instead of the first child's colids.
+
+-- per-segment input files for the two foreign tables
+create server fs_c foreign data wrapper file_fdw options (mpp_execute 'all segments');
+create server fs_d foreign data wrapper file_fdw options (mpp_execute 'all segments');
+create foreign table ft_c (a int, b int) server fs_c options (filename '@abs_srcdir@/data/int<SEGID>.csv', format 'csv');
+create foreign table ft_d (a int, b int) server fs_d options (filename '@abs_srcdir@/data/int<SEGID>.csv', format 'csv');
+create table part4 (a int, b int) distributed by (a)
+  partition by range (b) (start (0) end (20) every (10));
+insert into part4 select i, i % 20 from generate_series(1, 600000) i;
+alter table part4 attach partition ft_c for values from (20) to (30);
+alter table part4 attach partition ft_d for values from (30) to (40);
+analyze part4;
+create table flt (a int) distributed by (a);
+insert into flt values (21), (22);
+analyze flt;
+
+explain (costs off) select * from part4 p join flt f on p.b = f.a where p.b > 5;
+
 -- cleanup
+drop table part4 cascade;
+drop table flt;
+drop server fs_c;
+drop server fs_d;
+
 DROP TABLE bar;
 RESET ROLE;
 DROP EXTENSION file_fdw CASCADE;

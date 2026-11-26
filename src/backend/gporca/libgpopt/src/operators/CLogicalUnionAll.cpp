@@ -164,7 +164,10 @@ CLogicalUnionAll::PstatsDeriveUnionAll(CMemoryPool *mp,
 			mp, dynamic_cast<CStatistics *>(result_stats),
 			dynamic_cast<CStatistics *>(child_stats),
 			CColRef::Pdrgpul(mp, pdrgpcrOutput),
-			CColRef::Pdrgpul(mp, (*pdrgpdrgpcrInput)[0]),
+			// after the first merge the accumulated stats are keyed by the
+			// output colids, not by the first child's colids
+			CColRef::Pdrgpul(mp,
+							 1 == ul ? (*pdrgpdrgpcrInput)[0] : pdrgpcrOutput),
 			CColRef::Pdrgpul(mp, (*pdrgpdrgpcrInput)[ul]));
 		result_stats->Release();
 		result_stats = stats;

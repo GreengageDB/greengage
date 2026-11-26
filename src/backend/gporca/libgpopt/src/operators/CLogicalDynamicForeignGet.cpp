@@ -331,20 +331,15 @@ CLogicalDynamicForeignGet::RowsSelectedPartitions(
 		// retrieve row count from RelationStatistics objects.
 		// This functions as a backup mechanism, given our
 		// expectation that all leaf Relations should have a
-		// non-negative row count, and negative row count just
+		// positive row count, and non-positive row count just
 		// indicates the leaf stats are missing from the Relation
-		// objects, which could happen in old MDP's.
+		// objects.
 		if (-1 == part_rows || 0.0 == part_rows)
 		{
 			partition_mdid->AddRef();
 			CMDIdRelStats *rel_stats_mdid =
 				GPOS_NEW(mp) CMDIdRelStats(CMDIdGPDB::CastMdid(partition_mdid));
-			const IMDRelStats *rel_stats =
-				md_accessor->Pmdrelstats(rel_stats_mdid);
-			if (!rel_stats->IsEmpty())
-			{
-				part_rows = rel_stats->Rows();
-			}
+			part_rows = md_accessor->Pmdrelstats(rel_stats_mdid)->Rows();
 			rel_stats_mdid->Release();
 		}
 

@@ -1212,24 +1212,24 @@ analyze non_part;
 explain select * from part_mixed join non_part on part_mixed.a=non_part.a;
                                               QUERY PLAN                                              
 ------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1724.00 rows=1 width=16)
-   ->  Hash Join  (cost=0.00..1724.00 rows=1 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1724.00 rows=5 width=16)
+   ->  Hash Join  (cost=0.00..1724.00 rows=2 width=16)
          Hash Cond: (a = non_part.a)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1293.00 rows=1 width=8)
-               Hash Key: a
-               ->  Append  (cost=0.00..1293.00 rows=1 width=8)
-                     ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=1 width=8)
+         ->  Append  (cost=0.00..1293.00 rows=5 width=8)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=2 width=8)
+                     Hash Key: a
+                     ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=2 width=8)
                            Number of partitions to scan: 1 (out of 3)
-                     ->  Result  (cost=0.00..431.00 rows=1 width=8)
-                           One-Time Filter: (gp_execution_segment() = 2)
-                           ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=1 width=8)
-                                 Number of partitions to scan: 1 (out of 3)
-                     ->  Redistribute Motion 1:3  (slice3)  (cost=0.00..431.00 rows=1 width=8)
-                           ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=1 width=8)
-                                 Number of partitions to scan: 1 (out of 3)
-         ->  Hash  (cost=431.00..431.00 rows=1 width=8)
-               ->  Seq Scan on non_part  (cost=0.00..431.00 rows=1 width=8)
- Optimizer: Pivotal Optimizer (GPORCA)
+               ->  Result  (cost=0.00..431.00 rows=2 width=8)
+                     ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=2 width=8)
+                           Number of partitions to scan: 1 (out of 3)
+               ->  Redistribute Motion 1:3  (slice3)  (cost=0.00..431.00 rows=2 width=8)
+                     Hash Key: a
+                     ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=5 width=8)
+                           Number of partitions to scan: 1 (out of 3)
+         ->  Hash  (cost=431.00..431.00 rows=2 width=8)
+               ->  Seq Scan on non_part  (cost=0.00..431.00 rows=2 width=8)
+ Optimizer: GPORCA
 (18 rows)
 
 select * from part_mixed join non_part on part_mixed.a=non_part.a;
@@ -1245,24 +1245,24 @@ select * from part_mixed join non_part on part_mixed.a=non_part.a;
 explain select * from part_mixed left join non_part on part_mixed.a=non_part.a;
                                               QUERY PLAN                                              
 ------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1724.00 rows=2 width=16)
-   ->  Hash Left Join  (cost=0.00..1724.00 rows=1 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1724.00 rows=16 width=16)
+   ->  Hash Left Join  (cost=0.00..1724.00 rows=6 width=16)
          Hash Cond: (a = non_part.a)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1293.00 rows=1 width=8)
-               Hash Key: a
-               ->  Append  (cost=0.00..1293.00 rows=1 width=8)
-                     ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=1 width=8)
+         ->  Append  (cost=0.00..1293.00 rows=5 width=8)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=2 width=8)
+                     Hash Key: a
+                     ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=2 width=8)
                            Number of partitions to scan: 1 (out of 3)
-                     ->  Result  (cost=0.00..431.00 rows=1 width=8)
-                           One-Time Filter: (gp_execution_segment() = 0)
-                           ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=1 width=8)
-                                 Number of partitions to scan: 1 (out of 3)
-                     ->  Redistribute Motion 1:3  (slice3)  (cost=0.00..431.00 rows=1 width=8)
-                           ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=1 width=8)
-                                 Number of partitions to scan: 1 (out of 3)
-         ->  Hash  (cost=431.00..431.00 rows=1 width=8)
-               ->  Seq Scan on non_part  (cost=0.00..431.00 rows=1 width=8)
- Optimizer: Pivotal Optimizer (GPORCA)
+               ->  Result  (cost=0.00..431.00 rows=2 width=8)
+                     ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=2 width=8)
+                           Number of partitions to scan: 1 (out of 3)
+               ->  Redistribute Motion 1:3  (slice3)  (cost=0.00..431.00 rows=2 width=8)
+                     Hash Key: a
+                     ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=5 width=8)
+                           Number of partitions to scan: 1 (out of 3)
+         ->  Hash  (cost=431.00..431.00 rows=2 width=8)
+               ->  Seq Scan on non_part  (cost=0.00..431.00 rows=2 width=8)
+ Optimizer: GPORCA
 (18 rows)
 
 select * from part_mixed left join non_part on part_mixed.a=non_part.a;
@@ -1296,26 +1296,26 @@ select * from part_mixed left join non_part on part_mixed.a=non_part.a;
 (25 rows)
 
 explain select * from part_mixed right join non_part on part_mixed.a=non_part.a;
-                                              QUERY PLAN                                               
--------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1724.00 rows=16 width=16)
-   ->  Hash Right Join  (cost=0.00..1724.00 rows=6 width=16)
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1724.00 rows=5 width=16)
+   ->  Hash Right Join  (cost=0.00..1724.00 rows=2 width=16)
          Hash Cond: (a = non_part.a)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1293.00 rows=5 width=8)
-               Hash Key: a
-               ->  Append  (cost=0.00..1293.00 rows=5 width=8)
+         ->  Append  (cost=0.00..1293.00 rows=5 width=8)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=2 width=8)
+                     Hash Key: a
+                     ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=2 width=8)
+                           Number of partitions to scan: 1 (out of 3)
+               ->  Result  (cost=0.00..431.00 rows=2 width=8)
+                     ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=2 width=8)
+                           Number of partitions to scan: 1 (out of 3)
+               ->  Redistribute Motion 1:3  (slice3)  (cost=0.00..431.00 rows=2 width=8)
+                     Hash Key: a
                      ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=5 width=8)
                            Number of partitions to scan: 1 (out of 3)
-                     ->  Result  (cost=0.00..431.00 rows=5 width=8)
-                           One-Time Filter: (gp_execution_segment() = 1)
-                           ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=5 width=8)
-                                 Number of partitions to scan: 1 (out of 3)
-                     ->  Redistribute Motion 1:3  (slice3)  (cost=0.00..431.00 rows=5 width=8)
-                           ->  Dynamic Foreign Scan on part_mixed  (cost=0.00..431.00 rows=15 width=8)
-                                 Number of partitions to scan: 1 (out of 3)
          ->  Hash  (cost=431.00..431.00 rows=2 width=8)
                ->  Seq Scan on non_part  (cost=0.00..431.00 rows=2 width=8)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (18 rows)
 
 select * from part_mixed right join non_part on part_mixed.a=non_part.a;
