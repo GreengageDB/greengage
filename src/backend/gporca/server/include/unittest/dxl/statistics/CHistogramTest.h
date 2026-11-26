@@ -51,6 +51,9 @@ public:
 
 	// merge union test with double values differing by less than epsilon
 	static GPOS_RESULT EresUnittest_MergeUnionDoubleLessThanEpsilon();
+
+	// range containment tests with open and closed bucket bounds
+	static GPOS_RESULT EresUnittest_ContainsRange();
 };	// class CHistogramTest
 }  // namespace gpnaucrates
 
