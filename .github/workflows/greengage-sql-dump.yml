@@ -24,7 +24,7 @@ env:
     ''
     ) }}
   TARGET_OS: 'ubuntu'
-  TARGET_OS_VERSION: ${{ github.event.workflow_run.head_branch == '6.x' && '24.04' || '' }}
+  TARGET_OS_VERSION: '24.04'
 
 jobs:
   create-sql-dump-regression:
@@ -85,7 +85,7 @@ jobs:
       - name: Upload SQL Dump
         if: steps.image-pull.outcome == 'success'
         id: upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sqldump_ggdb${{ env.VERSION }}_${{ env.TARGET_OS }}${{ env.TARGET_OS_VERSION }}
           path: /mnt/logs/${{ env.TARGET_OS }}${{ env.TARGET_OS_VERSION }}_postgres_sqldump.tar

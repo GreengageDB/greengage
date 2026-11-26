@@ -384,7 +384,8 @@ public:
 	// does this histogram's own bucket range span at least as wide a value
 	// range as other's - e.g. so that unioning other into this one can't
 	// possibly widen the result beyond this histogram's own, already-known
-	// range. False whenever either histogram has no buckets to compare.
+	// range. A bound other includes has to be included by this one too.
+	// False whenever either histogram has no buckets to compare.
 	BOOL ContainsRange(const CHistogram *other) const;
 
 	// print function

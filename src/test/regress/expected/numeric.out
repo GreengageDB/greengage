@@ -2357,3 +2357,10 @@ SELECT SUM((-9999)::numeric) FROM generate_series(1, 100000);
  -999900000
 (1 row)
 
+-- Regression canary: the result overflows numeric and must be rejected
+-- early by the weight estimate in power_var_int() (in microseconds).
+-- If this ever takes tens of seconds (~100s unpatched vs ~0.005s patched),
+-- the early check is broken and the multiply loop is computing ~390k-digit
+-- intermediates before failing with the same error.
+select power(1.0004182, 2147483647);
+ERROR:  value overflows numeric format
