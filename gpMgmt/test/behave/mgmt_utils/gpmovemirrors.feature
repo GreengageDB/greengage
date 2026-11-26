@@ -358,6 +358,55 @@ Feature: Tests for gpmovemirrors
     And the cluster is recovered in full and rebalanced
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
 
+  @demo_cluster
+  @concourse_cluster
+  @skip_cleanup
+  Scenario: gpmovemirrors blocks gprecoverseg from running
+    Given the database is running
+    And all the segments are running
+    And the segments are synchronized
+    And all files in gpAdminLogs directory are deleted on all hosts in the cluster
+    And a gpmovemirrors directory under '/tmp' with mode '0700' is created
+    And a gpmovemirrors input file is created
+    And edit the input file to move mirror with content 0 to a new directory with mode 0700
+    When set fault inject "FAULT_GPMOVEMIRRORS_BEFORE_GPRECOVERSEG"
+    And set fault inject type to suspend
+    And the user asynchronously runs gpmovemirrors with input file and additional args " " and the process is saved
+    And the user waits till gpmovemirrors prints "Invocation of gpmovemirrors mirrors" in the logs (with timeout of "60" sec)
+    And the user runs "gprecoverseg -a"
+    Then gprecoverseg should return a return code of 0
+    And gprecoverseg should print "an instance of another conflicting utility is already running with PID" to stdout
+    And unset fault inject
+    And the user waits until saved async process is completed
+    And recovery_progress.file should not exist in gpAdminLogs
+    And verify that mirror on content 0 is up
+    And check if mirrors on content 0 are moved to new location on input file
+
+  @demo_cluster
+  @concourse_cluster
+  @skip_cleanup
+  Scenario: gprecoverseg blocks gpmovemirrors from running
+    Given the database is running
+    And all the segments are running
+    And the segments are synchronized
+    And all files in gpAdminLogs directory are deleted on all hosts in the cluster
+    And a gpmovemirrors directory under '/tmp' with mode '0700' is created
+    And a gpmovemirrors input file is created
+    And edit the input file to move mirror with content 0 to a new directory with mode 0700
+    And user immediately stops all mirror processes for content 0,1,2
+    And the user waits until mirror on content 0,1,2 is down
+    And user can start transactions
+    And the gprecoverseg input file "recover_config_file" is cleaned up
+    And a gprecoverseg input file "recover_config_file" is created with all the failed segments and valid recovery type
+    When the user asynchronously runs "gprecoverseg -i /tmp/recover_config_file -a --differential" and the process is saved
+    And the user waits till gprecoverseg prints "Greengage instance recovery parameters" in the logs (with timeout of "60" sec)
+    And the user runs gpmovemirrors with input file and additional args " "
+    Then gpmovemirrors should return a return code of 1
+    And gpmovemirrors should print "an instance of another conflicting utility is already running with PID" to stdout
+    And the user waits until saved async process is completed
+    And verify that mirror on content 0,1,2 is up
+    And all the segments are running
+    And the segments are synchronized
 
 ########################### @concourse_cluster tests ###########################
 # The @concourse_cluster tag denotes the scenario that requires a remote cluster
