@@ -624,4 +624,4 @@ class GpRecoverSegmentProgram:
         to prevent the customer from trying to run more than one instance of
         gprecoverseg at the same time.
         """
-        return {'pidlockpath': 'gprecoverseg.lock', 'parentpidvar': 'GPRECOVERPID'}
+        return {'pidlockpath': GPRECOVERSEG_LOCK_PATH, 'parentpidvar': GPRECOVERSEG_GPMOVEMIRRORS_PID_VAR, 'otherpidlockpaths': [GPMOVEMIRRORS_LOCK_PATH]}

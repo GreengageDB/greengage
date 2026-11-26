@@ -4,7 +4,7 @@
 #
 # Copyright (c) EMC Inc 2010. All Rights Reserved.
 #
-from gppylib.mainUtils import SimpleMainLock, ExceptionNoStackTraceNeeded
+from gppylib.mainUtils import *
 
 import os
 import sys
@@ -35,8 +35,6 @@ except ImportError as e:
 GPDB_STOPPED = 1
 GPDB_STARTED = 2
 GPDB_UTILITY = 3
-
-GP_MOVEMIRRORS_LOCK_PATH = "gpmovemirrors.lock"
 
 description = ("""
 Moves mirror segments in a pre-existing GPDB Array.
@@ -323,12 +321,24 @@ try:
 
     enable_verbose_logging()
 
-    mainOptions = {"pidlockpath": GP_MOVEMIRRORS_LOCK_PATH}
+    mainOptions = {"pidlockpath": GPMOVEMIRRORS_LOCK_PATH, "parentpidvar": GPRECOVERSEG_GPMOVEMIRRORS_PID_VAR}
     sml = SimpleMainLock(mainOptions)
     otherpid = sml.acquire()
     if otherpid is not None:
         logger.error("Lockfile %s indicates that an instance of %s is already running with PID %s" % (sml.ppath, "gpmovemirrors", otherpid))
         logger.error("If this is not the case, remove the lockfile directory at %s" % (sml.ppath))
+        sys.exit(1)
+
+    """
+    Check if gprecoverseg is already running.
+    Our child gprecoverseg could do it on its own, but
+    let's give the error right away.
+    """
+    otherpid, other_lock_path, abs_other_lock_path = simple_main_check_other_locks([GPRECOVERSEG_LOCK_PATH], GPRECOVERSEG_GPMOVEMIRRORS_PID_VAR)
+    if otherpid is not None:
+        logger.error("Lockfile %s indicates that an instance of another conflicting utility is already running with PID %s" % (other_lock_path, otherpid))
+        logger.error("If this is not the case, remove the lockfile directory at %s" % (abs_other_lock_path))
+        sml.release()
         sys.exit(1)
 
     logger.info("Invocation of gpmovemirrors mirrors")
