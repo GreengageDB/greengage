@@ -397,8 +397,8 @@ Feature: Tests for gpmovemirrors
     And the user waits until mirror on content 0,1,2 is down
     And user can start transactions
     And the gprecoverseg input file "recover_config_file" is cleaned up
-    And a gprecoverseg input file "recover_config_file" is created with all the failed segments and valid recovery type
-    When the user asynchronously runs "gprecoverseg -i /tmp/recover_config_file -a --differential" and the process is saved
+    When a gprecoverseg input file "recover_config_file" is created with all the failed segments and valid recovery type
+    And the user asynchronously runs "gprecoverseg -i /tmp/recover_config_file -a --differential" and the process is saved
     And the user waits till gprecoverseg prints "Greengage instance recovery parameters" in the logs (with timeout of "60" sec)
     And the user runs gpmovemirrors with input file and additional args " "
     Then gpmovemirrors should return a return code of 1

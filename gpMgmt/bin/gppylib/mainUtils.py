@@ -37,7 +37,7 @@ GPMOVEMIRRORS_LOCK_PATH = "gpmovemirrors.lock"
 
 # gprecoverseg and gpmovemirros should remember when they call each other,
 # so they share the same 'parentpidvar'.
-GPRECOVERSEG_GPMOVEMIRRORS_PID_VAR = "GPRECOVERPID_GPMOVEMIRRORS_PID"
+GPRECOVERSEG_GPMOVEMIRRORS_PID_VAR = "GPRECOVERSEG_GPMOVEMIRRORS_PID"
 
 def getProgramName():
     """
@@ -336,8 +336,7 @@ def simple_main_internal(createOptionParserFn, createCommandFn, mainOptions):
     we're done.
 
     If caller specifies 'otherpidlocks', then we check that none of these
-    locks are held, but don't acquire any of them. It is simlar to
-    check_pid_file() calls in some utilities.
+    locks are held by other utilities, but don't acquire any of them.
     """
     sml = None
     logger = gplog.get_default_logger()
