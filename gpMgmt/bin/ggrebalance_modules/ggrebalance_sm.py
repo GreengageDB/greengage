@@ -322,37 +322,39 @@ class RebalanceSM:
             finally:
                 self.cmd = None
 
-    def lookup_seg(self, gparray: gparray.GpArray, seg: Segment) -> bool:
-        """ Look up the segment gpdb by address, port, and dataDirectory """
-        for db in gparray.getDbList():
-            if (seg.getSegmentHostName() == db.getSegmentHostName() and
-                seg.getSegmentPort() == db.getSegmentPort() and
-                seg.getSegmentDataDirectory() == db.getSegmentDataDirectory()):
-                return True
-        return False
-
     def create_config_file(self, steps: List[RebalanceStepMoveMirror]) -> str:
         filename = f'/tmp/ggrebalance_move_config_pid{os.getpid()}'
         gparray = GpArray.initFromCatalog(self.dburl, utility=True)
+        catalog_by_dbid = {seg.dbid: seg for seg in gparray.getDbList()}
         with open(filename, 'w') as fp:
             for step in steps:
                 assert isinstance(step, RebalanceStepMoveMirror)
                 move = step.getMove()
-                segment_current_info = move.seg
-                # We need to check if the original segment location exists in gp_segment_configuration.
-                # If not, it means that we've already tried to move this segment but failed after the catalog update,
-                # and now we need to use the dst address as the old address (as it is already in the catalog, and
-                # gpmovemirrors will do validation against it).
-                if self.lookup_seg(gparray, segment_current_info):
-                    cfg_line = f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()} '
-                else:
-                    cfg_line = f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir} '
-                # If we perform a rollback, we use the original segment location as the target address.
+                original = move.seg
+                current = catalog_by_dbid[original.dbid]
+                source_location = (current.hostname, current.port, current.datadir)
+                original_location = (original.hostname, original.port, original.datadir)
+                planned_location = (move.dstHost.hostname, move.target_port, move.target_datadir)
+                if source_location not in (original_location, planned_location):
+                    try:
+                        fp.close()
+                        os.remove(filename)
+                    except FileNotFoundError:
+                        pass
+                    except OSError as error:
+                        self.logger.warning(f'Could not clean up incomplete move config {filename}: {error}')
+                    raise ValidationError(f"Unexpected catalog location for dbid {original.dbid}: {source_location}")
+
                 if step.isRollback():
-                    cfg_line += f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()}\n'
+                    target_location, address = original_location, original.address
                 else:
-                    cfg_line += f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir}\n'
-                fp.write(cfg_line)
+                    target_location, address = planned_location, move.dstHost.address
+                # A previous attempt may already have updated the catalog using a different address.
+                if target_location == source_location:
+                    address = current.address
+                hostname, port, datadir = target_location
+                fp.write(f'{current.hostname}|{current.address}|{current.port}|{current.datadir} '
+                         f'{hostname}|{address}|{port}|{datadir}\n')
         return filename
 
     def shutdown(self, hard_shutdown: bool) -> None:
