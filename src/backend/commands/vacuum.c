@@ -34,6 +34,7 @@
 #include "access/htup_details.h"
 #include "access/multixact.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
@@ -1788,6 +1789,8 @@ vac_update_datfrozenxid(void)
 	MultiXactId newMinMulti;
 	TransactionId lastSaneFrozenXid;
 	MultiXactId lastSaneMinMulti;
+	TransactionId floorFrozenXid;
+	MultiXactId floorMinMulti;
 	bool		bogus = false;
 	bool		dirty = false;
 	ScanKeyData key[1];
@@ -1918,6 +1921,21 @@ vac_update_datfrozenxid(void)
 
 	Assert(TransactionIdIsNormal(newFrozenXid));
 	Assert(MultiXactIdIsValid(newMinMulti));
+
+	/*
+	 * Virtual pg_class rows of temporary tables (tempcat) are invisible
+	 * to the scan above; the registry carries their oldest
+	 * relfrozenxid/relminmxid instead.
+	 */
+	if (tempcat_registry_floor(&floorFrozenXid, &floorMinMulti))
+	{
+		if (TransactionIdIsNormal(floorFrozenXid) &&
+			TransactionIdPrecedes(floorFrozenXid, newFrozenXid))
+			newFrozenXid = floorFrozenXid;
+		if (MultiXactIdIsValid(floorMinMulti) &&
+			MultiXactIdPrecedes(floorMinMulti, newMinMulti))
+			newMinMulti = floorMinMulti;
+	}
 
 	/* Now fetch the pg_database tuple we need to update. */
 	relation = table_open(DatabaseRelationId, RowExclusiveLock);

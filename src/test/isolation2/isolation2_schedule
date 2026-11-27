@@ -394,3 +394,13 @@ test: lock_status
 # Test 'dependency' drops plpython3u language by its design.
 # So we need to keep it the last one.
 test: dependency
+
+# The temp memory catalog dtx test runs after 'dependency' (it does not
+# use plpython) and before tempcat_deps, whose whole-database VACUUM
+# FREEZE must stay last of all.
+test: tempcat_dtx
+
+# The temp memory catalog deps test whole-database VACUUM FREEZEs and
+# terminates a session mid-test; it does not use plpython, so it can run
+# after 'dependency', in a group of its own, last of all.
+test: tempcat_deps

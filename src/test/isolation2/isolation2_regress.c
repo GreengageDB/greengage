@@ -6,6 +6,8 @@
 
 #include "access/aocssegfiles.h"
 #include "access/table.h"
+#include "access/transam.h"
+#include "access/xact.h"
 #include "catalog/indexing.h"
 #include "storage/bufmgr.h"
 #include "utils/numeric.h"
@@ -15,6 +17,55 @@ PG_MODULE_MAGIC;
 
 /* numeric upgrade tests */
 extern Datum setAOFormatVersion(PG_FUNCTION_ARGS);
+
+/* temp memory catalog deps test: burn XIDs and aim the OID counter */
+extern Datum test_consume_xids(PG_FUNCTION_ARGS);
+extern Datum gp_set_next_oid(PG_FUNCTION_ARGS);
+
+PG_FUNCTION_INFO_V1(test_consume_xids);
+Datum
+test_consume_xids(PG_FUNCTION_ARGS)
+{
+	int32		nxids = PG_GETARG_INT32(0);
+	FullTransactionId fullxid;
+	TransactionId xid;
+	TransactionId targetxid;
+
+	/* make sure we have a top-XID first */
+	(void) GetCurrentTransactionId();
+
+	xid = ReadNewTransactionId();
+
+	/* xid is the "next xid" now, so minus one here */
+	targetxid = xid + nxids - 1;
+	while (targetxid < FirstNormalTransactionId)
+		targetxid++;
+
+	while (TransactionIdPrecedes(xid, targetxid))
+	{
+		elog(DEBUG1, "xid: %u", xid);
+		fullxid = GetNewTransactionId(true);
+		xid = XidFromFullTransactionId(fullxid);
+	}
+
+	PG_RETURN_VOID();
+}
+
+PG_FUNCTION_INFO_V1(gp_set_next_oid);
+Datum
+gp_set_next_oid(PG_FUNCTION_ARGS)
+{
+	Oid			new_oid = PG_GETARG_OID(0);
+
+	LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
+
+	ShmemVariableCache->nextOid = new_oid;
+
+	LWLockRelease(OidGenLock);
+
+	PG_RETURN_VOID();
+}
+
 
 PG_FUNCTION_INFO_V1(flush_relation_buffers);
 Datum

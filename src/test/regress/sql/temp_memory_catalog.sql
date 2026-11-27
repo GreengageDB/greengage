@@ -1,0 +1,626 @@
+--
+-- TEMP_MEMORY_CATALOG
+-- Test in-memory virtual catalog for temporary tables
+--
+-- This test exercises the tempcat subsystem which stores temp table
+-- metadata in backend-private memory instead of on-disk pg_catalog.
+--
+
+-- ============================================================
+-- GUC is recognized and can be set
+-- ============================================================
+SHOW gp_enable_temp_memory_catalog;
+SET gp_enable_temp_memory_catalog = on;
+SHOW gp_enable_temp_memory_catalog;
+
+-- ============================================================
+-- CREATE TEMP TABLE and basic DML
+-- ============================================================
+CREATE TEMP TABLE tempcat_test1 (id int);
+
+INSERT INTO tempcat_test1 VALUES (1), (2), (3);
+SELECT * FROM tempcat_test1 ORDER BY id;
+
+UPDATE tempcat_test1 SET id = id * 10;
+SELECT * FROM tempcat_test1 ORDER BY id;
+
+DELETE FROM tempcat_test1 WHERE id = 20;
+SELECT * FROM tempcat_test1 ORDER BY id;
+
+-- ============================================================
+-- Multiple columns, various types
+-- ============================================================
+CREATE TEMP TABLE tempcat_test2 (
+    a int,
+    b text,
+    c float8,
+    d boolean
+);
+
+INSERT INTO tempcat_test2 VALUES (1, 'hello', 3.14, true);
+INSERT INTO tempcat_test2 VALUES (2, 'world', 2.72, false);
+SELECT * FROM tempcat_test2 ORDER BY a;
+
+-- ============================================================
+-- Index on temp table
+-- ============================================================
+CREATE INDEX tempcat_idx1 ON tempcat_test1 (id);
+
+-- Use the index
+SET enable_seqscan = off;
+-- start_ignore
+EXPLAIN (COSTS OFF) SELECT * FROM tempcat_test1 WHERE id = 10;
+-- end_ignore
+SELECT * FROM tempcat_test1 WHERE id = 10;
+RESET enable_seqscan;
+
+-- ============================================================
+-- Transaction rollback
+-- ============================================================
+BEGIN;
+    CREATE TEMP TABLE tempcat_test_rollback (x int);
+    INSERT INTO tempcat_test_rollback VALUES (42);
+    SELECT * FROM tempcat_test_rollback;
+ROLLBACK;
+
+-- Table should not exist after rollback
+SELECT * FROM tempcat_test_rollback;
+
+-- ============================================================
+-- ON COMMIT DROP
+-- ============================================================
+BEGIN;
+    CREATE TEMP TABLE tempcat_test_rollback (x int) ON COMMIT DROP;
+    INSERT INTO tempcat_test_rollback VALUES (42);
+    SELECT * FROM tempcat_test_rollback;
+COMMIT;
+
+-- Table should not exist after COMMIT
+SELECT * FROM tempcat_test_rollback;
+
+-- ============================================================
+-- Savepoints
+-- ============================================================
+BEGIN;
+    CREATE TEMP TABLE tempcat_test_sp (x int);
+    INSERT INTO tempcat_test_sp VALUES (1);
+
+    SAVEPOINT sp1;
+        INSERT INTO tempcat_test_sp VALUES (2);
+        SELECT * FROM tempcat_test_sp ORDER BY x;
+        
+        CREATE TEMP TABLE tempcat_test_sp_2 (x int);
+
+    ROLLBACK TO sp1;
+    -- Value 2 should be gone
+    SELECT * FROM tempcat_test_sp ORDER BY x;
+
+COMMIT;
+-- Table sp should still exist after commit
+SELECT * FROM tempcat_test_sp ORDER BY x;
+-- Table sp_2 should not exist (was rolled back with savepoint)
+SELECT * FROM tempcat_test_sp_2;
+
+-- ============================================================
+-- Release savepoint
+-- ============================================================
+BEGIN;
+    SAVEPOINT sp_rel;
+        CREATE TEMP TABLE tempcat_test_released (x int);
+    RELEASE SAVEPOINT sp_rel;
+
+    -- Table should be visible after release
+    SELECT * FROM tempcat_test_released;
+COMMIT;
+
+-- Table should still exist after commit
+SELECT * FROM tempcat_test_released;
+DROP TABLE tempcat_test_released;
+
+-- ============================================================
+-- Implicit subtransaction rollback (PL/pgSQL EXCEPTION)
+-- ============================================================
+DO $$
+BEGIN
+    CREATE TEMP TABLE tempcat_test_exc_fail (x int);
+    RAISE EXCEPTION 'test error';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'caught: %', SQLERRM;
+END;
+$$;
+
+-- Table should not exist (rolled back with the implicit subtransaction)
+SELECT * FROM tempcat_test_exc_fail;
+
+-- ============================================================
+-- Implicit subtransaction commit (PL/pgSQL EXCEPTION, no error)
+-- ============================================================
+DO $$
+BEGIN
+    CREATE TEMP TABLE tempcat_test_exc_ok (x int);
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'should not reach here';
+END;
+$$;
+
+-- Table should exist (implicit subtransaction committed)
+SELECT * FROM tempcat_test_exc_ok;
+DROP TABLE tempcat_test_exc_ok;
+
+-- ============================================================
+-- Nested savepoints: ROLLBACK TO an outer savepoint must discard the
+-- catalog rows created in every inner subtransaction level at once
+-- ============================================================
+BEGIN;
+    CREATE TEMP TABLE tcn_base (x int);       -- top level, survives
+    SAVEPOINT s1;
+        CREATE TEMP TABLE tcn_l1 (x int);
+        SAVEPOINT s2;
+            CREATE TEMP TABLE tcn_l2 (x int);
+            SAVEPOINT s3;
+                CREATE TEMP TABLE tcn_l3 (x int);
+    -- unwinds s3, s2 and the work done under s1 in one statement
+    ROLLBACK TO s1;
+    -- s1 is still active: base is visible, keep working under it
+    SELECT * FROM tcn_base;
+    CREATE TEMP TABLE tcn_after (x int);
+COMMIT;
+-- Committed catalog: tcn_base and tcn_after exist ...
+SELECT * FROM tcn_base;
+SELECT * FROM tcn_after;
+-- ... tcn_l1 / tcn_l2 / tcn_l3 were discarded by ROLLBACK TO s1
+SELECT * FROM tcn_l1;
+SELECT * FROM tcn_l2;
+SELECT * FROM tcn_l3;
+DROP TABLE tcn_base, tcn_after;
+
+-- ============================================================
+-- Repeated ROLLBACK TO the same savepoint
+-- (each rollback re-enters via TBLOCK_SUBRESTART -> StartSubTransaction)
+-- ============================================================
+BEGIN;
+    CREATE TEMP TABLE tcr_base (x int);
+    SAVEPOINT sp;
+        CREATE TEMP TABLE tcr_a (x int);
+    ROLLBACK TO sp;
+        CREATE TEMP TABLE tcr_b (x int);
+    ROLLBACK TO sp;
+        CREATE TEMP TABLE tcr_c (x int);
+    ROLLBACK TO sp;
+    CREATE TEMP TABLE tcr_final (x int);
+COMMIT;
+-- Only the pre-savepoint table and the final one survive
+SELECT * FROM tcr_base;
+SELECT * FROM tcr_final;
+SELECT * FROM tcr_a;
+SELECT * FROM tcr_b;
+SELECT * FROM tcr_c;
+DROP TABLE tcr_base, tcr_final;
+
+-- ============================================================
+-- RELEASE a nested savepoint (merge into parent), then ROLLBACK TO the
+-- outer one (the merged catalog rows must be discarded too)
+-- ============================================================
+BEGIN;
+    CREATE TEMP TABLE tcm_base (x int);
+    SAVEPOINT a;
+        CREATE TEMP TABLE tcm_a (x int);
+        SAVEPOINT b;
+            CREATE TEMP TABLE tcm_b (x int);
+        RELEASE SAVEPOINT b;    -- tcm_b merges up into a's level
+        -- after the merge both tables are visible
+        SELECT * FROM tcm_a;
+        SELECT * FROM tcm_b;
+    ROLLBACK TO a;             -- discards tcm_a and the merged tcm_b
+    SELECT * FROM tcm_base;    -- base survives
+    CREATE TEMP TABLE tcm_after (x int);
+COMMIT;
+SELECT * FROM tcm_base;
+SELECT * FROM tcm_after;
+SELECT * FROM tcm_a;
+SELECT * FROM tcm_b;
+DROP TABLE tcm_base, tcm_after;
+
+-- ============================================================
+-- PL/pgSQL EXCEPTION subtransaction nested inside a user savepoint
+-- ============================================================
+BEGIN;
+    CREATE TEMP TABLE tcp_base (x int);
+    SAVEPOINT outer_sp;
+        CREATE TEMP TABLE tcp_s1 (x int);
+        DO $$
+        BEGIN
+            CREATE TEMP TABLE tcp_pl (y int);
+            RAISE EXCEPTION 'boom';
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'caught: %', SQLERRM;
+        END;
+        $$;
+        -- implicit subxact rolled back tcp_pl; tcp_s1 still visible
+        SELECT * FROM tcp_s1;
+    ROLLBACK TO outer_sp;
+    SELECT * FROM tcp_base;    -- base survives
+COMMIT;
+SELECT * FROM tcp_base;
+SELECT * FROM tcp_s1;
+SELECT * FROM tcp_pl;
+DROP TABLE tcp_base;
+
+-- ============================================================
+-- DROP TEMP TABLE
+-- ============================================================
+DROP TABLE tempcat_test1;
+
+-- Should no longer exist
+SELECT * FROM tempcat_test1;
+
+-- Other temp tables should still work
+SELECT * FROM tempcat_test2 ORDER BY a;
+
+-- ============================================================
+-- Regular tables are unaffected
+-- ============================================================
+CREATE TABLE tempcat_permanent (id int);
+INSERT INTO tempcat_permanent VALUES (100);
+SELECT * FROM tempcat_permanent;
+
+-- Verify it's in pg_class with relpersistence = 'p'
+SELECT relname, relpersistence
+  FROM pg_class
+ WHERE relname = 'tempcat_permanent';
+
+DROP TABLE tempcat_permanent;
+
+-- ============================================================
+-- Append-optimized temp tables
+-- ============================================================
+
+CREATE TEMP TABLE tempcat_ao (a int, b text) WITH (appendonly=true);
+INSERT INTO tempcat_ao SELECT i, 'v' || i FROM generate_series(1, 10) i;
+CREATE INDEX tempcat_ao_idx ON tempcat_ao (a);
+-- Read through the index: the block directory rows must have gone to the
+-- block directory's own storage, not into the in-memory catalog.
+SET enable_seqscan = off;
+SELECT count(*) FROM tempcat_ao WHERE a = 5;
+RESET enable_seqscan;
+ALTER TABLE tempcat_ao ADD COLUMN c int;
+SELECT count(*), sum(a) FROM tempcat_ao;
+TRUNCATE tempcat_ao;
+SELECT count(*) FROM tempcat_ao;
+DROP TABLE tempcat_ao;
+
+CREATE TEMP TABLE tempcat_aoco (a int, b text)
+    WITH (appendonly=true, orientation=column, compresstype=zlib);
+INSERT INTO tempcat_aoco SELECT i, 'v' || i FROM generate_series(1, 10) i;
+SELECT count(*), sum(a) FROM tempcat_aoco;
+DROP TABLE tempcat_aoco;
+
+-- ============================================================
+-- GUC toggle hardening
+-- ============================================================
+
+-- The GUC cannot be disabled while the in-memory catalog still holds
+-- temporary table metadata.  Switching it off mid-session used to leave
+-- catalog rows invisible to the on-disk path (surprising visibility, see
+-- review discussion); catalog writes now route on the tuple TID instead
+-- of the GUC, and the toggle itself is refused while entries exist.
+CREATE TEMP TABLE tempcat_ao_off (a int) WITH (appendonly=true);
+SET gp_enable_temp_memory_catalog = off;
+-- RESET would flip the setting back to its default (off): refused as well
+RESET gp_enable_temp_memory_catalog;
+-- Setting the current value again is a no-op and always allowed
+SET gp_enable_temp_memory_catalog = on;
+-- RESET ALL goes through the same check: refused while entries exist
+RESET ALL;
+
+-- No toggle inside a transaction block, in either direction
+BEGIN;
+SET gp_enable_temp_memory_catalog = off;
+ROLLBACK;
+
+DROP TABLE tempcat_ao_off;
+-- tempcat_test2 / tempcat_test_sp still have metadata in the catalog
+SET gp_enable_temp_memory_catalog = off;
+DROP TABLE tempcat_test2;
+SET gp_enable_temp_memory_catalog = off;
+DROP TABLE tempcat_test_sp;
+-- No temporary table metadata left: the switch succeeds ...
+SET gp_enable_temp_memory_catalog = off;
+-- ... and toggling back on inside a transaction is refused as well
+BEGIN;
+SET gp_enable_temp_memory_catalog = on;
+ROLLBACK;
+
+-- ============================================================
+-- TEMP CATALOG is still respected when switched off
+-- ============================================================
+
+CREATE TEMP TABLE tempcat_test2 (id int);
+SELECT * FROM tempcat_test2 ORDER BY id;
+
+DROP TABLE tempcat_test2;
+SELECT * FROM tempcat_test2 ORDER BY id;
+
+SET gp_enable_temp_memory_catalog = on;
+
+CREATE TEMP TABLE tempcat_test2 (id int);
+SELECT * FROM tempcat_test2 ORDER BY id;
+
+-- ============================================================
+-- Cursor reader gangs receive tempcat state
+-- ============================================================
+
+CREATE TEMP TABLE tempcat_cursor_src (id int);
+INSERT INTO tempcat_cursor_src SELECT i FROM generate_series(1, 5) i;
+
+-- A cursor's slices run on reader gangs, which receive the session state
+-- through the cursor snapshot dump instead of the regular shared-snapshot
+-- handshake: they must still see the temp table's virtual catalog rows.
+BEGIN;
+DECLARE tempcat_cur CURSOR FOR SELECT id FROM tempcat_cursor_src ORDER BY id;
+FETCH 2 FROM tempcat_cur;
+FETCH ALL FROM tempcat_cur;
+CLOSE tempcat_cur;
+END;
+
+-- PL/pgSQL FOR loops over a query run through a cursor portal as well.
+CREATE OR REPLACE FUNCTION tempcat_for_loop() RETURNS int8 AS $$
+DECLARE
+    r record;
+    n int8 := 0;
+BEGIN
+    FOR r IN SELECT id FROM tempcat_cursor_src ORDER BY id LOOP
+        n := n + r.id;
+    END LOOP;
+    RETURN n;
+END;
+$$ LANGUAGE plpgsql;
+SELECT tempcat_for_loop();
+DROP FUNCTION tempcat_for_loop();
+
+-- Version bumps between cursor commands within one transaction: the reader
+-- gang must pick up both the new temp table and the altered table shape.
+BEGIN;
+DECLARE tempcat_cur2 CURSOR FOR SELECT id FROM tempcat_cursor_src ORDER BY id;
+FETCH 1 FROM tempcat_cur2;
+CLOSE tempcat_cur2;
+CREATE TEMP TABLE tempcat_cursor_mid (a int);
+INSERT INTO tempcat_cursor_mid VALUES (2), (4);
+DECLARE tempcat_cur3 CURSOR FOR SELECT s.id, m.a
+    FROM tempcat_cursor_src s JOIN tempcat_cursor_mid m ON s.id = m.a
+    ORDER BY s.id;
+FETCH ALL FROM tempcat_cur3;
+CLOSE tempcat_cur3;
+ALTER TABLE tempcat_cursor_src ADD COLUMN b text DEFAULT 'z';
+DECLARE tempcat_cur4 CURSOR FOR SELECT * FROM tempcat_cursor_src ORDER BY id;
+FETCH ALL FROM tempcat_cur4;
+CLOSE tempcat_cur4;
+END;
+
+DROP TABLE tempcat_cursor_src;
+DROP TABLE tempcat_cursor_mid;
+
+-- ============================================================
+-- Cleanup
+-- ============================================================
+DROP TABLE IF EXISTS tempcat_test2;
+
+RESET gp_enable_temp_memory_catalog;
+
+-- DISCARD ALL must work while the in-memory catalog holds metadata: it
+-- drops the temporary tables before resetting the GUCs, so the toggle
+-- hook does not reject the reset
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_discard (x int);
+DISCARD ALL;
+SHOW gp_enable_temp_memory_catalog;
+
+-- ============================================================
+-- Two-phase abort must roll back temp DDL on prepared segments
+-- ============================================================
+-- A transaction mixing temp DDL with a write to a permanent table is
+-- resolved by 2PC.  When one segment fails during PREPARE, the segments
+-- that already prepared are rolled back by an abort-prepared broadcast;
+-- that rollback must also discard their in-memory catalog changes.  The
+-- permanent write is required to reproduce: temp-only DDL writes no WAL,
+-- so no segment enters the two-phase protocol at all.
+
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_abort_prepared (a int) DISTRIBUTED BY (a);
+INSERT INTO tempcat_abort_prepared SELECT generate_series(1, 30);
+CREATE TABLE tempcat_abort_src (a int) DISTRIBUTED BY (a);
+
+-- Fail PREPARE on the content 1 primary; the other primaries prepare.
+SELECT gp_inject_fault('start_prepare', 'error', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+
+BEGIN;
+DROP TABLE tempcat_abort_prepared;
+INSERT INTO tempcat_abort_src SELECT generate_series(1, 10);
+COMMIT;
+
+SELECT gp_inject_fault('start_prepare', 'reset', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+
+-- The aborted DROP must leave the temp table usable on every segment.
+SELECT count(*) FROM tempcat_abort_prepared;
+INSERT INTO tempcat_abort_prepared VALUES (100);
+SELECT count(*) FROM tempcat_abort_prepared;
+
+DROP TABLE tempcat_abort_prepared;
+DROP TABLE tempcat_abort_src;
+RESET gp_enable_temp_memory_catalog;
+
+-- ============================================================
+-- DDL on a temp table created with the GUC off stays on disk
+-- ============================================================
+-- The temp-table scopes of ALTER, CREATE INDEX, COMMENT and ANALYZE route
+-- on the relation's persistence alone, so a table created while the GUC
+-- was off (rows on disk) picked up in-memory rows from later DDL: mixed
+-- metadata, and the virtual rows pinned tempcat_is_empty() so the GUC
+-- could not be disabled again until the table was dropped.  Routing on
+-- whether the relation's pg_class row is virtual keeps such DDL on disk.
+
+SET gp_enable_temp_memory_catalog = off;
+CREATE TEMP TABLE tempcat_mixed (a int) DISTRIBUTED BY (a);
+
+SET gp_enable_temp_memory_catalog = on;
+ALTER TABLE tempcat_mixed ADD COLUMN b text;
+CREATE INDEX tempcat_mixed_b ON tempcat_mixed (b);
+COMMENT ON TABLE tempcat_mixed IS 'created with the GUC off';
+GRANT SELECT ON tempcat_mixed TO public;
+INSERT INTO tempcat_mixed VALUES (1, 'x');
+ANALYZE tempcat_mixed;
+
+-- The rows went to disk: no temporary table metadata entered the
+-- in-memory catalog, so the switch back must be allowed.
+SET gp_enable_temp_memory_catalog = off;
+SELECT a, b FROM tempcat_mixed;
+
+DROP TABLE tempcat_mixed;
+RESET gp_enable_temp_memory_catalog;
+
+-- ============================================================
+-- Permanent objects cannot depend on temporary ones
+-- ============================================================
+-- A temp table's composite type exists only in the creating session:
+-- a disk-logged pg_depend edge to it would dangle once the session is
+-- gone, so recording one is refused.  A function's SET clause is no
+-- way around the GUC's checks either.
+
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_dep_src (a int) DISTRIBUTED BY (a);
+CREATE TABLE tempcat_dep_perm (a int, c tempcat_dep_src) DISTRIBUTED BY (a);
+CREATE FUNCTION tempcat_dep_fn() RETURNS tempcat_dep_src
+    AS $$ SELECT NULL::tempcat_dep_src $$ LANGUAGE sql;
+CREATE TEMP TABLE tempcat_dep_temp (a int, c tempcat_dep_src) DISTRIBUTED BY (a);
+SELECT 'temp-dependent-ok' AS probe, count(*) FROM tempcat_dep_temp;
+DROP TABLE tempcat_dep_temp;
+DROP TABLE tempcat_dep_src;
+CREATE FUNCTION tempcat_dep_set() RETURNS int
+    AS $$ SELECT 1 $$ LANGUAGE sql
+    SET gp_enable_temp_memory_catalog = on;
+RESET gp_enable_temp_memory_catalog;
+
+-- ============================================================
+-- The temporary namespace row stays on disk
+-- ============================================================
+-- One pg_temp_N row per session is negligible churn, while rows on disk
+-- that name the schema (pg_dump, objects in pg_temp, autovacuum's orphan
+-- scan after a crash) resolve again.  A plain SQL scan sees it.
+
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_ns_probe (a int) DISTRIBUTED BY (a);
+SELECT count(*) AS ns_on_disk FROM pg_namespace WHERE oid = pg_my_temp_schema();
+DROP TABLE tempcat_ns_probe;
+RESET gp_enable_temp_memory_catalog;
+
+-- ============================================================
+-- DDL in an event trigger body stays out of the temp table scope
+-- ============================================================
+-- A table_rewrite trigger firing during ALTER TABLE of a temporary table
+-- must not have its ordinary table's catalog rows captured into memory.
+
+CREATE FUNCTION tempcat_et_rewrite() RETURNS event_trigger LANGUAGE plpgsql AS
+  $$ BEGIN CREATE TABLE tempcat_et_log (a int) DISTRIBUTED BY (a); END $$;
+CREATE EVENT TRIGGER tempcat_et ON table_rewrite EXECUTE FUNCTION tempcat_et_rewrite();
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_et_t (a int) DISTRIBUTED BY (a);
+INSERT INTO tempcat_et_t VALUES (1);
+ALTER TABLE tempcat_et_t ALTER COLUMN a TYPE bigint;
+SELECT count(*) AS trigger_table_on_disk FROM pg_class WHERE relname = 'tempcat_et_log';
+DROP TABLE tempcat_et_t;
+RESET gp_enable_temp_memory_catalog;
+DROP EVENT TRIGGER tempcat_et;
+DROP TABLE tempcat_et_log;
+DROP FUNCTION tempcat_et_rewrite();
+
+-- COMMENT ON a temp object must stay in the in-memory catalog: nothing may
+-- land in on-disk pg_description, and clean session exit stays clean.
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_comment_t (a int, b text) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tempcat_comment_ref (c int CHECK (c > 0)) DISTRIBUTED BY (c);
+SELECT count(*) AS n_before FROM pg_description \gset
+COMMENT ON TABLE tempcat_comment_t IS 'table comment';
+COMMENT ON COLUMN tempcat_comment_t.a IS 'column comment';
+COMMENT ON TYPE tempcat_comment_t IS 'type comment';
+COMMENT ON CONSTRAINT tempcat_comment_ref_c_check ON tempcat_comment_ref IS 'constraint comment';
+SELECT count(*) AS n_after FROM pg_description \gset
+SELECT :n_before = :n_after AS comments_stayed_virtual;
+DROP TABLE tempcat_comment_t;
+DROP TABLE tempcat_comment_ref;
+RESET gp_enable_temp_memory_catalog;
+
+-- Creating a temp table inside a REPEATABLE READ transaction is rejected;
+-- outside a transaction block it is fine even at RR isolation.
+SET gp_enable_temp_memory_catalog = on;
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+CREATE TEMP TABLE tempcat_rr_t (a int) DISTRIBUTED BY (a);
+ROLLBACK;
+SET default_transaction_isolation = 'repeatable read';
+CREATE TEMP TABLE tempcat_rr_ok (a int) DISTRIBUTED BY (a);
+INSERT INTO tempcat_rr_ok VALUES (1);
+RESET default_transaction_isolation;
+DROP TABLE tempcat_rr_ok;
+-- Temp sequences are refused inside an RR transaction as well.
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+CREATE TEMP SEQUENCE tempcat_rr_seq;
+ROLLBACK;
+RESET gp_enable_temp_memory_catalog;
+
+-- Sequences owned by temp tables (serial, IDENTITY, OWNED BY) work like with
+-- the GUC off; CLUSTER on a temp table is refused (see doc/tempcat.md).
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE seq_t1 (id serial, v text) DISTRIBUTED BY (id);
+INSERT INTO seq_t1 (v) VALUES ('a'), ('b');
+CREATE TEMP TABLE seq_t2 (id int GENERATED ALWAYS AS IDENTITY, v text) DISTRIBUTED BY (v);
+INSERT INTO seq_t2 (v) VALUES ('c');
+CREATE TEMP TABLE seq_t3 (a int) DISTRIBUTED BY (a);
+CREATE TEMP SEQUENCE seq_owned OWNED BY seq_t3.a;
+-- CLUSTER on a virtual temp table is refused: the rebuild reads the on-disk
+-- heap, which is empty, so clustering would silently lose the data.
+CREATE TEMP TABLE seq_t5 (a int, b text) WITH (appendonly=true) DISTRIBUTED BY (a);
+CREATE INDEX seq_t5_i ON seq_t5 (a);
+CLUSTER seq_t5 USING seq_t5_i;
+SELECT nextval('seq_owned') AS seq_value;
+SELECT count(*) AS serial_rows FROM seq_t1;
+DROP TABLE seq_t1, seq_t2, seq_t3, seq_t5;
+DROP SEQUENCE seq_owned;
+RESET gp_enable_temp_memory_catalog;
+
+-- ALTER TYPE must refuse on the type of a temp typed table, as with the GUC off
+SET gp_enable_temp_memory_catalog = on;
+CREATE TYPE tempcat_ct AS (a int);
+CREATE TEMP TABLE tempcat_tt OF tempcat_ct;
+ALTER TYPE tempcat_ct ADD ATTRIBUTE b int;
+DROP TABLE tempcat_tt;
+DROP TYPE tempcat_ct;
+RESET gp_enable_temp_memory_catalog;
+
+-- Triggers and rules must fire in name order regardless of creation order.
+SET gp_enable_temp_memory_catalog = on;
+CREATE FUNCTION trig_note() RETURNS trigger LANGUAGE plpgsql AS
+  $$ BEGIN NEW.n := NEW.n || tg_name; RETURN new; END $$;
+CREATE TEMP TABLE trig_src (a int, n text) DISTRIBUTED BY (a);
+CREATE TRIGGER z_trig BEFORE INSERT ON trig_src FOR EACH ROW EXECUTE FUNCTION trig_note();
+CREATE TRIGGER a_trig BEFORE INSERT ON trig_src FOR EACH ROW EXECUTE FUNCTION trig_note();
+INSERT INTO trig_src VALUES (1, '');
+SELECT n AS trigger_firing_order FROM trig_src;
+DROP TABLE trig_src;
+DROP FUNCTION trig_note();
+
+CREATE TEMP TABLE rule_a_log (t text) DISTRIBUTED BY (t);
+CREATE TEMP TABLE rule_z_log (t text) DISTRIBUTED BY (t);
+CREATE TEMP TABLE rule_src (a int) DISTRIBUTED BY (a);
+CREATE RULE z_rule AS ON INSERT TO rule_src DO ALSO
+  INSERT INTO rule_z_log VALUES ('z');
+CREATE RULE a_rule AS ON INSERT TO rule_src DO ALSO
+  INSERT INTO rule_a_log VALUES ('a');
+INSERT INTO rule_src VALUES (1);
+SELECT t AS rule_firing_order FROM
+  (SELECT 'a' AS t, ctid FROM rule_a_log
+   UNION ALL SELECT 'z', ctid FROM rule_z_log) x ORDER BY ctid;
+DROP TABLE rule_src, rule_a_log, rule_z_log;
+RESET gp_enable_temp_memory_catalog;

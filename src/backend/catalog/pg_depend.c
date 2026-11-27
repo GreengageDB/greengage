@@ -17,6 +17,7 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/table.h"
+#include "access/tempcat.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_constraint.h"
@@ -86,6 +87,23 @@ recordMultipleDependencies(const ObjectAddress *depender,
 
 	for (i = 0; i < nreferenced; i++, referenced++)
 	{
+		/*
+		 * A virtual temp object dies with its session, and only its owning
+		 * backend sees its rows: no pg_depend edge logged to disk may
+		 * reference it, or it dangles once the session is gone.
+		 */
+		if (!IsTempTableScope() &&
+			((referenced->classId == RelationRelationId &&
+			  tempcat_relation_is_virtual(referenced->objectId)) ||
+			 (referenced->classId == TypeRelationId &&
+			  tempcat_type_is_virtual(referenced->objectId))))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot create a permanent object that depends on a temporary one"),
+					 errdetail("%s is temporary: it exists only in the creating session.",
+							   getObjectDescription(referenced)),
+					 errhint("Reference only objects that outlive the session.")));
+
 		/*
 		 * If the referenced object is pinned by the system, there's no real
 		 * need to record dependencies on it.  This saves lots of space in
