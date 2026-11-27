@@ -1,4 +1,5 @@
 import shutil, filecmp,re
+import ipaddress
 import os, fcntl, select, getpass, socket
 import stat
 from subprocess import *
@@ -623,6 +624,16 @@ def validateHostnameAddress(hostname, address):
     @param address Address of the host to be validated. Can be hostname/alias also
     @return if the address and hostname are of the same host
     """
+    # A literal IP can match the hostname without a PTR record
+    try:
+        target_ip = ipaddress.ip_address(address)
+        resolved = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        if any(ipaddress.ip_address(info[4][0]) == target_ip for info in resolved):
+            return True
+    except (ValueError, socket.error):
+        pass
+
+    # Accept pairs previously accepted through reverse resolution
     try:
         resolved_hostname, _, resolved_address_list = gethostbyaddr(hostname)
         resolved_hostname_2, _, resolved_address_list_2 = gethostbyaddr(address)
