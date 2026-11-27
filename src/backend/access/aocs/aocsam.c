@@ -1066,6 +1066,22 @@ aocs_getsegment(AOCSScanDesc scan, int64 targrow)
 		{
 			/* new segment, make sure segrowsprocessed was reset */
 			Assert(scan->segrowsprocessed == 0);
+
+			/*
+			 * The files of the new segment were opened without reading a
+			 * block, so each datum stream still describes the last block it
+			 * read from the previous segment file. Forget that block: a
+			 * column has no current block until it reads a block header
+			 * from the new segment file, see aocs_gettuple().
+			 */
+			for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
+			{
+				AttrNumber attno = scan->columnScanInfo.proj_atts[i];
+				DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
+
+				ds->blockRowCount = 0;
+				ds->blockRowsProcessed = 0;
+			}
 		}
 		else
 		{
@@ -1211,7 +1227,15 @@ aocs_gettuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *slot)
 			}
 		}
 
-		if (scan->segrowsprocessed == 0)
+		/*
+		 * The column has a current block only if it has read a block header
+		 * from the current segment file, which is not implied by a non-zero
+		 * scan->segrowsprocessed. All rows sampled from this segment file so
+		 * far may have been served from the missing value above, without
+		 * touching the datum stream of a column added by ALTER TABLE ADD
+		 * COLUMN. aocs_getsegment() resets blockRowCount for that reason.
+		 */
+		if (ds->blockRowCount <= 0)
 			; /* haven't read block */
 		else
 		{
