@@ -29,6 +29,7 @@
 #include "miscadmin.h"
 #include "utils/memdebug.h"
 #include "utils/memutils.h"
+#include "utils/pddiag.h"
 #include "utils/memaccounting.h"
 
 #include "cdb/cdbvars.h"                    /* gp_process_memory_cutoff_bytes */
@@ -193,6 +194,7 @@ MemoryContextInit(void)
 void
 MemoryContextReset(MemoryContext context)
 {
+	pd_trace(PD_TAG_CTX_RESET, context, NULL);
 	AssertArg(MemoryContextIsValid(context));
 
 	/* save a function call in common case where there are no children */
@@ -240,6 +242,7 @@ MemoryContextResetChildren(MemoryContext context)
 void
 MemoryContextDeleteImpl(MemoryContext context, const char* sfile, const char *func, int sline)
 {
+	pd_trace(PD_TAG_CTX_DELETE, context, NULL);
 	AssertArg(MemoryContextIsValid(context));
 	/* We had better not be deleting TopMemoryContext ... */
 	Assert(context != TopMemoryContext);
@@ -1237,6 +1240,8 @@ void *
 MemoryContextAlloc(MemoryContext context, Size size)
 {
 	void	   *ret;
+
+	PD_EV_ENTER();
 #ifdef PGTRACE_ENABLED
 	StandardChunkHeader *header;
 #endif
@@ -1280,6 +1285,7 @@ MemoryContextAllocZero(MemoryContext context, Size size)
 {
 	void	   *ret;
 
+	PD_EV_ENTER();
 #ifdef PGTRACE_ENABLED
 	StandardChunkHeader *header;
 #endif
@@ -1324,6 +1330,7 @@ MemoryContextAllocZeroAligned(MemoryContext context, Size size)
 {
 	void	   *ret;
 
+	PD_EV_ENTER();
 #ifdef PGTRACE_ENABLED
 	StandardChunkHeader *header;
 #endif
@@ -1363,6 +1370,7 @@ palloc(Size size)
 	/* duplicates MemoryContextAlloc to avoid increased overhead */
 	void	   *ret;
 
+	PD_EV_ENTER();
 	AssertArg(MemoryContextIsValid(CurrentMemoryContext));
 
 	if (!AllocSizeIsValid(size))
@@ -1382,6 +1390,7 @@ palloc0(Size size)
 	/* duplicates MemoryContextAllocZero to avoid increased overhead */
 	void	   *ret;
 
+	PD_EV_ENTER();
 	AssertArg(MemoryContextIsValid(CurrentMemoryContext));
 
 	if (!AllocSizeIsValid(size))
@@ -1406,6 +1415,7 @@ pfree(void *pointer)
 {
 	MemoryContext context;
 
+	PD_EV_ENTER();
 	/*
 	 * Try to detect bogus pointers handed to us, poorly though we can.
 	 * Presumably, a pointer that isn't MAXALIGNED isn't pointing at an
@@ -1456,6 +1466,7 @@ repalloc(void *pointer, Size size)
 	MemoryContext context;
 	void	   *ret;
 
+	PD_EV_ENTER();
 	/*
 	 * Try to detect bogus pointers handed to us, poorly though we can.
 	 * Presumably, a pointer that isn't MAXALIGNED isn't pointing at an
@@ -1520,6 +1531,7 @@ MemoryContextAllocHuge(MemoryContext context, Size size)
 {
 	void	   *ret;
 
+	PD_EV_ENTER();
 	AssertArg(MemoryContextIsValid(context));
 
 	if (!AllocHugeSizeIsValid(size))
@@ -1545,6 +1557,7 @@ repalloc_huge(void *pointer, Size size)
 	MemoryContext context;
 	void	   *ret;
 
+	PD_EV_ENTER();
 	if (!AllocHugeSizeIsValid(size))
 		elog(ERROR, "invalid memory alloc request size %zu", size);
 

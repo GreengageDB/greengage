@@ -40,6 +40,7 @@
 #include "postmaster/postmaster.h"
 #include "utils/builtins.h"
 #include "utils/faultinjector.h"
+#include "utils/pddiag.h"
 #include "utils/fmgroids.h"
 #include "utils/memutils.h"
 
@@ -142,6 +143,8 @@ FtsProbeMain(Datum main_arg)
 	InitStandardHandlerForSigillSigsegvSigbus_OnMainThread();
 	pqsignal(SIGSEGV, CdbProgramErrorHandler);
 #endif
+	/* pqsignal above displaced pddiag's handler: take the slot back now */
+	pd_recheck();
 
 	/* We're now ready to receive signals */
 	BackgroundWorkerUnblockSignals();

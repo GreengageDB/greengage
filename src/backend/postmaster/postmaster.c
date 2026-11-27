@@ -138,6 +138,7 @@
 #include "utils/faultinjector.h"
 #include "utils/gdd.h"
 #include "utils/memutils.h"
+#include "utils/pddiag.h"
 #include "utils/ps_status.h"
 #include "utils/timeout.h"
 
@@ -736,6 +737,14 @@ PostmasterMain(int argc, char *argv[])
 #ifdef SIGXFSZ
 	pqsignal(SIGXFSZ, SIG_IGN); /* ignored */
 #endif
+
+	/*
+	 * Allocator diagnostics: install the crash-dump signal handler and
+	 * enable the event ring for the postmaster itself.  Children re-boot
+	 * in their own init paths (InitPostgres, startup, walreceiver, ...);
+	 * see pddiag.c.
+	 */
+	pd_boot();
 
 	/*
 	 * Options setup
