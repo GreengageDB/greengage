@@ -76,38 +76,61 @@ setup_cgroup_v2() {
 }
 
 cleanup_loop_devices() {
-    local i dir
-    for i in 1 2; do
-        dir="$ISOLATION2_TESTTABLESPACE/rg_io_limit_loop_$i"
-        mountpoint -q "$dir" && umount "$dir"
-    done
-}
-
-setup_loop_devices() {
-    local i dir img src prev=""
+    local i dir img loop
     for i in 1 2; do
         dir="$ISOLATION2_TESTTABLESPACE/rg_io_limit_loop_$i"
         img="$ISOLATION2_TESTTABLESPACE/io_limit_fs_$i.img"
+        rm -f "$ISOLATION2_TESTTABLESPACE/io_limit_dev_$i"
+        mountpoint -q "$dir" && umount "$dir"
+        loop=$(losetup -j "$img" -O NAME --noheadings 2>/dev/null | tr -d '[:space:]' | head -n1 || true)
+        [ -n "$loop" ] && losetup -d "$loop"
+    done
+}
+
+# Mount each image through an alias device node and hide the alias right
+# after mounting. The mount source recorded in /proc/self/mounts then names
+# a node that does not exist, so get_bdi_of_path() resolves the backing
+# device through st_dev of the tablespace path rather than stat'ing the
+# source, exercising the missing-device-node case deterministically on
+# every runner.
+setup_loop_devices() {
+    local i dir img alias loop majmin prev=""
+
+    # Register the cleanup before allocating anything: a failure after the
+    # first losetup must still detach the loop and drop a leftover alias.
+    exit_handlers+=(cleanup_loop_devices)
+
+    for i in 1 2; do
+        dir="$ISOLATION2_TESTTABLESPACE/rg_io_limit_loop_$i"
+        img="$ISOLATION2_TESTTABLESPACE/io_limit_fs_$i.img"
+        alias="$ISOLATION2_TESTTABLESPACE/io_limit_dev_$i"
 
         mkdir -p "$dir"
+        rm -f "$alias"
         if ! mountpoint -q "$dir"; then
             truncate -s 64M "$img"
             mkfs.ext4 -q -F "$img"
-            mount -o loop "$img" "$dir"
+            loop=$(losetup --find --show "$img")
+            # --noheadings still pads columns to the header width
+            majmin=$(losetup --noheadings --output MAJ:MIN "$loop" | tr -d '[:space:]')
+            mknod "$alias" b "${majmin%%:*}" "${majmin##*:}"
+            if [ ! -b "$alias" ]; then
+                fatal "$alias: failed to create block device alias node"
+            fi
+            mount "$alias" "$dir"
+            rm "$alias"
         fi
         chown gpadmin:gpadmin "$dir"
 
-        src=$(findmnt -no SOURCE "$dir" || true)
-        if [ ! -b "$src" ]; then
-            fatal "$dir: mount source '$src' is not a block device node"
+        majmin=$({ findmnt -no MAJ:MIN "$dir" 2>/dev/null || true; } | tr -d '[:space:]')
+        if [ -z "$majmin" ] || [ ! -d "/sys/dev/block/${majmin%%:*}:${majmin##*:}" ]; then
+            fatal "$dir: mount device '$majmin' is not a block device in sysfs"
         fi
-        if [ "$src" = "$prev" ]; then
-            fatal "both io_limit tablespaces resolved to $src"
+        if [ "$majmin" = "$prev" ]; then
+            fatal "both io_limit tablespaces resolved to $majmin"
         fi
-        prev=$src
+        prev=$majmin
     done
-
-    exit_handlers+=(cleanup_loop_devices) 
 }
 
 gen_env() {
