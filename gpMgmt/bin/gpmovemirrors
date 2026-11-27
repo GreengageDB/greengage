@@ -49,6 +49,10 @@ The input file should be a plain text file with the format:
 
   <old_address>|<port>|<datadir> <new_address>|<port>|<datadir>
 
+To supply a separate hostname, use four fields on both sides:
+
+  <old_hostname>|<old_address>|<port>|<datadir> <new_hostname>|<new_address>|<port>|<datadir>
+
 """,
          """
          An input file must be specified.
@@ -192,11 +196,24 @@ def lookupGpdb(address, port, dataDirectory):
 class Mirror:
     """ This class represents information about a mirror. """
 
-    def __init__(self, address, port, dataDirectory, inPlace=False):
+    def __init__(self, address, port, dataDirectory, inPlace=False, hostname=None):
+        self.hostname = hostname
         self.address = address
         self.port = port
         self.dataDirectory = dataDirectory
         self.inPlace = inPlace
+
+    @classmethod
+    def from_fields(cls, parts, lineno):
+        address, port, datadir = parts[-3:]
+        hostname = parts[0] if len(parts) == 4 else None
+        check_values(lineno, hostname=hostname, address=address, port=port, datadir=datadir)
+        return cls(address, port, datadir, hostname=hostname)
+
+    def config_group(self):
+        if self.hostname is None:
+            return f"{canonicalize_address(self.address)}|{self.port}|{self.dataDirectory}"
+        return f"{self.hostname}|{self.address}|{self.port}|{self.dataDirectory}"
 
     def __str__(self):
         tempStr = "address = " + str(self.address) + '\n'
@@ -222,15 +239,10 @@ class Configuration:
             raise ExceptionNoStackTraceNeeded("expected 2 groups but found %d" % len(groups))
         oldParts = groups[0].split('|')
         newParts = groups[1].split('|')
-        if len(oldParts) != 3 or len(newParts) != 3:
-            msg = "expected 3 parts in old and new groups, got %d and %d" % (oldParts, newParts)
-            raise ExceptionNoStackTraceNeeded(msg)
-        oldAddress, oldPort, oldDataDirectory = oldParts
-        newAddress, newPort, newDataDirectory = newParts
-        check_values(lineno, address=oldAddress, port=oldPort, datadir=oldDataDirectory)
-        check_values(lineno, address=newAddress, port=newPort, datadir=newDataDirectory)
-
-        return (oldAddress, oldPort, oldDataDirectory), (newAddress, newPort, newDataDirectory)
+        if len(oldParts) not in (3, 4) or len(newParts) != len(oldParts):
+            raise ExceptionNoStackTraceNeeded(
+                "expected 3 or 4 parts in both groups, got %d and %d" % (len(oldParts), len(newParts)))
+        return Mirror.from_fields(oldParts, lineno), Mirror.from_fields(newParts, lineno)
 
     def read_input_file(self, inputFile):
         self.inputFile = inputFile
@@ -238,32 +250,31 @@ class Configuration:
         with open(inputFile) as f:
             for lineno, line in line_reader(f):
                 try:
-                    (oldAddress, oldPort, oldDataDirectory), (newAddress, newPort, newDataDirectory) = \
-                        self._getParsedRow(lineno, line)
-
-                    oldGpdb = lookupGpdb(oldAddress, oldPort, oldDataDirectory)
+                    oldMirror, newMirror = self._getParsedRow(lineno, line)
+                    oldGpdb = lookupGpdb(oldMirror.address, oldMirror.port, oldMirror.dataDirectory)
                     if oldGpdb is None or oldGpdb.getSegmentRole() != ROLE_MIRROR:
                         if oldGpdb is None:
                             raise Exception(
                                 "Old mirror segment does not exist with given information: address = %s, port = %s, segment data directory = %s"
-                                % (oldAddress, str(oldPort), oldDataDirectory))
+                                % (oldMirror.address, str(oldMirror.port), oldMirror.dataDirectory))
                         else:
                             raise Exception(
                                 "Old mirror segment is not currently in a mirror role: address = %s, port = %s, segment data directory = %s"
-                                % (oldAddress, str(oldPort), oldDataDirectory))
-                    inPlace = (oldAddress == newAddress and oldDataDirectory == newDataDirectory)
-                    if inPlace and oldPort == newPort:
+                                % (oldMirror.address, str(oldMirror.port), oldMirror.dataDirectory))
+                    if oldMirror.hostname is not None and oldMirror.hostname != oldGpdb.getSegmentHostName():
+                        raise Exception("Old mirror hostname does not match the catalog: %s (expected %s)"
+                                        % (oldMirror.hostname, oldGpdb.getSegmentHostName()))
+                    if (newMirror.hostname is not None and newMirror.hostname != newMirror.address
+                            and not utils.validateHostnameAddress(newMirror.hostname, newMirror.address)):
+                        raise Exception("Destination hostname and address do not identify the same host: %s, %s"
+                                        % (newMirror.hostname, newMirror.address))
+
+                    same_host = (oldMirror.address == newMirror.address or
+                                 (oldMirror.hostname is not None and oldMirror.hostname == newMirror.hostname))
+                    oldMirror.inPlace = same_host and oldMirror.dataDirectory == newMirror.dataDirectory
+                    if oldMirror.config_group() == newMirror.config_group():
                         logger.warn("input file %s contained request to move a mirror with identical attributes (%s, %s, %s)"
-                                    % (inputFile, newAddress, str(newPort), newDataDirectory))
-                    oldMirror = Mirror(address=oldAddress
-                                       , port=oldPort
-                                       , dataDirectory=oldDataDirectory
-                                       , inPlace=inPlace
-                                       )
-                    newMirror = Mirror(address=newAddress
-                                       , port=newPort
-                                       , dataDirectory=newDataDirectory
-                                       )
+                                    % (inputFile, newMirror.address, str(newMirror.port), newMirror.dataDirectory))
                     self.oldMirrorList.append(oldMirror)
                     self.newMirrorList.append(newMirror)
                 except ValueError:
@@ -273,24 +284,18 @@ class Configuration:
 
     def write_output_file(self, filename, oldToNew=True):
         """ Write out the configuration in a format appropriate for use with the -i option. """
-        fp = open(filename, 'w')
-
         if oldToNew == True:
             firstList = self.oldMirrorList
             secondList = self.newMirrorList
         else:
             firstList = self.newMirrorList
             secondList = self.oldMirrorList
-        for i in range(0, len(firstList)):
-            oldEntry = firstList[i]
-            newEntry = secondList[i]
-            line = canonicalize_address(oldEntry.address) + \
-                   "|" + str(oldEntry.port) + "|" + oldEntry.dataDirectory
-            line = line + " "
-            line = line + canonicalize_address(newEntry.address) + \
-                   "|" + str(newEntry.port) + "|" + newEntry.dataDirectory
-            line = line + '\n'
-            fp.write(line)
+        with open(filename, 'w') as fp:
+            for i in range(0, len(firstList)):
+                oldEntry = firstList[i]
+                newEntry = secondList[i]
+                line = f"{oldEntry.config_group()} {newEntry.config_group()}\n"
+                fp.write(line)
 
 
 # -------------------------------------------------------------------------
@@ -367,9 +372,8 @@ try:
             raise Exception(
                 "Old mirror segment is not currently in a mirror role: address = %s, port = %s, segment data directory = %s"
                 % (oldMirror.address, str(oldMirror.port), oldMirror.dataDirectory))
-        # exclude any in place mirrors, i.e if the host on which the mirror reside still stays same, in that
-        # case we need not update the entries
-        if not oldMirror.inPlace:
+        # An in-place move can still change which interface the mirror uses.
+        if not oldMirror.inPlace or oldMirror.address != newMirror.address:
             for segment in gpArrayInstance.getDbList():
                 # identify the corresponding primary pair of the mirror being moved
                 if segment.getSegmentContentId() == seg.getSegmentContentId() and segment.getSegmentRole() != seg.getSegmentRole():

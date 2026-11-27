@@ -1775,6 +1775,15 @@ def impl(context, when):
     context.saved_array[when] = GpArray.initFromCatalog(dbconn.DbURL())
 
 
+@then('each segment has a hostname and address pair from "{when}"')
+def impl(context, when):
+    expected = {(seg.hostname, seg.address) for seg in context.saved_array[when].getSegDbList()}
+    current = GpArray.initFromCatalog(dbconn.DbURL())
+    for seg in current.getSegDbList():
+        assert (seg.hostname, seg.address) in expected, (
+            f"Unexpected hostname/address for dbid {seg.dbid}: {seg.hostname}/{seg.address}")
+
+
 @given('we run a sample background script to generate a pid on "{seg}" segment')
 @when('we run a sample background script to generate a pid on "{seg}" segment')
 @then('we run a sample background script to generate a pid on "{seg}" segment')
