@@ -61,7 +61,8 @@ CHistogram::CHistogram(CMemoryPool *mp, CBucketArray *histogram_buckets,
 	  m_skew_was_measured(false),
 	  m_skew(1.0),
 	  m_NDVs_were_scaled(false),
-	  m_is_col_stats_missing(false)
+	  m_is_col_stats_missing(false),
+	  m_is_unsupported_pred_derived(false)
 {
 	GPOS_ASSERT(NULL != histogram_buckets);
 }
@@ -77,7 +78,8 @@ CHistogram::CHistogram(CMemoryPool *mp, BOOL is_well_defined)
 	  m_skew_was_measured(false),
 	  m_skew(1.0),
 	  m_NDVs_were_scaled(false),
-	  m_is_col_stats_missing(false)
+	  m_is_col_stats_missing(false),
+	  m_is_unsupported_pred_derived(false)
 {
 	m_histogram_buckets = GPOS_NEW(m_mp) CBucketArray(m_mp);
 }
@@ -96,7 +98,8 @@ CHistogram::CHistogram(CMemoryPool *mp, CBucketArray *histogram_buckets,
 	  m_skew_was_measured(false),
 	  m_skew(1.0),
 	  m_NDVs_were_scaled(false),
-	  m_is_col_stats_missing(is_col_stats_missing)
+	  m_is_col_stats_missing(is_col_stats_missing),
+	  m_is_unsupported_pred_derived(false)
 {
 	GPOS_ASSERT(m_histogram_buckets);
 	GPOS_ASSERT(CDouble(0.0) <= null_freq);
@@ -1020,8 +1023,106 @@ CHistogram::CopyHistogram() const
 	{
 		histogram_copy->SetNDVScaled();
 	}
+	if (IsUnsupportedPredDerived())
+	{
+		histogram_copy->SetUnsupportedPredDerived();
+	}
 
 	return histogram_copy;
+}
+
+// does this histogram's own buckets cover every one of other's buckets
+// without a gap - a gap in other's own range is territory other doesn't
+// claim either, so this doesn't need to cover it there, but wherever
+// other does have a bucket, this's own buckets must span it continuously.
+// A bound only counts as covered if this includes it wherever other does:
+// (1,10) doesn't contain [1,10], while [1,10] does contain (1,10).
+BOOL
+CHistogram::ContainsRange(const CHistogram *other) const
+{
+	GPOS_ASSERT(NULL != other);
+
+	const ULONG num_buckets = GetNumBuckets();
+	const ULONG num_other_buckets = other->GetNumBuckets();
+	if (0 == num_buckets || 0 == num_other_buckets)
+	{
+		return false;
+	}
+
+	// both bucket arrays are kept sorted and non-overlapping, so walk them
+	// together: for each of other's buckets in turn, advance past any of
+	// this's buckets that end before it starts, then make sure this's
+	// buckets span it with no gap
+	ULONG ul_this = 0;
+	for (ULONG ul_other = 0; ul_other < num_other_buckets; ul_other++)
+	{
+		const CBucket *other_bucket = (*other->m_histogram_buckets)[ul_other];
+		const CPoint *other_lower = other_bucket->GetLowerBound();
+		const CPoint *other_upper = other_bucket->GetUpperBound();
+		const BOOL is_other_lower_closed = other_bucket->IsLowerClosed();
+		const BOOL is_other_upper_closed = other_bucket->IsUpperClosed();
+
+		// a bucket ending exactly at other's lower bound reaches into
+		// other's bucket only if both of them include that point
+		const CBucket *bucket = NULL;
+		for (; ul_this < num_buckets; ul_this++)
+		{
+			bucket = (*m_histogram_buckets)[ul_this];
+			const CPoint *upper = bucket->GetUpperBound();
+			if (upper->IsGreaterThan(other_lower) ||
+				(is_other_lower_closed && bucket->IsUpperClosed() &&
+				 upper->Equals(other_lower)))
+			{
+				break;
+			}
+		}
+		if (ul_this == num_buckets)
+		{
+			return false;
+		}
+
+		// that bucket has to start at or before other's bucket does
+		const CPoint *lower = bucket->GetLowerBound();
+		if (!lower->IsLessThan(other_lower) &&
+			!((bucket->IsLowerClosed() || !is_other_lower_closed) &&
+			  lower->Equals(other_lower)))
+		{
+			return false;
+		}
+
+		// extend the covered range bucket by bucket until it reaches
+		// other's upper bound
+		const CPoint *covered_upto = bucket->GetUpperBound();
+		BOOL is_covered_upto_closed = bucket->IsUpperClosed();
+		while (!covered_upto->IsGreaterThan(other_upper) &&
+			   !((is_covered_upto_closed || !is_other_upper_closed) &&
+				 covered_upto->Equals(other_upper)))
+		{
+			ULONG ul_next = ul_this + 1;
+			if (ul_next == num_buckets)
+			{
+				return false;
+			}
+
+			// the next bucket has to continue where the covered range
+			// ends - starting later leaves a gap, and so does starting at
+			// the very same point when neither of the two includes it
+			const CBucket *next_bucket = (*m_histogram_buckets)[ul_next];
+			const CPoint *next_lower = next_bucket->GetLowerBound();
+			if (!next_lower->IsLessThan(covered_upto) &&
+				!((is_covered_upto_closed || next_bucket->IsLowerClosed()) &&
+				  next_lower->Equals(covered_upto)))
+			{
+				return false;
+			}
+
+			ul_this = ul_next;
+			covered_upto = next_bucket->GetUpperBound();
+			is_covered_upto_closed = next_bucket->IsUpperClosed();
+		}
+	}
+
+	return true;
 }
 
 BOOL
