@@ -2491,11 +2491,11 @@ RemovePendingDeletesForPreparedTransactions()
 	{
 		char	   *errormsg = NULL;
 		TwoPhaseFileHeader *hdr;
+		int32		savedInterruptHoldoffCount = InterruptHoldoffCount;
 
 		if (entry->xlogrecptr == InvalidXLogRecPtr)
 			continue;
 
-		int savedInterruptHoldoffCount = InterruptHoldoffCount;
 		PG_TRY();
 		{
 			xlogrec = XLogReadRecord(xlogreader, entry->xlogrecptr, &errormsg);
