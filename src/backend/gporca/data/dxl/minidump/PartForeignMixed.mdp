@@ -373,7 +373,7 @@
     <dxl:Plan Id="0" SpaceSize="2">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="974.666667" Rows="2000000.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="926.960382" Rows="2000000.000000" Width="8"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -387,7 +387,7 @@
         <dxl:SortingColumnList/>
         <dxl:Append IsTarget="false" IsZapped="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="915.040000" Rows="2000000.000000" Width="8"/>
+            <dxl:Cost StartupCost="0" TotalCost="867.333715" Rows="2000000.000000" Width="8"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -400,7 +400,7 @@
           <dxl:Filter/>
           <dxl:DynamicTableScan SelectorIds="" SelectedPartitionSet="1,3">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="444.933333" Rows="2000000.000000" Width="8"/>
+              <dxl:Cost StartupCost="0" TotalCost="431.000111" Rows="16.000000" Width="8"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="9" Alias="a">
@@ -433,7 +433,7 @@
           </dxl:DynamicTableScan>
           <dxl:DynamicForeignScan SelectorIds="" ForeignServerOid="13212" SelectedPartitionSet="0,2">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="444.933333" Rows="2000000.000000" Width="8"/>
+              <dxl:Cost StartupCost="0" TotalCost="431.000111" Rows="16.000000" Width="8"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="18" Alias="a">

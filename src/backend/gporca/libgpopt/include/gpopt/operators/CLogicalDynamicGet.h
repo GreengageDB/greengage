@@ -14,6 +14,7 @@
 #include "gpos/base.h"
 
 #include "gpopt/operators/CLogicalDynamicGetBase.h"
+#include "naucrates/statistics/CStatistics.h"
 
 namespace gpopt
 {
@@ -201,6 +202,18 @@ public:
 	// derive stats from base table using filters on partition and/or index columns
 	IStatistics *PstatsDeriveFilter(CMemoryPool *mp, CExpressionHandle &exprhdl,
 									CExpression *pexprFilter) const;
+
+	// Sum of the row counts of the leaf partitions selected by selected_parts.
+	// A null bit set means that all leaf partitions are scanned. If
+	// num_selected is not null, it is set to the number of selected leaves.
+	CDouble RowsSelectedPartitions(CMemoryPool *mp,
+								   CBitSet *selected_partitions) const;
+
+	// Return statistics with cardinality rows, consuming the reference on
+	// pstats. Used to project root statistics onto the leaves that this
+	// operator scans. Scales the cardinality both up and down.
+	static CStatistics *PstatsWithRows(CMemoryPool *mp, CStatistics *pstats,
+									   CDouble rows);
 
 	// stat promise
 	EStatPromise

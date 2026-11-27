@@ -164,7 +164,10 @@ CLogicalUnionAll::PstatsDeriveUnionAll(CMemoryPool *mp,
 			mp, dynamic_cast<CStatistics *>(result_stats),
 			dynamic_cast<CStatistics *>(child_stats),
 			CColRef::Pdrgpul(mp, pdrgpcrOutput),
-			CColRef::Pdrgpul(mp, (*pdrgpdrgpcrInput)[0]),
+			// after the first merge the accumulated stats are keyed by the
+			// output colids, not by the first child's colids
+			CColRef::Pdrgpul(mp,
+							 1 == ul ? (*pdrgpdrgpcrInput)[0] : pdrgpcrOutput),
 			CColRef::Pdrgpul(mp, (*pdrgpdrgpcrInput)[ul]));
 		result_stats->Release();
 		result_stats = stats;
@@ -197,33 +200,41 @@ CLogicalUnionAll::PstatsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	CColRefArray *pdrgpcrOutputStats = prprel->PcrsStat()->Pdrgpcr(mp);
 
 	CColRef2dArray *pdrgpdrgpcrInputStats = GPOS_NEW(mp) CColRef2dArray(mp);
-	/* 
-	 * In CLogicalUnionAll, output columns are the same as the input columns
-	 * of the first union all child
-	 */
-	pdrgpdrgpcrInputStats->Append(pdrgpcrOutputStats);
+
 	/*
-	 * We iteratively remap the stats columns for the 2nd (index 1) union all
-	 * child and subsequent ones. Each of the stat columns, which are a subset
-	 * of output columns, is mapped to the corresponding input column. The 
-	 * first (index 0) union all child doesn't require remapping, because union
-	 * all output columns align directly with the input columns of the first 
-	 * union all child.
+	 * We iteratively remap the stats columns. Each of the stat columns, which
+	 * are a subset of output columns, is mapped to the corresponding input
+	 * column.
 	 */
 	const ULONG arity = exprhdl.Arity();
-	for (ULONG ul = 1; ul < arity; ul++)
+	for (ULONG ul = 0; ul < arity; ul++)
 	{
-		UlongToColRefMap *mapping =
-			CUtils::PhmulcrMapping(mp, pdrgpcrOutput, (*pdrgpdrgpcrInput)[ul]);
-		CColRefArray *pdrgpcrInputStats =
-			CUtils::PdrgpcrRemap(mp, pdrgpcrOutputStats, mapping, true);
-		pdrgpdrgpcrInputStats->Append(pdrgpcrInputStats);
-		mapping->Release();
+		CColRefArray *pdrgpcrChildInput = (*pdrgpdrgpcrInput)[ul];
+
+		// If this child's input colrefs are the same as the output colrefs
+		// (common for user-written UNION ALL and ConstTableGet), skip remapping.
+		// Otherwise (e.g. xforms that synthesize new colrefs like
+		// CXformExpandDynamicGetWithForeignPartitions), remap the stats columns.
+		if (pdrgpcrOutput->Equals(pdrgpcrChildInput))
+		{
+			pdrgpcrOutputStats->AddRef();
+			pdrgpdrgpcrInputStats->Append(pdrgpcrOutputStats);
+		}
+		else
+		{
+			UlongToColRefMap *mapping = CUtils::PhmulcrMapping(
+				mp, pdrgpcrOutput, (*pdrgpdrgpcrInput)[ul]);
+			CColRefArray *pdrgpcrInputStats =
+				CUtils::PdrgpcrRemap(mp, pdrgpcrOutputStats, mapping, true);
+			pdrgpdrgpcrInputStats->Append(pdrgpcrInputStats);
+			mapping->Release();
+		}
 	}
 
 	IStatistics *result = PstatsDeriveUnionAll(mp, exprhdl, pdrgpcrOutputStats,
 											   pdrgpdrgpcrInputStats);
 	pdrgpdrgpcrInputStats->Release();
+	pdrgpcrOutputStats->Release();
 
 	return result;
 }

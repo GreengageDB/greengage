@@ -315,7 +315,7 @@ explain select * from part;
     <dxl:Plan Id="0" SpaceSize="2">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.000140" Rows="1.000000" Width="12"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.000782" Rows="1.000000" Width="12"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="word1">
@@ -329,7 +329,7 @@ explain select * from part;
         <dxl:SortingColumnList/>
         <dxl:Append IsTarget="false" IsZapped="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.000096" Rows="1.000000" Width="12"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.000738" Rows="1.000000" Width="12"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="word1">
@@ -342,7 +342,7 @@ explain select * from part;
           <dxl:Filter/>
           <dxl:DynamicForeignScan SelectorIds="" ForeignServerOid="32945" SelectedPartitionSet="0">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="431.000008" Rows="1.000000" Width="12"/>
+              <dxl:Cost StartupCost="0" TotalCost="431.000062" Rows="8.000000" Width="12"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="9" Alias="word1">
@@ -373,7 +373,7 @@ explain select * from part;
           </dxl:DynamicForeignScan>
           <dxl:RandomMotion InputSegments="-1" OutputSegments="0,1,2">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="431.000077" Rows="1.000000" Width="12"/>
+              <dxl:Cost StartupCost="0" TotalCost="431.000613" Rows="8.000000" Width="12"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="18" Alias="word1">
@@ -387,7 +387,7 @@ explain select * from part;
             <dxl:SortingColumnList/>
             <dxl:DynamicForeignScan SelectorIds="" ForeignServerOid="32945" SelectedPartitionSet="1">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="431.000023" Rows="1.000000" Width="12"/>
+                <dxl:Cost StartupCost="0" TotalCost="431.000185" Rows="8.000000" Width="12"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="18" Alias="word1">
