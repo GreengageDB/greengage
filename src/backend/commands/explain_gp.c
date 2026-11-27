@@ -40,6 +40,10 @@
 /* Convert bytes into kilobytes */
 #define kb(x) (floor((x + 1023.0) / 1024.0))
 
+/* Hooks for extensions to send their own statistics, see cdbexplain.h */
+cdbexplain_send_hook_type cdbexplain_send_hook = NULL;
+cdbexplain_recv_hook_type cdbexplain_recv_hook = NULL;
+
 /* EXPLAIN ANALYZE statistics for one plan node of a slice */
 typedef struct CdbExplain_StatInst
 {
@@ -91,6 +95,8 @@ typedef struct CdbExplain_StatHdr
 	int			nInst;			/* num of StatInst entries following StatHdr */
 	int			bnotes;			/* offset to extra text area */
 	int			enotes;			/* offset to end of extra text area */
+	int			eextension;		/* offset to end of extensions' data, which
+								 * follows the extra text */
 
 	CdbExplain_SliceWorker worker;	/* qExec's overall stats for slice */
 
@@ -298,6 +304,9 @@ static void cdbexplain_depositStatsToNode(PlanState *planstate,
 										  CdbExplain_RecvStatCtx *ctx);
 static int cdbexplain_collectExtraText(PlanState *planstate,
 									   StringInfo notebuf);
+static void cdbexplain_passExtensionData(CdbExplain_StatHdr *hdr,
+										 int sliceIndex,
+										 CdbExplain_ShowStatCtx *showstatctx);
 
 static void show_motion_keys(PlanState *planstate, List *hashExpr, int nkeys,
 							 AttrNumber *keycols, const char *qlabel,
@@ -467,6 +476,18 @@ cdbexplain_sendExecStats(QueryDesc *queryDesc)
 	ctx.hdr.enotes = ctx.buf.len - hoff;
 	pfree(notebuf.data);
 
+	/* Append the data of extensions. */
+	if (cdbexplain_send_hook)
+	{
+		StringInfoData extbuf;
+
+		initStringInfo(&extbuf);
+		(*cdbexplain_send_hook) (queryDesc, &extbuf);
+		appendBinaryStringInfo(&ctx.buf, extbuf.data, extbuf.len);
+		pfree(extbuf.data);
+	}
+	ctx.hdr.eextension = ctx.buf.len - hoff;
+
 	/*
 	 * Move the message header into the buffer. Rewrite the updated header
 	 * (with bnotes, enotes, nInst etc.) Note: this is the second time we are
@@ -602,10 +623,15 @@ cdbexplain_recvExecStats(struct PlanState *planstate,
 		/* Validate the message header. */
 		hdr = (CdbExplain_StatHdr *) statcell->data;
 		if ((size_t) statcell->len < sizeof(*hdr) ||
+			hdr->nInst < 0 ||
+			hdr->bnotes < 0 ||
+			hdr->enotes < hdr->bnotes ||
+			hdr->eextension < hdr->enotes ||
+			statcell->len != hdr->eextension ||
 			(size_t) statcell->len != (sizeof(*hdr) - sizeof(hdr->inst) +
 									   hdr->nInst * sizeof(hdr->inst) +
-									   hdr->enotes - hdr->bnotes) ||
-			statcell->len != hdr->enotes ||
+									   hdr->enotes - hdr->bnotes +
+									   hdr->eextension - hdr->enotes) ||
 			hdr->segindex < -1 ||
 			hdr->segindex >= getgpsegmentCount())
 		{
@@ -664,7 +690,11 @@ cdbexplain_recvExecStats(struct PlanState *planstate,
 	 */
 	if (sliceIndex == 0 || !showstatctx->slices[sliceIndex].workers)
 		for (imsgptr = 0; imsgptr < ctx.nmsgptr; imsgptr++)
+		{
 			cdbexplain_depositSliceStats(ctx.msgptrs[imsgptr], &ctx);
+			cdbexplain_passExtensionData(ctx.msgptrs[imsgptr], sliceIndex,
+										 showstatctx);
+		}
 
 	/* Transfer worker counts to SliceSummary. */
 	showstatctx->slices[sliceIndex].dispatchSummary = ds;
@@ -743,6 +773,82 @@ cdbexplain_collectSliceStats(PlanState *planstate,
 	if (estate->es_jit != NULL)
 		out_worker->ji = estate->es_jit->instr;
 }								/* cdbexplain_collectSliceStats */
+
+
+/*
+ * cdbexplain_appendExtensionData
+ *	  Add a piece of an extension's data, under its name, to the buffer that
+ *	  cdbexplain_send_hook was given: the length of the name with its zero,
+ *	  the name, the length of the data, the data.
+ */
+void
+cdbexplain_appendExtensionData(StringInfo buf, const char *name,
+							   const void *data, int len)
+{
+	int32		namelen = strlen(name) + 1;
+	int32		datalen = len;
+
+	Assert(len >= 0);
+	appendBinaryStringInfo(buf, (const char *) &namelen, sizeof(namelen));
+	appendBinaryStringInfo(buf, name, namelen);
+	appendBinaryStringInfo(buf, (const char *) &datalen, sizeof(datalen));
+	appendBinaryStringInfo(buf, data, len);
+}								/* cdbexplain_appendExtensionData */
+
+
+/*
+ * cdbexplain_passExtensionData
+ *	  Give each piece of extensions' data in a qExec's message to
+ *	  cdbexplain_recv_hook, after checking that it lies within the message.
+ *	  The header was checked: enotes <= eextension, the end of the message.
+ */
+static void
+cdbexplain_passExtensionData(CdbExplain_StatHdr *hdr, int sliceIndex,
+							 CdbExplain_ShowStatCtx *showstatctx)
+{
+	const char *pos = (const char *) hdr + hdr->enotes;
+	const char *end = (const char *) hdr + hdr->eextension;
+
+	if (!cdbexplain_recv_hook)
+		return;
+
+	/* The message itself, whether or not it carries pieces. */
+	(*cdbexplain_recv_hook) (showstatctx, sliceIndex, hdr->segindex,
+							 hdr->qe_identifier, NULL, NULL, 0);
+
+	while (pos < end)
+	{
+		int32		namelen;
+		int32		len;
+		const char *name;
+
+		if (end - pos < (ptrdiff_t) sizeof(namelen))
+			goto invalid;
+		memcpy(&namelen, pos, sizeof(namelen));
+		pos += sizeof(namelen);
+		if (namelen <= 0 || end - pos < namelen || pos[namelen - 1] != '\0')
+			goto invalid;
+		name = pos;
+		pos += namelen;
+		if (end - pos < (ptrdiff_t) sizeof(len))
+			goto invalid;
+		memcpy(&len, pos, sizeof(len));
+		pos += sizeof(len);
+		if (len < 0 || end - pos < len)
+			goto invalid;
+		(*cdbexplain_recv_hook) (showstatctx, sliceIndex, hdr->segindex,
+								 hdr->qe_identifier, name, pos, len);
+		pos += len;
+	}
+	return;
+
+invalid:
+	ereport(ERROR,
+			(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
+			 errmsg_internal("Invalid data of extensions in execution "
+							 "statistics returned from seg%d",
+							 hdr->segindex)));
+}								/* cdbexplain_passExtensionData */
 
 
 /*
