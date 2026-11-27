@@ -522,6 +522,20 @@ shareinput_walker(SHAREINPUT_MUTATOR f, Node *node, PlannerInfo *root)
 				shareinput_walker(f, (Node *) lfirst(cell), root);
 			}
 		}
+		else if (IsA(node, CustomScan))
+		{
+			ListCell   *cell;
+
+			/*
+			 * The trees, then the provider's children in list order, the
+			 * order in which the scan starts them (see extensible.h).
+			 */
+			shareinput_walker(f, (Node *) plan->lefttree, root);
+			shareinput_walker(f, (Node *) plan->righttree, root);
+			foreach(cell, ((CustomScan *) node)->custom_plans)
+				shareinput_walker(f, (Node *) lfirst(cell), root);
+			shareinput_walker(f, (Node *) plan->initPlan, root);
+		}
 		else
 		{
 			shareinput_walker(f, (Node *) plan->lefttree, root);

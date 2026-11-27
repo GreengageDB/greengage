@@ -26,6 +26,8 @@
 #include "nodes/plannodes.h"
 
 extern void DirectDispatchUpdateContentIdsFromPlan(PlannerInfo *root, Plan *plan);
+extern void DirectDispatchUpdateContentIdsFromCustomPath(PlannerInfo *root,
+														 CustomPath *path, Plan *plan);
 extern void DirectDispatchUpdateContentIdsForInsert(PlannerInfo *root, Plan *plan,
 													GpPolicy *targetPolicy, Oid *hashfuncs);
 

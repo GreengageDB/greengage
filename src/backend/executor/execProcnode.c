@@ -1254,6 +1254,28 @@ planstate_walk_kids(PlanState *planstate,
 			Assert(!planstate->lefttree && !planstate->righttree);
 			break;
 
+		case T_CustomScanState:
+			{
+				ListCell   *lc;
+
+				/*
+				 * The trees, then the provider's children, as
+				 * planstate_tree_walker visits them. As in the default case
+				 * below, a child is visited only while the walk goes on: once
+				 * the walker answers other than CdbVisit_Walk, it stops.
+				 */
+				v = planstate_walk_node_extended(planstate->lefttree, walker, context, flags);
+				if (v == CdbVisit_Walk)
+					v = planstate_walk_node_extended(planstate->righttree, walker, context, flags);
+				foreach(lc, ((CustomScanState *) planstate)->custom_ps)
+				{
+					if (v != CdbVisit_Walk)
+						break;
+					v = planstate_walk_node_extended((PlanState *) lfirst(lc), walker, context, flags);
+				}
+				break;
+			}
+
 		default:
 			/* Left subtree */
 			v = planstate_walk_node_extended(planstate->lefttree, walker, context, flags);
@@ -1609,6 +1631,13 @@ find_all_mat_nodes(PlanState *ps)
 		mat_nodes = list_concat(mat_nodes, find_all_mat_nodes(outerPlanState(ps)));
 	if (innerPlanState(ps))
 		mat_nodes = list_concat(mat_nodes, find_all_mat_nodes(innerPlanState(ps)));
+	/* A custom scan keeps its children in custom_ps. */
+	if (IsA(ps, CustomScanState))
+	{
+		foreach(lc, ((CustomScanState *) ps)->custom_ps)
+			mat_nodes = list_concat(mat_nodes,
+									find_all_mat_nodes((PlanState *) lfirst(lc)));
+	}
 	if (ps->subPlan)
 	{
 		foreach(lc, ps->subPlan)

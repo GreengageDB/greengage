@@ -336,6 +336,16 @@ plan_tree_mutator(Node *node,
 
 				FLATCOPY(newcscan, cscan, CustomScan);
 				SCANMUTATE(newcscan, cscan);
+				MUTATE(newcscan->custom_plans, cscan->custom_plans, List *);
+				MUTATE(newcscan->custom_exprs, cscan->custom_exprs, List *);
+				MUTATE(newcscan->custom_scan_tlist, cscan->custom_scan_tlist, List *);
+
+				/*
+				 * custom_private is the provider's own data, which may hold
+				 * value nodes expression_tree_mutator does not know: copy it
+				 * unchanged, as fdw_private is.
+				 */
+				newcscan->custom_private = copyObject(cscan->custom_private);
 				return (Node *) newcscan;
 			}
 			break;

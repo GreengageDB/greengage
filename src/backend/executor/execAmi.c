@@ -757,6 +757,10 @@ ExecSquelchNode(PlanState *node)
 			ExecSquelchProjectSetNode((ProjectSetState *) node);
 			break;
 
+		case T_CustomScanState:
+			ExecSquelchCustomScan((CustomScanState *) node);
+			break;
+
 			/*
 			 * Node types that need no special handling, just recurse to
 			 * children.
