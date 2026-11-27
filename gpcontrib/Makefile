@@ -40,6 +40,10 @@ endif
 ifeq "$(with_zstd)" "yes"
 	recurse_targets += zstd
 endif
+
+ifeq "$(with_arrow_flight)" "yes"
+	recurse_targets += arrowflight
+endif
 $(call recurse,all install clean distclean, $(recurse_targets))
 
 all: gpcloud orafce
@@ -77,6 +81,7 @@ installcheck:
 	$(MAKE) -C gp_internal_tools installcheck
 	if [ "$(enable_orafce)" = "yes" ]; then $(MAKE) -C orafce installcheck; fi
 	if [ "$(with_zstd)" = "yes" ]; then $(MAKE) -C zstd installcheck; fi
+	if [ "$(with_arrow_flight)" = "yes" ]; then $(MAKE) -C arrowflight installcheck; fi
 	$(MAKE) -C gp_sparse_vector installcheck
 	$(MAKE) -C gp_exttable_fdw installcheck
 	$(MAKE) -C gp_toolkit installcheck
