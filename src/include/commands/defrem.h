@@ -40,6 +40,8 @@ extern char *ChooseRelationName(const char *name1, const char *name2,
 extern char *ChooseRelationNameWithCache(const char *name1, const char *name2,
 								const char *label, Oid namespaceid, 
 								struct HTAB *cache);
+extern char *ChooseRelationNameForRename(const char *name1, const char *name2,
+										const char *label, Oid namespaceid, Oid self);
 extern char *ChooseIndexName(const char *tabname, Oid namespaceId,
 				List *colnames, List *exclusionOpNames,
 				bool primary, bool isconstraint);

@@ -2094,17 +2094,9 @@ makeObjectName(const char *name1, const char *name2, const char *label)
  *
  * Returns a palloc'd string.
  */
-char *
-ChooseRelationName(const char *name1, const char *name2,
-				   const char *label, Oid namespaceid)
-{
-	return ChooseRelationNameWithCache(name1, name2, label, namespaceid, NULL);
-}
-
-char *
-ChooseRelationNameWithCache(const char *name1, const char *name2,
-				   const char *label, Oid namespaceid,
-				   HTAB *cache)
+static char *
+choose_relation_name(const char *name1, const char *name2, const char *label,
+					 Oid namespaceid, HTAB *cache, Oid self)
 {
 	int			pass = 0;
 	char	   *relname = NULL;
@@ -2124,12 +2116,21 @@ ChooseRelationNameWithCache(const char *name1, const char *name2,
 		if (cache)
 			hash_search(cache, (void *) relname, HASH_FIND, &found);
 
-		if (!found && !OidIsValid(get_relname_relid(relname, namespaceid)))
-			break;
+		if (!found)
+		{
+			Oid owner = get_relname_relid(relname, namespaceid);
+
+			if (!OidIsValid(owner) || owner == self)
+				break;
+		}
 
 		/* found a conflict, so try a new name component */
 		pfree(relname);
-		snprintf(modlabel, sizeof(modlabel), "%s%d", label, ++pass);
+		if (snprintf(modlabel, sizeof(modlabel), "%s%d", label, ++pass) >
+			NAMEDATALEN - (name2 ? 4 : 3))
+			ereport(ERROR,
+					(errcode(ERRCODE_NAME_TOO_LONG),
+					 errmsg("could not generate a unique relation name with label \"%s\"", label)));
 	}
 
 	/* If we are caching found values add the value to our hash */
@@ -2140,6 +2141,29 @@ ChooseRelationNameWithCache(const char *name1, const char *name2,
 	}
 
 	return relname;
+}
+
+char *
+ChooseRelationName(const char *name1, const char *name2,
+				   const char *label, Oid namespaceid)
+{
+	return ChooseRelationNameWithCache(name1, name2, label, namespaceid, NULL);
+}
+
+char *
+ChooseRelationNameWithCache(const char *name1, const char *name2,
+				   const char *label, Oid namespaceid,
+				   HTAB *cache)
+{
+	return choose_relation_name(name1, name2, label, namespaceid, cache, InvalidOid);
+}
+
+/* The relation being renamed may already own the generated name. */
+char *
+ChooseRelationNameForRename(const char *name1, const char *name2,
+							const char *label, Oid namespaceid, Oid self)
+{
+	return choose_relation_name(name1, name2, label, namespaceid, NULL, self);
 }
 
 /*

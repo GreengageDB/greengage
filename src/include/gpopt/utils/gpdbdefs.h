@@ -73,8 +73,6 @@ extern "C" {
 extern List *pg_parse_and_rewrite(const char *query_string, Oid *paramTypes,
 								  int iNumParams);
 
-extern PlannedStmt *pg_plan_query(Query *pqueryTree, ParamListInfo boundParams);
-
 extern char *get_rel_name(Oid relid);
 
 extern Relation RelationIdGetRelation(Oid relationId);

@@ -22,6 +22,7 @@
 #include "nodes/relation.h"
 #include "optimizer/clauses.h"
 #include "optimizer/plancat.h"
+#include "tcop/utility.h"
 #include "utils/hsearch.h"
 #include "utils/relcache.h"
 
@@ -194,9 +195,9 @@ exchange_part_rule(Oid oldrelid, Oid newrelid);
 extern void
 exchange_permissions(Oid oldrelid, Oid newrelid);
 
-extern List *
-atpxRenameList(PartitionNode *pNode,
-			   char *old_parentname, const char *new_parentname, int *skipped);
+extern void RenamePartitionChildren(PartitionNode *pNode, const char *old_parent,
+									const char *new_parent, ProcessUtilityContext context,
+									int *renamed, int *skipped);
 
 extern List *
 basic_AT_oids(Relation rel, AlterTableCmd *cmd);

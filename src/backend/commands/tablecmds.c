@@ -3325,7 +3325,6 @@ RenameRelation(RenameStmt *stmt)
 {
 	Oid			relid;
 	Relation	targetrelation;
-	char	   *oldrelname;
 
 	/*
 	 * Grab an exclusive lock on the target table, index, sequence, view,
@@ -3361,7 +3360,6 @@ RenameRelation(RenameStmt *stmt)
 		targetrelation = fake_relation_open(relid);
 	else
 		targetrelation = relation_open(relid, AccessExclusiveLock);
-	oldrelname = RelationGetRelationName(targetrelation);
 
 	/* if this is a child table of a partitioning configuration, complain */
 	if (rel_is_child_partition(relid) && !stmt->bAllowPartn)
@@ -3382,73 +3380,6 @@ RenameRelation(RenameStmt *stmt)
 
 	/* Do the work */
 	RenameRelationInternal(relid, stmt->newname, false);
-
-	/* MPP-3059: recursive rename of partitioned table */
-	/* Note: the top-level RENAME has bAllowPartn=FALSE, while the
-	 * generated statements from this block set it to TRUE.  That way,
-	 * the rename of each partition is allowed, but this block doesn't
-	 * get invoked recursively.
-	 */
-	if (!rel_is_child_partition(relid) && !stmt->bAllowPartn &&
-		(Gp_role == GP_ROLE_DISPATCH))
-	{
-		PartitionNode *pNode;
-
-		pNode = RelationBuildPartitionDescByOid(relid, false);
-
-		if (pNode)
-		{
-			RenameStmt 			   	*renStmt 	 = makeNode(RenameStmt);
-			DestReceiver 		   	*dest  		 = None_Receiver;
-			List 					*renList 	 = NIL;
-			int 					 skipped 	 = 0;
-			int 					 renamed 	 = 0;
-
-			renStmt->renameType = OBJECT_TABLE;
-			renStmt->subname = NULL;
-			renStmt->bAllowPartn = true; /* allow rename of partitions */
-
-			/* rename the children as well */
-			renList = atpxRenameList(pNode, oldrelname, stmt->newname, &skipped);
-
-			/* process children if there are any */
-			if (renList)
-			{
-				ListCell 		*lc;
-
-				foreach(lc, renList)
-				{
-					ListCell 		*lc2;
-					List  			*lpair = lfirst(lc);
-
-					lc2 = list_head(lpair);
-
-					renStmt->relation = (RangeVar *)lfirst(lc2);
-					lc2 = lnext(lc2);
-					renStmt->newname = (char *)lfirst(lc2);
-
-					ProcessUtility((Node *) renStmt,
-								   synthetic_sql,
-								   PROCESS_UTILITY_QUERY,
-								   NULL,
-								   dest,
-								   NULL);
-					renamed++;
-				}
-
-				/* MPP-3542: warn when skip child partitions */
-				if (skipped)
-				{
-					ereport(WARNING,
-							(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-									errmsg("renamed %d partitions, "
-										   "skipped %d child partitions "
-										   "due to name truncation",
-										   renamed, skipped)));
-				}
-			}
-		}
-	}
 
 	/*
 	 * Close rel, but keep exclusive lock!
@@ -17258,7 +17189,6 @@ ATPExecPartRename(Relation rel,
 		Relation				 part_rel;
 		HeapTuple				 tuple;
 		Form_pg_partition_rule	 pgrule;
-		List 					*renList 	 = NIL;
 		int 					 skipped 	 = 0;
 		int 					 renamed 	 = 0;
 
@@ -17333,9 +17263,6 @@ ATPExecPartRename(Relation rel,
 		else
 				pNode = NULL;
 
-		/* rename the children as well */
-		renList = atpxRenameList(pNode, targetrelname, relname, &skipped);
-
 		part_rel = heap_open(PartitionRuleRelationId, RowExclusiveLock);
 
 		tuple = SearchSysCacheCopy1(PARTRULEOID,
@@ -17359,31 +17286,8 @@ ATPExecPartRename(Relation rel,
 					   dest,
 					   NULL);
 
-		/* process children if there are any */
-		if (renList)
-		{
-			ListCell 		*lc;
-
-			foreach(lc, renList)
-			{
-				ListCell 		*lc2;
-				List  			*lpair = lfirst(lc);
-
-				lc2 = list_head(lpair);
-
-				renStmt->relation = (RangeVar *)lfirst(lc2);
-				lc2 = lnext(lc2);
-				renStmt->newname = (char *)lfirst(lc2);
-
-				ProcessUtility((Node *) renStmt,
-							   synthetic_sql,
-							   PROCESS_UTILITY_SUBCOMMAND,
-							   NULL,
-							   dest,
-							   NULL);
-				renamed++;
-			}
-		}
+		RenamePartitionChildren(pNode, targetrelname, relname,
+								PROCESS_UTILITY_SUBCOMMAND, &renamed, &skipped);
 
 		/* MPP-6929: metadata tracking */
 		MetaTrackUpdObject(RelationRelationId,
@@ -17406,7 +17310,7 @@ ATPExecPartRename(Relation rel,
 		{
 			ereport(WARNING,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("renamed %d partitions, skipped %d child partitions due to name truncation",
+					 errmsg("renamed %d partitions, skipped %d child partitions with custom names",
 							renamed, skipped)));
 		}
 
