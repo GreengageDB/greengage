@@ -45,6 +45,7 @@ const char *IOconfigFields[4] = {"rbps", "wbps", "riops", "wiops"};
 const char	*IOStatFields[4] = {"rbytes", "wbytes", "rios", "wios"};
 
 static int bdi_cmp(const void *a, const void *b);
+static bdi_t get_bdi_from_sysfs(int maj, int min, const char *path);
 
 typedef struct BDICmp
 {
@@ -183,43 +184,37 @@ fill_bdi_list(TblSpcIOLimit *iolimit)
 }
 
 /*
- * Get BDI of a path.
+ * Get BDI of a path via /proc/self/mounts.
  *
- * First find mountpoint from /proc/self/mounts, then find bdi of mountpoints.
- * Check this bdi is a disk or a partition(via check 'start' file in
- * /sys/dev/block/{bdi}), if it is a disk, just return it, if not, find the disk
- * and return it's bdi.
+ * Find the covering mount entry and stat its device name. Used as a fallback
+ * for paths whose st_dev does not map to a block device in sysfs, e.g. the
+ * anonymous device of a btrfs subvolume, which is not the backing disk.
  */
-bdi_t
-get_bdi_of_path(const char *ori_path)
+static bdi_t
+get_bdi_from_mounts(const char *path)
 {
-	int maj;
-	int min;
 	size_t max_match_len = 0;
 	struct mntent *mnt;
 	struct mntent result;
-	struct mntent match_mnt = {};
+	struct mntent match_mnt = {0};
 	/* default size of glibc */
 	char mntent_buffer[PATH_MAX];
-	char sysfs_path[PATH_MAX];
-	char sysfs_path_start[PATH_MAX];
-	char real_path[PATH_MAX];
-	char path[PATH_MAX];
-
-	char *res = realpath(ori_path, path);
-	if (res == NULL)
-		ereport(ERROR,
-				(errcode(ERRCODE_IO_ERROR),
-				errmsg("io limit: cannot find realpath of %s, details: %m.", ori_path)));
+	struct stat sb;
 
 	FILE *fp = setmntent("/proc/self/mounts", "r");
+
+	if (fp == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_IO_ERROR),
+				 errmsg("cannot open /proc/self/mounts, details: %m")));
 
 	/* find mount point of path */
 	while ((mnt = getmntent_r(fp, &result, mntent_buffer, sizeof(mntent_buffer))) != NULL)
 	{
 		size_t dir_len = strlen(mnt->mnt_dir);
 
-		if (strstr(path, mnt->mnt_dir) != NULL && strncmp(path, mnt->mnt_dir, dir_len) == 0)
+		if (strncmp(path, mnt->mnt_dir, dir_len) == 0 &&
+			(dir_len == 1 || path[dir_len] == '\0' || path[dir_len] == '/'))
 		{
 			if (dir_len > max_match_len)
 			{
@@ -248,7 +243,11 @@ get_bdi_of_path(const char *ori_path)
 	}
 	endmntent(fp);
 
-	struct stat sb;
+	if (match_mnt.mnt_fsname == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_IO_ERROR),
+				 errmsg("cannot find mount point of %s", path)));
+
 	if (stat(match_mnt.mnt_fsname, &sb) == -1)
 	{
 		ereport(ERROR,
@@ -261,8 +260,22 @@ get_bdi_of_path(const char *ori_path)
 	pfree(match_mnt.mnt_type);
 	pfree(match_mnt.mnt_opts);
 
-	maj = major(sb.st_rdev);
-	min = minor(sb.st_rdev);
+	return get_bdi_from_sysfs(major(sb.st_rdev), minor(sb.st_rdev), path);
+}
+
+/*
+ * Get BDI of the block device {maj:min} via sysfs.
+ *
+ * Check this bdi is a disk or a partition(via check 'start' file in
+ * /sys/dev/block/{bdi}), if it is a disk, just return it, if not, find the
+ * disk and return it's bdi.
+ */
+static bdi_t
+get_bdi_from_sysfs(int maj, int min, const char *path)
+{
+	char sysfs_path[PATH_MAX];
+	char sysfs_path_start[PATH_MAX];
+	char real_path[PATH_MAX];
 
 	snprintf(sysfs_path, sizeof(sysfs_path), "/sys/dev/block/%d:%d", maj, min);
 
@@ -271,7 +284,7 @@ get_bdi_of_path(const char *ori_path)
 	if (access(sysfs_path_start, F_OK) == -1)
 		return make_bdi(maj, min);
 
-	res = realpath(sysfs_path, real_path);
+	char *res = realpath(sysfs_path, real_path);
 	if (res == NULL)
 	{
 		ereport(ERROR,
@@ -304,6 +317,55 @@ get_bdi_of_path(const char *ori_path)
 	fclose(f);
 
 	return make_bdi(parent_maj, parent_min);
+}
+
+/*
+ * Get BDI of a path.
+ *
+ * Prefer the device id of the filesystem containing the path taken from
+ * st_dev: unlike a device name taken from /proc/self/mounts, it does not
+ * depend on the device node being present in /dev, which is not always the
+ * case in containers. The returned bdi is resolved to a disk through sysfs
+ * (see get_bdi_from_sysfs).
+ *
+ * This works as long as st_dev maps to a block device in sysfs, which is
+ * the case for block-backed filesystems (xfs, ext4, device-mapper, loop).
+ * Otherwise fall back to resolving the covering /proc/self/mounts entry
+ * (see get_bdi_from_mounts), which stats the device name, so filesystems
+ * with an anonymous st_dev (e.g. a btrfs subvolume) still need the device
+ * node; overlayfs and tmpfs fail either way and are out of scope.
+ */
+bdi_t
+get_bdi_of_path(const char *ori_path)
+{
+	int maj;
+	int min;
+	struct stat sb;
+	char sysfs_path[PATH_MAX];
+	char path[PATH_MAX];
+
+	char *res = realpath(ori_path, path);
+	if (res == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_IO_ERROR),
+				errmsg("io limit: cannot find realpath of %s, details: %m.", ori_path)));
+
+	if (stat(path, &sb) == -1)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_IO_ERROR),
+				 errmsg("cannot find disk of %s, details: %m", path)));
+	}
+
+	maj = major(sb.st_dev);
+	min = minor(sb.st_dev);
+
+	snprintf(sysfs_path, sizeof(sysfs_path), "/sys/dev/block/%d:%d", maj, min);
+
+	if (access(sysfs_path, F_OK) == 0)
+		return get_bdi_from_sysfs(maj, min, path);
+
+	return get_bdi_from_mounts(path);
 }
 
 
