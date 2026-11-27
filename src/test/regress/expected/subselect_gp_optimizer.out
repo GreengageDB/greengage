@@ -2540,29 +2540,28 @@ explain (costs off) with run_dt as (
 )
 select * from run_dt, extra_flow_dist1
 where dt < '2010-01-01'::date;
-                                         QUERY PLAN
---------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice3; segments: 3)
-   ->  Nested Loop
-         Join Filter: true
-         ->  Seq Scan on extra_flow_dist1
-         ->  Materialize
-               ->  Broadcast Motion 1:3  (slice2)
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Nested Loop
+   Join Filter: true
+   ->  Result
+         Filter: (((SubPlan 1)) < '01-01-2010'::date)
+         ->  Result
+               ->  Limit
                      ->  Result
-                           Filter: (((SubPlan 1)) < '01-01-2010'::date)
-                           ->  Result
-                                 ->  Limit
-                                       ->  Result
-                                             ->  Seq Scan on pg_trigger
-                                 SubPlan 1  (slice2)
-                                   ->  Result
-                                         Filter: (extra_flow_dist.b = "outer".x)
-                                         ->  Materialize
-                                               ->  Gather Motion 3:1  (slice1; segments: 3)
-                                                     ->  Seq Scan on extra_flow_dist
-                                                           Filter: (b = 1)
+                           ->  Seq Scan on pg_trigger
+               SubPlan 1  (slice0)
+                 ->  Result
+                       Filter: (extra_flow_dist.b = "outer".x)
+                       ->  Materialize
+                             ->  Gather Motion 3:1  (slice2; segments: 3)
+                                   ->  Seq Scan on extra_flow_dist
+                                         Filter: (b = 1)
+   ->  Materialize
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Seq Scan on extra_flow_dist1
  Optimizer: Pivotal Optimizer (GPORCA)
-(20 rows)
+(19 rows)
 
 with run_dt as (
 	select
