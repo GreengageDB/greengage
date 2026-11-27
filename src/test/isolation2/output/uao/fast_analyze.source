@@ -795,3 +795,64 @@ select * from gp_acquire_sample_rows('test_dead_values_return_@amname@'::regclas
 
 drop table test_dead_values_return_@amname@;
 DROP TABLE
+
+--
+-- Test sampling of columns added by ALTER TABLE ADD COLUMN when the table
+-- has several segment files.
+--
+-- Rows written before ADD COLUMN are not stored in the files of the new
+-- columns. They are served from the missing value, without touching the
+-- datum stream. If a segment file starts with such rows, the datum stream
+-- of a new column still keeps the last block it read from the previous
+-- segment file. Non-blkdir based sampling used to take that block for a
+-- block of the current segment file: the sample got values of other rows,
+-- or a datum read before the first row of that block, which could crash
+-- ANALYZE.
+--
+
+create table analyze_addcol_@amname@(id int, a int) using @amname@ distributed by (id);
+CREATE TABLE
+
+-- Create two segment files. The first one gets more row numbers.
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+1: insert into analyze_addcol_@amname@ select 1, 0 from generate_series(1, 150);
+INSERT 0 150
+2: insert into analyze_addcol_@amname@ select 1, 0 from generate_series(1, 10);
+INSERT 0 10
+1: commit;
+COMMIT
+2: commit;
+COMMIT
+
+alter table analyze_addcol_@amname@ add column b int default 0, add column c text;
+ALTER TABLE
+
+-- Append rows with b = a and c = 'v' || a to both segment files.
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+1: insert into analyze_addcol_@amname@ select 1, i, i, 'v' || i from generate_series(1001, 1300) i;
+INSERT 0 300
+2: insert into analyze_addcol_@amname@ select 1, i, i, 'v' || i from generate_series(2001, 2300) i;
+INSERT 0 300
+1: commit;
+COMMIT
+2: commit;
+COMMIT
+
+-- All rows are sampled. b = a in every row, c is NULL in the old rows only.
+select count(*) as sampled, count(*) filter (where b <> a) as wrong_b, count(*) filter (where c is distinct from case when a > 0 then 'v' || a end) as wrong_c from gp_acquire_sample_rows('analyze_addcol_@amname@'::regclass, 10000, 'f') as (totalrows pg_catalog.float8, totaldeadrows pg_catalog.float8, oversized_cols_length pg_catalog._float8, id int, a int, b int, c text) where totalrows is null;
+ sampled | wrong_b | wrong_c 
+---------+---------+---------
+ 760     | 0       | 0       
+(1 row)
+
+analyze analyze_addcol_@amname@;
+ANALYZE
+
+drop table analyze_addcol_@amname@;
+DROP TABLE
