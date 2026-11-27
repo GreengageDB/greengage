@@ -1,0 +1,26 @@
+test_ao_scan
+============
+
+An example of how an extension can read ao_row and ao_column tables by
+itself, without a tuple slot and a call for every row, through the public
+functions the core has for that:
+
+  - appendonly_scan_next_block, AppendOnlyExecutorReadBlock_NextTuple,
+    AppendOnlyExecutorReadBlock_BindingInit and memtuple_getattr_inline
+    for ao_row;
+  - aocs_scan_next_seg, datumstreamread_block, datumstreamread_advance and
+    datumstreamread_get for ao_column.
+
+test_ao_scan.c gives the rows of a block at once, up to 64 of them, column
+by column, with a mask of the rows the snapshot sees. test_ao_scan_compare
+reads a table both this way and through tuple slots and checks that the two
+agree on every value, so the tests also keep these functions working.
+
+The functions called for every row or value are inline in the headers, as
+a module outside the backend can inline nothing else. A value passed by
+value comes in the Datum fetch_att makes of it, which the test checks too.
+
+Run the tests against a running cluster:
+
+    make install
+    make installcheck

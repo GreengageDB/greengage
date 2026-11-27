@@ -531,6 +531,35 @@ close_cur_scan_seg(AOCSScanDesc scan)
 		AppendOnlyBlockDirectory_End_forInsert(scan->blockDirectory);
 }
 
+/*
+ * Move the scan to the first row of its next segment file, for a caller that
+ * reads the columns' datum streams itself. False when there are no more
+ * segment files, or no column to read.
+ */
+bool
+aocs_scan_next_seg(AOCSScanDesc scan)
+{
+	if (scan->columnScanInfo.relationTupleDesc == NULL)
+	{
+		scan->columnScanInfo.relationTupleDesc = RelationGetDescr(scan->rs_base.rs_rd);
+		/* Pin it! ... and of course release it upon destruction / rescan */
+		PinTupleDesc(scan->columnScanInfo.relationTupleDesc);
+		initscan_with_colinfo(scan);
+	}
+	if (scan->columnScanInfo.num_proj_atts == 0)
+		return false;
+
+	close_cur_scan_seg(scan);
+	if (open_next_scan_seg(scan) < 0)
+	{
+		/* No more seg, we are at the end */
+		scan->cur_seg = -1;
+		return false;
+	}
+	scan->segrowsprocessed = 0;
+	return true;
+}
+
 static void
 aocs_blkdirscan_init(AOCSScanDesc scan)
 {
