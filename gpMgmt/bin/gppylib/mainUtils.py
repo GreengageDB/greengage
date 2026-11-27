@@ -31,6 +31,13 @@ from gppylib.system import configurationInterface, configurationImplGpdb, fileSy
     fileSystemImplOs, osInterface, osImplNative, faultProberInterface, faultProberImplGpdb
 from optparse import OptionGroup, OptionParser, SUPPRESS_HELP
 
+# Common locks that are held by more than one utility
+GPRECOVERSEG_LOCK_PATH = "gprecoverseg.lock"
+GPMOVEMIRRORS_LOCK_PATH = "gpmovemirrors.lock"
+
+# gprecoverseg and gpmovemirros should remember when they call each other,
+# so they share the same 'parentpidvar'.
+GPRECOVERSEG_GPMOVEMIRRORS_PID_VAR = "GPRECOVERSEG_GPMOVEMIRRORS_PID"
 
 def getProgramName():
     """
@@ -143,14 +150,16 @@ class SimpleMainLock:
     def __init__(self, mainOptions):
         self.pidlockpath = mainOptions.get('pidlockpath', None)  # the directory we're using for locking
         self.parentpidvar = mainOptions.get('parentpidvar', None)  # environment variable holding parent pid
-        self.parentpid = None  # parent pid which already has the lock
+        self.parentpids = None  # parent pids which already have the lock
         self.ppath = None  # complete path to the lock file
         self.pidlockfile = None  # PIDLockFile object
         self.pidfilepid = None  # pid of the process which has the lock
         self.locktorelease = None  # PIDLockFile object we should release when done
 
         if self.parentpidvar is not None and self.parentpidvar in os.environ:
-            self.parentpid = int(os.environ[self.parentpidvar])
+            self.parentpids = []
+            for pid in os.environ[self.parentpidvar].split(":"):
+                self.parentpids.append(int(pid))
 
         if self.pidlockpath is not None:
             self.ppath = os.path.join(gp.get_coordinatordatadir(), self.pidlockpath)
@@ -173,12 +182,14 @@ class SimpleMainLock:
         except ValueError:
             shutil.rmtree(self.ppath)
 
+        # we found a lock file
         if self.pidfilepid is not None:
-
-            # we found a lock file
-            # allow the process to proceed if the locker was our parent
-            if self.pidfilepid == self.parentpid:
-                return None
+            # allow the process to proceed if the locker is one
+            # of our parents
+            if self.parentpids is not None:
+                for parent_pid in self.parentpids:
+                    if self.pidfilepid == parent_pid:
+                        return None
 
             # Check if the process that holds the lock exists.
             # If the process is already killed, remove the lock directory.
@@ -199,7 +210,11 @@ class SimpleMainLock:
         self.locktorelease = self.pidlockfile
         self.pidfilepid = self.pidlockfile.read_pid()
         if self.parentpidvar is not None:
-            os.environ[self.parentpidvar] = str(self.pidfilepid)
+            if self.parentpidvar not in os.environ:
+                os.environ[self.parentpidvar] = str(self.pidfilepid)
+            else:
+                os.environ[self.parentpidvar] = "%s:%s" % (os.environ[self.parentpidvar], str(self.pidfilepid))
+
 
         return None
 
@@ -252,6 +267,34 @@ class UserAbortedException(Exception):
     """
     pass
 
+def simple_main_check_other_locks(other_lock_paths, parentpidvar):
+    parents = []
+    if parentpidvar is not None and parentpidvar in os.environ:
+        for parent in os.environ[parentpidvar].split(':'):
+            parents.append(int(parent))
+
+    for other_lock_path in other_lock_paths:
+        abs_other_lock_path = os.path.join(gp.get_coordinatordatadir(), other_lock_path, "PID")
+        try:
+            with open(abs_other_lock_path) as pidfile:
+                pid = int(pidfile.read())
+        except Exception:
+            continue # No such file, or it is malformed
+
+        if not unix.check_pid(pid):
+            continue # No such process
+
+        parent_is_found = False
+        for parent_pid in parents:
+            if pid == parent_pid:
+                parent_is_found = True
+                break
+        if parent_is_found:
+            continue # Lock is held by one of our parents
+
+        return pid, other_lock_path, abs_other_lock_path
+
+    return None, None, None
 
 def simple_main(createOptionParserFn, createCommandFn, mainOptions=None):
     """
@@ -291,16 +334,30 @@ def simple_main_internal(createOptionParserFn, createCommandFn, mainOptions):
     specified pid file within the COORDINATOR_DATA_DIRECTORY before proceeding
     to execute the specified program and we clean up the pid file when
     we're done.
+
+    If caller specifies 'otherpidlocks', then we check that none of these
+    locks are held by other utilities, but don't acquire any of them.
     """
     sml = None
-    if mainOptions is not None and 'pidlockpath' in mainOptions:
-        sml = SimpleMainLock(mainOptions)
-        otherpid = sml.acquire()
-        if otherpid is not None:
-            logger = gplog.get_default_logger()
-            logger.error("Lockfile %s indicates that an instance of %s is already running with PID %s" % (sml.ppath, getProgramName(), otherpid))
-            logger.error("If this is not the case, remove the lockfile directory at %s" % (sml.ppath))
-            return
+    logger = gplog.get_default_logger()
+    if mainOptions is not None:
+        if 'pidlockpath' in mainOptions:
+            sml = SimpleMainLock(mainOptions)
+            otherpid = sml.acquire()
+            if otherpid is not None:
+                logger.error("Lockfile %s indicates that an instance of %s is already running with PID %s" % (sml.ppath, getProgramName(), otherpid))
+                logger.error("If this is not the case, remove the lockfile directory at %s" % (sml.ppath))
+                return
+
+        if 'otherpidlockpaths' in mainOptions:
+            other_lock_paths = mainOptions.get("otherpidlockpaths", None)
+            parentpidvar = mainOptions.get("parentpidvar", None)
+            otherpid, other_lock_path, abs_other_lock_path = simple_main_check_other_locks(other_lock_paths, parentpidvar)
+            if otherpid is not None:
+                logger.error("Lockfile %s indicates that an instance of another conflicting utility is already running with PID %s" % (other_lock_path, otherpid))
+                logger.error("If this is not the case, remove the lockfile directory at %s" % (abs_other_lock_path))
+                sml.release()
+                return
 
     # at this point we have whatever lock we require
     try:
