@@ -1735,6 +1735,22 @@ UnassignResGroup(void)
 	ResGroupData		*group;
 	ResGroupSlotData	*slot;
 
+	if (Gp_role == GP_ROLE_DISPATCH)
+	{
+		SpinLockAcquire(&MyProc->movetoMutex);
+		if (MyProc->movetoCallerPid == ResGroupMoveAbandonedPid)
+		{
+			/*
+			 * The target normally clears an abandoned request on completion.
+			 * Transaction abort must do so if the move failed before then.
+			 */
+			MyProc->movetoResSlot = NULL;
+			MyProc->movetoGroupId = InvalidOid;
+			MyProc->movetoCallerPid = InvalidPid;
+		}
+		SpinLockRelease(&MyProc->movetoMutex);
+	}
+
 	if (bypassedGroup)
 	{
 		/* bypass mode ref count is only maintained on qd */
@@ -3526,8 +3542,6 @@ HandleMoveResourceGroup(void)
 		Assert(groupId != InvalidOid);
 		SIMPLE_FAULT_INJECTOR("resource_group_move_handler_after_qd_control");
 
-		ResGroupMoveNotifyInitiator(callerPid);
-
 		/* unassign the old resource group and release the old slot */
 		UnassignResGroup();
 
@@ -3539,6 +3553,25 @@ HandleMoveResourceGroup(void)
 
 		/* Init self */
 		self->caps = slot->caps;
+
+		SIMPLE_FAULT_INJECTOR("resource_group_move_handler_before_completion");
+
+		SpinLockAcquire(&MyProc->movetoMutex);
+		callerPid = MyProc->movetoCallerPid;
+		if (callerPid == ResGroupMoveAbandonedPid)
+		{
+			MyProc->movetoCallerPid = InvalidPid;
+			MyProc->movetoGroupId = InvalidOid;
+			callerPid = InvalidPid;
+		}
+		else
+			MyProc->movetoGroupId = groupId;
+		SpinLockRelease(&MyProc->movetoMutex);
+
+		SIMPLE_FAULT_INJECTOR("resource_group_move_handler_before_initiator_notify");
+
+		if (callerPid != InvalidPid)
+			ResGroupMoveNotifyInitiator(callerPid);
 
 		/*
 		 * You may say it's ugly to notify entrydb process here, but not in
@@ -3681,10 +3714,8 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 	for (;;)
 	{
 		/*
-		 * In an infinite loop, call ResGroupMoveCheckTargetReady() to check whether
-		 * all target processes have received signal of RG move.
-		 * If we have hit gp_resource_group_move_timeout, try to cancel the move
-		 * operation (no matter was target handled signal) and clean remained stuffs.
+		 * Wait for the target to publish the new session slot. On timeout,
+		 * cancel a pending request or abandon one whose slot was transferred.
 		 */
 		curTime = GetCurrentTimestamp();
 		timeout = gp_resource_group_move_timeout - (curTime - waitStart) / 1000;
@@ -3695,8 +3726,8 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 				SIMPLE_FAULT_INJECTOR("resource_group_give_away_wait_latch");
 
 				/*
-				 * do check here to clean all target's moveto* params in case
-				 * of interruption or any exception
+				 * do check here to clean or abandon the request in case of
+				 * interruption or any exception
 				 */
 				CHECK_FOR_INTERRUPTS();
 
@@ -3733,12 +3764,32 @@ resGroupGiveSlotAway(int sessionId, ResGroupSlotData ** slot, Oid groupId)
 
 		SIMPLE_FAULT_INJECTOR("resource_group_give_away_after_latch");
 
-		clean = (latchRes & WL_TIMEOUT);
-		ResGroupMoveCheckTargetReady(sessionId, &clean, &res);
+		ResetLatch(&MyProc->procLatch);
+		clean = false;
+		ResGroupMoveCheckTargetCompletion(sessionId, &clean, &res);
+		if (res && !clean)
+			SIMPLE_FAULT_INJECTOR("resource_group_give_away_after_handoff");
 		if (clean)
 			break;
 
-		ResetLatch(&MyProc->procLatch);
+		if (latchRes & WL_TIMEOUT)
+		{
+			clean = true;
+			ResGroupMoveCheckTargetReady(sessionId, &clean, &res);
+			if (res && clean)
+			{
+				/*
+				 * The move got completed despite the timeout: the target
+				 * has published the new session slot. Report success by
+				 * the fresh state, not by the result of the stale check.
+				 */
+				break;
+			}
+			if (res)
+				*slot = NULL;
+			res = false;
+			break;
+		}
 	}
 
 	if (!res)
