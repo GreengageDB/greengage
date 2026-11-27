@@ -362,6 +362,7 @@ UPDATE 1
  10 | 1  | hello world          
  25 | 16 | c                    
 (9 rows)
+-- those segfiles in AWAITING_DROP state are expected to be truncated
 4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
  segno | column_num | physical_segno | tupcount | modcount | state 
 -------+------------+----------------+----------+----------+-------
@@ -383,18 +384,23 @@ UPDATE 1
 (15 rows)
 4:VACUUM crash_coordinator_before_cleanup_phase;
 VACUUM
-4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
+-- Check if previous AWAITING_DROP segfiles are truncated.
+-- Exclude modcount=3 at first as it could be re-compacted, but check for its
+-- existence in the next SELECT.
+--
+-- Note: after compaction phase gp_aocsseg rows could be left in AWAITING_DROP
+-- and their tupcount left unchanged if xmin horizon didn't progress fast
+-- enough after crash. So, checking for tupcount and state of rows with
+-- modcount=3 is non-deterministic - don't do it to prevent flakiness.
+4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase') WHERE modcount<>3;
  segno | column_num | physical_segno | tupcount | modcount | state 
 -------+------------+----------------+----------+----------+-------
  1     | 0          | 1              | 0        | 2        | 1     
  1     | 0          | 1              | 0        | 2        | 1     
- 1     | 0          | 1              | 0        | 3        | 1     
  1     | 1          | 129            | 0        | 2        | 1     
  1     | 1          | 129            | 0        | 2        | 1     
- 1     | 1          | 129            | 0        | 3        | 1     
  1     | 2          | 257            | 0        | 2        | 1     
  1     | 2          | 257            | 0        | 2        | 1     
- 1     | 2          | 257            | 0        | 3        | 1     
  2     | 0          | 2              | 1        | 1        | 1     
  2     | 0          | 2              | 3        | 0        | 1     
  2     | 0          | 2              | 5        | 0        | 1     
@@ -404,6 +410,28 @@ VACUUM
  2     | 2          | 258            | 1        | 1        | 1     
  2     | 2          | 258            | 3        | 0        | 1     
  2     | 2          | 258            | 5        | 0        | 1     
+(15 rows)
+4:SELECT segno,column_num,physical_segno,modcount FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
+ segno | column_num | physical_segno | modcount 
+-------+------------+----------------+----------
+ 1     | 0          | 1              | 2        
+ 1     | 0          | 1              | 2        
+ 1     | 0          | 1              | 3        
+ 1     | 1          | 129            | 2        
+ 1     | 1          | 129            | 2        
+ 1     | 1          | 129            | 3        
+ 1     | 2          | 257            | 2        
+ 1     | 2          | 257            | 2        
+ 1     | 2          | 257            | 3        
+ 2     | 0          | 2              | 0        
+ 2     | 0          | 2              | 0        
+ 2     | 0          | 2              | 1        
+ 2     | 1          | 130            | 0        
+ 2     | 1          | 130            | 0        
+ 2     | 1          | 130            | 1        
+ 2     | 2          | 258            | 0        
+ 2     | 2          | 258            | 0        
+ 2     | 2          | 258            | 1        
 (18 rows)
 4:INSERT INTO crash_coordinator_before_cleanup_phase VALUES(21, 1, 'c'), (26, 1, 'c');
 INSERT 0 2
