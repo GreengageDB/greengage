@@ -105,19 +105,20 @@
 4:INSERT INTO crash_coordinator_before_cleanup_phase VALUES(1, 1, 'c'), (25, 6, 'c');
 4:UPDATE crash_coordinator_before_cleanup_phase SET b = b+10 WHERE a=25;
 4:SELECT * FROM crash_coordinator_before_cleanup_phase ORDER BY a,b;
-4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
 -- those segfiles in AWAITING_DROP state are expected to be truncated
-4:SELECT segno,column_num,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase') 
-    WHERE segno=1 AND modcount=2;
--- Also, follow-up VACUUM should not lose nor create new segfile row entires.
--- Note: we do not check for state to prevent flakiness, as after compaction
--- phase gp_aocsseg rows could be left in  AWAITING_DROP if xmin horizon did
--- not progress fast enough after crash.
-4:SELECT DISTINCT segno,column_num,physical_segno FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
+4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
 4:VACUUM crash_coordinator_before_cleanup_phase;
-4:SELECT segno,column_num,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase')
-    WHERE segno=1 AND modcount=2;
-4:SELECT DISTINCT segno,column_num,physical_segno FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
+-- Check if previous AWAITING_DROP segfiles are truncated. 
+-- Exclude modcount=3 at first as it could be re-compacted, but check for its 
+-- existence in the next SELECT.
+--
+-- Note: after compaction phase gp_aocsseg rows could be left in AWAITING_DROP 
+-- and their tupcount left unchanged if xmin horizon didn't progress fast 
+-- enough after crash. So, checking for tupcount and state of rows with 
+-- modcount=3 is non-deterministic - don't do it to prevent flakiness.
+4:SELECT segno,column_num,physical_segno,tupcount,modcount,state FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase')
+    WHERE modcount<>3;
+4:SELECT segno,column_num,physical_segno,modcount FROM gp_toolkit.__gp_aocsseg('crash_coordinator_before_cleanup_phase');
 4:INSERT INTO crash_coordinator_before_cleanup_phase VALUES(21, 1, 'c'), (26, 1, 'c');
 4:UPDATE crash_coordinator_before_cleanup_phase SET b = b+10 WHERE a=26;
 4:SELECT * FROM crash_coordinator_before_cleanup_phase ORDER BY a,b;
