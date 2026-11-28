@@ -734,14 +734,15 @@ cdbcomponent_updateCdbComponents(void)
 }
 
 /*
- * cdbcomponent_getCdbComponents 
+ * cdbcomponent_getCdbComponents
  *
- *
- * Storage for the SegmentInstances block and all subsidiary
- * structures are allocated from the caller's context.
+ * Return the process-wide cached CdbComponentDatabases, constructing it on
+ * first use.  The structure and all its subsidiary allocations live in the
+ * dedicated CdbComponentsContext (a child of TopMemoryContext).  Released by
+ * cdbcomponent_destroyCdbComponents().
  */
 CdbComponentDatabases *
-cdbcomponent_getCdbComponents()
+cdbcomponent_getCdbComponents(void)
 {
 	PG_TRY();
 	{
@@ -765,12 +766,15 @@ cdbcomponent_getCdbComponents()
 }
 
 /*
- * cdbcomponet_destroyCdbComponents 
+ * cdbcomponent_destroyCdbComponents
  *
- * Disconnect and destroy all idle QEs, releases the memory
- * occupied by the CdbComponentDatabases
+ * Destroy the cached CdbComponentDatabases: disconnect and destroy all
+ * idle QEs (including writers), drop the segment IP cache, and delete
+ * CdbComponentsContext, which releases the structure and all its
+ * subsidiary allocations.
  *
- * callers must clean up QEs used by dispatcher states.
+ * Callers must clean up the QEs used by their dispatcher states first
+ * (asserted: no active QEs may remain).
  */
 void
 cdbcomponent_destroyCdbComponents(void)
